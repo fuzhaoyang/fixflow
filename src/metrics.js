@@ -1,0 +1,89 @@
+import { runCommand } from "./tools.js";
+
+const safe = async (fn) => {
+  try { return await fn(); } catch { return { error: "N/A" }; }
+};
+
+export async function collectSystem() {
+  const [uptime, mem, disk] = await Promise.all([
+    runCommand("uptime"), runCommand("free -m"), runCommand("df -h"),
+  ]);
+  return {
+    uptime: { ok: uptime.exitCode === 0, detail: uptime.stdout || uptime.stderr },
+    memory: { ok: mem.exitCode === 0, detail: mem.stdout || mem.stderr },
+    disk: { ok: disk.exitCode === 0, detail: disk.stdout || disk.stderr },
+  };
+}
+
+export async function collectNetwork() {
+  const ss = await runCommand("ss -tulnp");
+  return { listeners: { ok: ss.exitCode === 0, detail: ss.stdout || ss.stderr } };
+}
+
+export async function collectNginx() {
+  const [status, config] = await Promise.all([
+    runCommand("systemctl is-active nginx"),
+    runCommand("nginx -t 2>&1"),
+  ]);
+  return {
+    status: { ok: status.exitCode === 0, detail: status.stdout.trim() || "未安装/未运行" },
+    config: { ok: config.exitCode === 0, detail: config.stdout || config.stderr },
+  };
+}
+
+export async function collectFirewall() {
+  const [ufw, iptables] = await Promise.all([
+    runCommand("ufw status"),
+    runCommand("iptables -L -n --line-numbers | head -30"),
+  ]);
+  const isActive = ufw.stdout.includes("Status: active") || (ufw.exitCode === 0 && ufw.stdout.includes("active"));
+  return {
+    status: { ok: true, detail: isActive ? "ufw active" : (ufw.stdout.trim() || "ufw 不可用") },
+    rules: { ok: iptables.exitCode === 0, detail: iptables.stdout || iptables.stderr },
+  };
+}
+
+export async function collectServices({ services = [] }) {
+  return Promise.all(services.map(async (s) => {
+    try {
+      const res = await fetch(s.url, { signal: AbortSignal.timeout(5000) });
+      return { name: s.name, ok: res.status < 500, detail: `HTTP ${res.status}` };
+    } catch (e) {
+      return { name: s.name, ok: false, detail: e.message };
+    }
+  }));
+}
+
+export async function collectDatabases({ databases = [] }) {
+  const probes = {
+    postgres: "pg_isready",
+    mysql: "mysqladmin ping",
+    redis: "redis-cli ping",
+  };
+  return Promise.all(databases.map(async (d) => {
+    const cmd = probes[d.type];
+    if (!cmd) return { name: d.name, ok: false, detail: `未知数据库类型 ${d.type}` };
+    const r = await runCommand(cmd);
+    return { name: d.name, ok: r.exitCode === 0, detail: (r.stdout || r.stderr).trim() || "无输出" };
+  }));
+}
+
+export async function collectDocker() {
+  const r = await runCommand("docker ps -a --format '{{.Names}} | {{.Status}}'");
+  return {
+    ok: r.exitCode === 0,
+    detail: r.stdout || r.stderr || "docker 不可用",
+  };
+}
+
+export async function collectAll(config) {
+  return {
+    system: await safe(collectSystem),
+    network: await safe(collectNetwork),
+    nginx: await safe(collectNginx),
+    firewall: await safe(collectFirewall),
+    services: await safe(() => collectServices(config)),
+    databases: await safe(() => collectDatabases(config)),
+    docker: await safe(collectDocker),
+  };
+}

@@ -1,0 +1,9 @@
+{
+  "name": "fixflow",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "服务器运维 AI Agent CLI + Web 面板",
+  "bin": { "fixflow": "bin/fixflow.js" },
+  "scripts": { "test": "node --test tests/" },
+  "engines": { "node": ">=18" }
+}
