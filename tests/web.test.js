@@ -46,6 +46,15 @@ test("config 接口：GET 返回脱敏 key，POST 保存并热更新", async () 
   assert.equal(file.port, 8888);
   assert.equal(file.services.length, 1);
   assert.equal(file.apiKey, "secret123");
+
+  const post2 = await fetch(`${base}/api/config`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sslSites: ["example.com"], pingTargets: ["1.1.1.1"] }),
+  });
+  assert.equal(post2.status, 200);
+  const file2 = JSON.parse((await import("node:fs")).readFileSync(tmp, "utf8"));
+  assert.deepEqual(file2.sslSites, ["example.com"]);
+  assert.deepEqual(file2.pingTargets, ["1.1.1.1"]);
   w.close();
 });
 

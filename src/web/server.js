@@ -37,6 +37,8 @@ async function fetchModels(baseUrl, apiKey) {
 }
 
 export async function startWeb(config = {}) {
+  config.sslSites = config.sslSites || [];
+  config.pingTargets = config.pingTargets || [];
   const clients = new Set();
   const waiters = new Map();
   let seq = 0;
@@ -79,13 +81,15 @@ export async function startWeb(config = {}) {
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
-        const { baseUrl, apiKey, model } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
+        if (Array.isArray(sslSites)) config.sslSites = sslSites;
+        if (Array.isArray(pingTargets)) config.pingTargets = pingTargets;
         let existing = {};
         try { existing = JSON.parse(await readFile(configPath, "utf8")); } catch {}
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model };
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
         res.writeHead(200, { "Content-Type": "application/json" });
