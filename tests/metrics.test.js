@@ -15,7 +15,7 @@ test("collectSystemd 不抛错（无 systemd 时返回 error）", async () => {
   if (r.services) {
     for (const s of r.services) {
       assert.equal(typeof s.name, "string");
-      assert.ok("state" in s && "memory" in s && "cpu" in s && "started" in s);
+      assert.ok("state" in s && "path" in s && "cpu" in s && "mem" in s && "memMb" in s && "started" in s);
     }
   }
 });

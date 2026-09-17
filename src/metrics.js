@@ -111,8 +111,16 @@ export async function collectDocker() {
 }
 
 export async function collectSystemd() {
-  const r = await runCommand("systemctl show --type=service -p Id,ActiveState,SubState,MemoryCurrent,CPUUsageNSec,ActiveEnterTimestamp --no-pager");
+  const [r, ps] = await Promise.all([
+    runCommand("systemctl show --type=service -p Id,ActiveState,SubState,MemoryCurrent,ActiveEnterTimestamp,FragmentPath,MainPID --no-pager"),
+    runCommand("ps -eo pid,%cpu,%mem --no-headers"),
+  ]);
   if (r.exitCode !== 0) return { error: r.stderr || "systemctl 不可用" };
+  const psMap = new Map();
+  for (const line of (ps.stdout || "").split("\n")) {
+    const p = line.trim().split(/\s+/);
+    if (p.length >= 3) psMap.set(p[0], { cpu: p[1], mem: p[2] });
+  }
   const services = [];
   for (const block of r.stdout.split("\n\n")) {
     const kv = {};
@@ -121,12 +129,15 @@ export async function collectSystemd() {
       if (i > -1) kv[line.slice(0, i)] = line.slice(i + 1);
     }
     if (!kv.Id || !kv.ActiveState) continue;
+    const proc = psMap.get(kv.MainPID);
     services.push({
       name: kv.Id.replace(/\.service$/, ""),
       state: kv.ActiveState,
       sub: kv.SubState,
-      memory: formatBytes(kv.MemoryCurrent),
-      cpu: formatCpu(kv.CPUUsageNSec),
+      path: kv.FragmentPath || "—",
+      cpu: proc ? proc.cpu : "—",
+      mem: proc ? proc.mem : "—",
+      memMb: formatMemMb(kv.MemoryCurrent),
       started: kv.ActiveEnterTimestamp || "—",
     });
   }
@@ -134,19 +145,9 @@ export async function collectSystemd() {
   return { services };
 }
 
-function formatBytes(v) {
+function formatMemMb(v) {
   if (!v || v === "[not set]") return "—";
-  const n = Number(v);
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
-  return `${(n / 1024 / 1024).toFixed(1)} MB`;
-}
-
-function formatCpu(v) {
-  if (!v || v === "[not set]") return "—";
-  const s = Math.round(Number(v) / 1e9);
-  if (s < 60) return `${s}s`;
-  return `${Math.floor(s / 60)}m${s % 60}s`;
+  return (Number(v) / 1024 / 1024).toFixed(1) + " MB";
 }
 
 const parsePsLine = (line) => {

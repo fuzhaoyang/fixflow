@@ -49,6 +49,8 @@ function applyRoute() {
     viewTitle.textContent = "Agent 对话";
   } else {
     currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
+    viewMonitor.classList.toggle("single", currentFilter !== "all");
+    viewMonitor.style.display = currentFilter === "all" ? "block" : "flex";
     viewChat.style.display = "none";
     viewMonitor.style.display = "block";
     viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
@@ -153,9 +155,9 @@ function renderSystemd(m) {
   if (!list.length) return `<pre>${escapeHtml(q ? `未找到匹配「${q}」的服务` : "（无服务）")}</pre>`;
   const rows = list.map((s) => {
     const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
-    return `<tr><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.memory)}</td><td>${escapeHtml(s.cpu)}</td><td>${escapeHtml(s.started)}</td></tr>`;
+    return `<tr><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.path || "—")}</td><td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td><td>${escapeHtml(s.started)}</td></tr>`;
   }).join("");
-  return `<div class="card-body"><table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>内存</th><th>CPU</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="card-body"><table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>服务路径</th><th>占用cpu</th><th>占用内存%</th><th>内容大小</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 let procSort = "cpu";
