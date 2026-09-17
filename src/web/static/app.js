@@ -36,26 +36,34 @@ let currentFilter = "all";
 let metrics = {};
 let busy = false;
 
-// ---------- 菜单 ----------
+// ---------- 路由（hash：#/system、#/network、#/chat） ----------
+function applyRoute() {
+  const route = (location.hash.replace(/^#\/?/, "") || "all").trim();
+  document.querySelectorAll(".menu-item").forEach((i) => {
+    const hit = route === "chat" ? i.dataset.view === "chat" : i.dataset.view === "monitor" && i.dataset.filter === route;
+    i.classList.toggle("active", hit);
+  });
+  if (route === "chat") {
+    viewMonitor.style.display = "none";
+    viewChat.style.display = "flex";
+    viewTitle.textContent = "Agent 对话";
+  } else {
+    currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
+    viewChat.style.display = "none";
+    viewMonitor.style.display = "block";
+    viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
+    searchBox.style.display = currentFilter === "systemd" ? "" : "none";
+    netTools.style.display = currentFilter === "network" ? "flex" : "none";
+    renderCards();
+  }
+}
 document.querySelectorAll(".menu-item").forEach((item) => {
   item.addEventListener("click", () => {
-    document.querySelectorAll(".menu-item").forEach((i) => i.classList.remove("active"));
-    item.classList.add("active");
-    if (item.dataset.view === "chat") {
-      viewMonitor.style.display = "none";
-      viewChat.style.display = "flex";
-      viewTitle.textContent = "Agent 对话";
-    } else {
-      currentFilter = item.dataset.filter;
-      viewChat.style.display = "none";
-      viewMonitor.style.display = "block";
-      viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
-      searchBox.style.display = currentFilter === "systemd" ? "" : "none";
-      netTools.style.display = currentFilter === "network" ? "flex" : "none";
-      renderCards();
-    }
+    location.hash = item.dataset.view === "chat" ? "/chat" : "/" + item.dataset.filter;
   });
 });
+window.addEventListener("hashchange", applyRoute);
+applyRoute();
 
 // ---------- 监控 ----------
 function renderCards() {
