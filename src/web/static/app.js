@@ -86,7 +86,7 @@ function renderCards() {
       let netHtml = "";
       if (items?.length) {
         const rows = items.map((i) => `<tr><td>${escapeHtml(i.proto)}</td><td>${escapeHtml(i.state)}</td><td>${escapeHtml(i.local)}</td><td>${escapeHtml(i.process || "—")}</td><td>${i.pid ? `<a href="javascript:void(0)" onclick="return false" title="${i.pid}">${i.pid}</a>` : "—"}</td></tr>`).join("");
-        netHtml = `<div style="flex:1 1 auto;min-height:120px;max-height:400px;overflow:auto"><table class="svc-table"><thead><tr><th>协议</th><th>状态</th><th>本地地址</th><th>进程</th><th>PID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        netHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>协议</th><th>状态</th><th>本地地址</th><th>进程</th><th>PID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       } else {
         netHtml = `<pre>${escapeHtml(detail(m))}</pre>`;
       }
@@ -147,7 +147,7 @@ function renderSystemd(m) {
     const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
     return `<tr><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.memory)}</td><td>${escapeHtml(s.cpu)}</td><td>${escapeHtml(s.started)}</td></tr>`;
   }).join("");
-  return `<div style="flex:1 1 auto;min-height:120px;max-height:400px;overflow:auto"><table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>内存</th><th>CPU</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `<div class="card-body"><table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>内存</th><th>CPU</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 let procSort = "cpu";
@@ -167,7 +167,7 @@ function renderProcesses(m) {
     const style = bad ? " style='background:rgba(248,113,113,0.15);color:var(--bad)'" : "";
     return `<tr${style}><td>${p.pid}</td><td>${escapeHtml(p.user || "")}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td>${p.memKb ? Math.round(p.memKb / 1024) + "MB" : "—"}</td><td>${escapeHtml(p.service || "—")}</td><td>${escapeHtml(p.cmd || "")}</td></tr>`;
   }).join("");
-  return `${anomalies}${zombie}${sortBtns}<div style="flex:1 1 auto;min-height:120px;max-height:400px;overflow:auto"><table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function renderSsl(m) {
