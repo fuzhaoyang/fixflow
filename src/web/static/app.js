@@ -72,7 +72,11 @@ function renderCards() {
     } else if (key === "network") {
       const scan = metrics.portScan;
       const ping = metrics.pingResult;
-      card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>${scan ? `<pre>【端口占用】${escapeHtml(scan?.listeners?.detail || scan?.error || "N/A")}</pre>` : ""}${ping ? `<pre>【连通性】${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
+      let scanHtml = "";
+      if (scan?.results?.length) {
+        scanHtml = `<pre>【端口占用】${scan.results.map((p) => `${p.port} (${p.service}): ${p.ok ? "监听中" : "未监听"}\n${p.detail}`).join("\n----\n")}</pre>`;
+      }
+      card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>${scanHtml}${ping ? `<pre>【连通性】${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
     } else if (key === "processes") {
       card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
     } else if (key === "ssl") {
