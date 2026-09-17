@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity } from "../metrics.js";
 import { loadConfig } from "../config.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
@@ -64,8 +64,12 @@ export async function startWeb(config = {}) {
     const url = new URL(req.url, "http://127.0.0.1");
     try {
       if (url.pathname === "/api/metrics") {
+        const q = url.searchParams;
+        const data = await collectAll(config);
+        if (q.get("port")) data.portScan = await collectPorts(q.get("port"));
+        if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(await collectAll(config)));
+        res.end(JSON.stringify(data));
       } else if (url.pathname === "/api/models") {
         try {
           const models = await fetchModels(config.baseUrl, config.apiKey);

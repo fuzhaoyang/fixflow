@@ -11,6 +11,7 @@ const preview = document.getElementById("preview");
 const clearBtn = document.getElementById("clear-history");
 const conn = document.getElementById("conn");
 const searchBox = document.getElementById("search");
+const netTools = document.getElementById("net-tools");
 const viewTitle = document.getElementById("view-title");
 const viewMonitor = document.getElementById("view-monitor");
 const viewChat = document.getElementById("view-chat");
@@ -50,6 +51,7 @@ document.querySelectorAll(".menu-item").forEach((item) => {
       viewMonitor.style.display = "block";
       viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
       searchBox.style.display = currentFilter === "systemd" ? "" : "none";
+      netTools.style.display = currentFilter === "network" ? "flex" : "none";
       renderCards();
     }
   });
@@ -65,6 +67,12 @@ function renderCards() {
     card.className = "card";
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
+    } else if (key === "system") {
+      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">📄 生成报告</button></h2><pre>${escapeHtml(detail(m))}</pre><pre id="report-out" style="display:none"></pre>`;
+    } else if (key === "network") {
+      const scan = metrics.portScan;
+      const ping = metrics.pingResult;
+      card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>${scan ? `<pre>【端口占用】${escapeHtml(scan?.listeners?.detail || scan?.error || "N/A")}</pre>` : ""}${ping ? `<pre>【连通性】${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
     } else if (key === "processes") {
       card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
     } else if (key === "ssl") {
@@ -76,6 +84,17 @@ function renderCards() {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
     }
     cards.appendChild(card);
+    const reportBtn = card.querySelector("#report-btn");
+    if (reportBtn) {
+      reportBtn.onclick = async () => {
+        const out = document.getElementById("report-out");
+        const res = await fetch("/api/metrics");
+        const data = await res.json();
+        const report = Object.entries(data).map(([k, v]) => `## ${k}\n${JSON.stringify(v, null, 2)}`).join("\n\n");
+        out.textContent = report;
+        out.style.display = "";
+      };
+    }
     const dot = document.querySelector(`.menu-item[data-filter="${key}"] .dot`);
     if (dot) {
       const ok = Array.isArray(m) ? m.every((x) => x.ok) : m?.ok;
@@ -473,6 +492,22 @@ clearBtn.onclick = () => { clearHistory(); addSimpleMsg("🧹 聊天历史已清
 input.addEventListener("input", () => { charCount.textContent = input.value.length ? input.value.length + "/5000" : ""; });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 searchBox.addEventListener("input", () => { if (currentFilter === "systemd") renderCards(); });
+const portBtn = document.getElementById("port-btn");
+const pingBtn = document.getElementById("ping-btn");
+portBtn.onclick = async () => {
+  const port = document.getElementById("port-input").value.trim();
+  if (!port) return;
+  const res = await fetch(`/api/metrics?port=${encodeURIComponent(port)}`);
+  metrics.portScan = (await res.json()).portScan;
+  renderCards();
+};
+pingBtn.onclick = async () => {
+  const target = document.getElementById("ping-input").value.trim();
+  if (!target) return;
+  const res = await fetch(`/api/metrics?ping=${encodeURIComponent(target)}`);
+  metrics.pingResult = (await res.json()).pingResult;
+  renderCards();
+};
 refreshMetrics();
 setInterval(refreshMetrics, 5000);
 (async () => { await loadHistory(); restoreHistory(); })();
