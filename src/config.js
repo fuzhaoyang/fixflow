@@ -13,5 +13,7 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     timeout: file.timeout || 30000,
     services: file.services || [],
     databases: file.databases || [],
+    sslSites: file.sslSites || [],
+    pingTargets: file.pingTargets || [],
   };
 }

@@ -25,3 +25,15 @@ test("配置文件覆盖默认值", () => {
   assert.equal(cfg.port, 9000);
   assert.equal(cfg.services.length, 1);
 });
+
+test("配置新增 sslSites 与 pingTargets", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  const cfg = loadConfig({ filePath: file });
+  assert.deepEqual(cfg.sslSites, []);
+  assert.deepEqual(cfg.pingTargets, []);
+  writeFileSync(file, JSON.stringify({ sslSites: ["example.com"], pingTargets: ["1.1.1.1"] }));
+  const cfg2 = loadConfig({ filePath: file });
+  assert.deepEqual(cfg2.sslSites, ["example.com"]);
+  assert.deepEqual(cfg2.pingTargets, ["1.1.1.1"]);
+});
