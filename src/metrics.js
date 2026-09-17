@@ -130,14 +130,38 @@ function formatCpu(v) {
   return `${Math.floor(s / 60)}m${s % 60}s`;
 }
 
+const parsePsLine = (line) => {
+  const parts = line.trim().split(/\s+/);
+  if (parts.length < 11) return null;
+  return {
+    user: parts[0],
+    pid: parseInt(parts[1], 10),
+    cpu: parseFloat(parts[2]),
+    mem: parseFloat(parts[3]),
+    memKb: parseInt(parts[5], 10),
+    cmd: parts.slice(10).join(" "),
+  };
+};
+
 export async function collectProcesses() {
-  const [top, zombie] = await Promise.all([
+  const [top, zombie, memtotal] = await Promise.all([
     runCommand("ps aux --sort=-%cpu | head -21"),
     runCommand("ps -eo stat,comm | awk '$1 ~ /Z/ {print $2}'"),
+    runCommand("awk '/MemTotal/ {print $2}' /proc/meminfo"),
   ]);
   if (top.exitCode !== 0) return { error: top.stderr || "ps 不可用" };
+  const totalMemKb = parseInt(memtotal.stdout.trim(), 10) || 0;
+  const list = (top.stdout || "").split("\n").slice(1).map(parsePsLine).filter(Boolean).slice(0, 20);
+  const anomalies = [];
+  for (const p of list) {
+    const cgroup = await runCommand(`cat /proc/${p.pid}/cgroup 2>/dev/null`);
+    const m = (cgroup.stdout || "").match(/([\w-]+\.service)/);
+    p.service = m ? m[1] : "";
+    if (p.cpu > 100) anomalies.push(`进程 ${p.cmd} (PID ${p.pid}) CPU ${p.cpu}% 超阈值`);
+    if (totalMemKb && p.memKb > totalMemKb * 0.1) anomalies.push(`进程 ${p.cmd} (PID ${p.pid}) 内存占用异常`);
+  }
   const zombies = (zombie.stdout || "").split("\n").filter((l) => l.trim()).length;
-  return { top: top.stdout, zombies, zombieDetail: zombie.stdout.trim() };
+  return { top: list, zombies, zombieDetail: zombie.stdout.trim(), anomalies };
 }
 
 export async function collectSsl(sites = []) {

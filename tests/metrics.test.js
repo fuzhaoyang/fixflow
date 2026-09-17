@@ -49,10 +49,17 @@ test("collectDatabases 支持 postgres/mysql/redis", async () => {
   assert.equal(typeof r[0].ok, "boolean");
 });
 
-test("collectProcesses 返回进程与僵尸统计", async () => {
+test("collectProcesses 返回结构化进程与异常列表", async () => {
   const r = await collectProcesses();
-  assert.ok("top" in r && "zombies" in r || "error" in r);
-  if (r.top) assert.equal(typeof r.top, "string");
+  assert.ok("top" in r && "anomalies" in r || "error" in r);
+  if (r.top) {
+    assert.ok(Array.isArray(r.top));
+    for (const p of r.top) {
+      assert.equal(typeof p.pid, "number");
+      assert.ok("cpu" in p && "mem" in p && "memKb" in p && "cmd" in p);
+      assert.ok("service" in p);
+    }
+  }
 });
 
 test("collectSsl 对空列表返回空 results，不抛错", async () => {
