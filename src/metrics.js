@@ -34,12 +34,18 @@ export async function collectNginx() {
 export async function collectFirewall() {
   const [ufw, iptables] = await Promise.all([
     runCommand("ufw status"),
-    runCommand("iptables -L -n --line-numbers | head -30"),
+    runCommand("iptables -L -n --line-numbers"),
   ]);
   const isActive = ufw.stdout.includes("Status: active") || (ufw.exitCode === 0 && ufw.stdout.includes("active"));
+  const riskyPorts = [];
+  for (const line of (iptables.stdout || "").split("\n")) {
+    const m = line.match(/ACCEPT\s+tcp\s+.*\s0\.0\.0\.0\/0\s+0\.0\.0\.0\/0\s+tcp\s+dpt:(\d+)/);
+    if (m) riskyPorts.push({ proto: "tcp", port: Number(m[1]) });
+  }
   return {
     status: { ok: true, detail: isActive ? "ufw active" : (ufw.stdout.trim() || "ufw 不可用") },
     rules: { ok: iptables.exitCode === 0, detail: iptables.stdout || iptables.stderr },
+    riskyPorts,
   };
 }
 

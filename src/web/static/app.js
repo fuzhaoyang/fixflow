@@ -63,6 +63,9 @@ function renderCards() {
     card.className = "card";
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
+    } else if (key === "firewall" && m?.riskyPorts?.length) {
+      const risk = `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">⚠️ 对全网开放端口：${m.riskyPorts.map((p) => `${p.proto}/${p.port}`).join("、")}</div>`;
+      card.innerHTML = `<h2>${label}</h2>${risk}<pre>${escapeHtml(detail(m))}</pre>`;
     } else {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
     }

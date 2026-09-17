@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts } from "../src/metrics.js";
+import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -63,4 +63,10 @@ test("collectConnectivity 对空目标返回空 results", async () => {
 test("collectPorts 无参返回监听列表", async () => {
   const r = await collectPorts();
   assert.ok("listeners" in r || "error" in r);
+});
+
+test("collectFirewall 返回 riskyPorts 字段", async () => {
+  const r = await collectFirewall();
+  assert.ok("riskyPorts" in r, "缺少 riskyPorts 字段");
+  assert.ok(Array.isArray(r.riskyPorts));
 });
