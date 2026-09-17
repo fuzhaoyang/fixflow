@@ -20,10 +20,10 @@ test("parseFree 排除 buffer/cache 计算 usedPct", () => {
 });
 
 test("assessHealth 分级与建议", () => {
-  const r = assessHealth({ df: [{ mount: "/", usedPct: 90 }, { mount: "/data", usedPct: 20 }], free: 82, load: 3, cpuCount: 8 });
+  const r = assessHealth({ df: [{ mount: "/", usedPct: 91 }, { mount: "/data", usedPct: 20 }], free: 82, load: 3, cpuCount: 8 });
   const disk = r.items.find((i) => i.name.includes("/"));
   assert.equal(disk.status, "bad");
-  assert.match(disk.advice, /90/);
+  assert.match(disk.advice, /91/);
   const mem = r.items.find((i) => i.name === "内存");
   assert.equal(mem.status, "warn");
   assert.ok(r.risks.length >= 2);
