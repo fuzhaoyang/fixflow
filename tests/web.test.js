@@ -87,3 +87,13 @@ test("chat 与 abort 走通会话", async () => {
   assert.equal(r2.status, 200);
   w.close();
 });
+
+test("/api/report 返回 Markdown 报告", async () => {
+  const w = await startWeb({ port: 0, services: [], databases: [] });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/report`);
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /# Fixflow 系统体检报告/);
+  w.close();
+});

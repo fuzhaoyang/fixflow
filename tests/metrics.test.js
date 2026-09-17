@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
+import { collectAll, collectSystem, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -32,6 +32,11 @@ test("collectServices 用 HTTP 健康检查", async () => {
   const r2 = await collectServices({ services: [{ name: "app", url: "http://127.0.0.1:9999/x" }] });
   assert.equal(r2[0].ok, false);
   globalThis.fetch = orig;
+});
+
+test("collectSystem 返回 health 字段", async () => {
+  const r = await collectSystem();
+  assert.ok("health" in r || "error" in r);
 });
 
 test("collectDatabases 支持 postgres/mysql/redis", async () => {

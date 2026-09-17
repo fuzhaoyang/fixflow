@@ -1,17 +1,26 @@
 import { runCommand } from "./tools.js";
+import { assessHealth, parseDf, parseFree, parseLoad } from "./health.js";
 
 const safe = async (fn) => {
   try { return await fn(); } catch { return { error: "N/A" }; }
 };
 
 export async function collectSystem() {
-  const [uptime, mem, disk] = await Promise.all([
-    runCommand("uptime"), runCommand("free -m"), runCommand("df -h"),
+  const [uptime, mem, disk, nproc] = await Promise.all([
+    runCommand("uptime"), runCommand("free -m"), runCommand("df -h"), runCommand("nproc"),
   ]);
+  const cpuCount = nproc.exitCode === 0 ? parseInt(nproc.stdout.trim() || "1", 10) || 1 : 1;
+  const health = assessHealth({
+    df: parseDf(disk.stdout || ""),
+    free: parseFree(mem.stdout || "").usedPct,
+    load: parseLoad(uptime.stdout || "").load,
+    cpuCount,
+  });
   return {
     uptime: { ok: uptime.exitCode === 0, detail: uptime.stdout || uptime.stderr },
     memory: { ok: mem.exitCode === 0, detail: mem.stdout || mem.stderr },
     disk: { ok: disk.exitCode === 0, detail: disk.stdout || disk.stderr },
+    health,
   };
 }
 

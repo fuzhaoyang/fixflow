@@ -70,6 +70,26 @@ export async function startWeb(config = {}) {
         if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(data));
+      } else if (url.pathname === "/api/report") {
+        const data = await collectAll(config);
+        const s = data.system;
+        const now = new Date().toLocaleString("zh-CN");
+        let md = `# Fixflow 系统体检报告\n\n生成时间：${now}\n\n## 总览\n\n| 项目 | 状态 | 摘要 |\n|---|---|---|\n`;
+        for (const it of s?.health?.items || []) {
+          const icon = it.status === "ok" ? "✅ 正常" : it.status === "warn" ? "⚠️ 警告" : "❌ 异常";
+          md += `| ${it.name} | ${icon} | ${it.detail} |\n`;
+        }
+        md += `\n## 风险项\n\n`;
+        md += s?.health?.risks?.length
+          ? s.health.risks.map((r) => `- ${r}`).join("\n") + "\n"
+          : "未发现风险。\n";
+        md += `\n## 系统详情\n\n`;
+        for (const key of ["uptime", "memory", "disk"]) {
+          const item = s?.[key];
+          if (item) md += `### ${key}\n\n\`\`\`\n${item.detail}\n\`\`\`\n\n`;
+        }
+        res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8" });
+        res.end(md);
       } else if (url.pathname === "/api/models") {
         try {
           const models = await fetchModels(config.baseUrl, config.apiKey);
