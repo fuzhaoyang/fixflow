@@ -130,6 +130,7 @@ export async function collectSystemd() {
     }
     if (!kv.Id || !kv.ActiveState) continue;
     const proc = psMap.get(kv.MainPID);
+    const t = (kv.ActiveEnterTimestamp || "").match(/^\S+\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
     services.push({
       name: kv.Id.replace(/\.service$/, ""),
       state: kv.ActiveState,
@@ -138,7 +139,7 @@ export async function collectSystemd() {
       cpu: proc ? proc.cpu : "—",
       mem: proc ? proc.mem : "—",
       memMb: formatMemMb(kv.MemoryCurrent),
-      started: kv.ActiveEnterTimestamp || "—",
+      started: t ? t[1] : (kv.ActiveEnterTimestamp || "—"),
     });
   }
   services.sort((a, b) => a.name.localeCompare(b.name));
@@ -148,6 +149,12 @@ export async function collectSystemd() {
 function formatMemMb(v) {
   if (!v || v === "[not set]") return "—";
   return (Number(v) / 1024 / 1024).toFixed(1) + " MB";
+}
+
+export function formatDateTime(d) {
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 const parsePsLine = (line) => {
@@ -191,8 +198,9 @@ export async function collectSsl(sites = []) {
     const r = await runCommand(`timeout 10 bash -c 'echo | openssl s_client -connect ${host}:${port} -servername ${host} 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null'`);
     const m = (r.stdout || "").match(/notAfter=(.*)/);
     if (!m) return { host, port, error: r.stderr || "无法读取证书" };
-    const daysLeft = Math.floor((new Date(m[1]) - Date.now()) / 86400000);
-    return { host, port, notAfter: m[1], daysLeft };
+    const date = new Date(m[1]);
+    const daysLeft = Math.floor((date - Date.now()) / 86400000);
+    return { host, port, notAfter: formatDateTime(date), daysLeft };
   }));
   return { results };
 }

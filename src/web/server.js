@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
 import { loadConfig } from "../config.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
@@ -73,7 +73,7 @@ export async function startWeb(config = {}) {
       } else if (url.pathname === "/api/report") {
         const data = await collectAll(config);
         const s = data.system;
-        const now = new Date().toLocaleString("zh-CN");
+        const now = formatDateTime(new Date());
         let md = `# Fixflow 系统体检报告\n\n生成时间：${now}\n\n## 总览\n\n| 项目 | 状态 | 摘要 |\n|---|---|---|\n`;
         for (const it of s?.health?.items || []) {
           const icon = it.status === "ok" ? "✅ 正常" : it.status === "warn" ? "⚠️ 警告" : "❌ 异常";
