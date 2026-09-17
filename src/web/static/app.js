@@ -488,10 +488,16 @@ function connectStream() {
       row.className = "msg confirm";
       const yes = document.createElement("button");
       yes.className = "btn btn-yes small"; yes.textContent = "确认执行";
-      yes.onclick = () => fetch("/api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) });
       const no = document.createElement("button");
       no.className = "btn btn-no small"; no.textContent = "拒绝";
-      no.onclick = () => fetch("/api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) });
+      const finish = (label) => {
+        row.innerHTML = "";
+        const span = document.createElement("span");
+        span.textContent = label;
+        row.appendChild(span);
+      };
+      yes.onclick = () => { finish("✅ 已确认执行，正在运行…"); fetch("/api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) }); };
+      no.onclick = () => { finish("❌ 已拒绝执行"); fetch("/api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
       row.append(yes, no);
       log.appendChild(row);
       log.scrollTop = log.scrollHeight;
