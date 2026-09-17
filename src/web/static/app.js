@@ -68,7 +68,7 @@ function renderCards() {
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
     } else if (key === "system") {
-      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">📄 生成报告</button></h2><pre>${escapeHtml(detail(m))}</pre><pre id="report-out" style="display:none"></pre>`;
+      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">📄 生成报告</button></h2><pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">复制</button> <button class="btn small" id="report-dl">下载 .md</button></div><pre id="report-out"></pre></div>`;
     } else if (key === "network") {
       const scan = metrics.portScan;
       const ping = metrics.pingResult;
@@ -87,12 +87,21 @@ function renderCards() {
     const reportBtn = card.querySelector("#report-btn");
     if (reportBtn) {
       reportBtn.onclick = async () => {
+        const box = document.getElementById("report-box");
         const out = document.getElementById("report-out");
-        const res = await fetch("/api/metrics");
-        const data = await res.json();
-        const report = Object.entries(data).map(([k, v]) => `## ${k}\n${JSON.stringify(v, null, 2)}`).join("\n\n");
+        const res = await fetch("/api/report");
+        const report = await res.text();
         out.textContent = report;
-        out.style.display = "";
+        box.style.display = "";
+        document.getElementById("report-copy").onclick = () => navigator.clipboard.writeText(report);
+        document.getElementById("report-dl").onclick = () => {
+          const blob = new Blob([report], { type: "text/markdown" });
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = `fixflow-report-${Date.now()}.md`;
+          a.click();
+          URL.revokeObjectURL(a.href);
+        };
       };
     }
     const dot = document.querySelector(`.menu-item[data-filter="${key}"] .dot`);
