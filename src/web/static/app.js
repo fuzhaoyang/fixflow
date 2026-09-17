@@ -10,6 +10,7 @@ const fileInput = document.getElementById("file");
 const preview = document.getElementById("preview");
 const clearBtn = document.getElementById("clear-history");
 const conn = document.getElementById("conn");
+const searchBox = document.getElementById("search");
 const viewTitle = document.getElementById("view-title");
 const viewMonitor = document.getElementById("view-monitor");
 const viewChat = document.getElementById("view-chat");
@@ -25,6 +26,7 @@ const MODULES = [
   ["services", "Python 服务"],
   ["databases", "数据库"],
   ["docker", "Docker"],
+  ["systemd", "服务"],
 ];
 
 let currentFilter = "all";
@@ -45,6 +47,7 @@ document.querySelectorAll(".menu-item").forEach((item) => {
       viewChat.style.display = "none";
       viewMonitor.style.display = "block";
       viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
+      searchBox.style.display = currentFilter === "systemd" ? "" : "none";
       renderCards();
     }
   });
@@ -58,7 +61,11 @@ function renderCards() {
     const m = metrics[key];
     const card = document.createElement("div");
     card.className = "card";
-    card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
+    if (key === "systemd") {
+      card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
+    } else {
+      card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
+    }
     cards.appendChild(card);
     const dot = document.querySelector(`.menu-item[data-filter="${key}"] .dot`);
     if (dot) {
@@ -66,6 +73,18 @@ function renderCards() {
       dot.className = "dot " + (ok === true ? "ok" : ok === false ? "bad" : "na");
     }
   }
+}
+
+function renderSystemd(m) {
+  if (!m?.services) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  const q = searchBox.value.trim().toLowerCase();
+  const list = q ? m.services.filter((s) => s.name.toLowerCase().includes(q)) : m.services;
+  if (!list.length) return `<pre>${escapeHtml(q ? `未找到匹配「${q}」的服务` : "（无服务）")}</pre>`;
+  const rows = list.map((s) => {
+    const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
+    return `<tr><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.memory)}</td><td>${escapeHtml(s.cpu)}</td><td>${escapeHtml(s.started)}</td></tr>`;
+  }).join("");
+  return `<table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>内存</th><th>CPU</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function detail(m) {
@@ -346,8 +365,9 @@ function toolSummary(ev) {
 
 function connectStream() {
   const es = new EventSource("/api/stream");
-  es.onopen = () => (conn.textContent = "已连接");
-  es.onerror = () => (conn.textContent = "连接断开，重连中…");
+  const dot = document.getElementById("conn-dot");
+  es.onopen = () => { conn.textContent = "已连接"; dot.className = "conn-dot ok"; };
+  es.onerror = () => { conn.textContent = "连接断开，重连中…"; dot.className = "conn-dot bad"; };
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
     if (ev.type === "text") addMsg(ev.text, "assistant");
@@ -424,6 +444,7 @@ stopBtn.onclick = () => fetch("/api/abort", { method: "POST" });
 clearBtn.onclick = () => { clearHistory(); addSimpleMsg("🧹 聊天历史已清空", "system", { keepWelcome: true }); };
 input.addEventListener("input", () => { charCount.textContent = input.value.length ? input.value.length + "/5000" : ""; });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+searchBox.addEventListener("input", () => { if (currentFilter === "systemd") renderCards(); });
 refreshMetrics();
 setInterval(refreshMetrics, 5000);
 (async () => { await loadHistory(); restoreHistory(); })();

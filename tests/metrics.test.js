@@ -1,11 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectServices, collectDatabases } from "../src/metrics.js";
+import { collectAll, collectServices, collectDatabases, collectSystemd } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
-  for (const k of ["system", "network", "nginx", "firewall", "services", "databases", "docker"]) {
+  for (const k of ["system", "network", "nginx", "firewall", "services", "databases", "docker", "systemd"]) {
     assert.ok(k in r, `缺少 ${k}`);
+  }
+});
+
+test("collectSystemd 不抛错（无 systemd 时返回 error）", async () => {
+  const r = await collectSystemd();
+  assert.ok("services" in r || "error" in r);
+  if (r.services) {
+    for (const s of r.services) {
+      assert.equal(typeof s.name, "string");
+      assert.ok("state" in s && "memory" in s && "cpu" in s && "started" in s);
+    }
   }
 });
 

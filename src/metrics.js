@@ -76,6 +76,45 @@ export async function collectDocker() {
   };
 }
 
+export async function collectSystemd() {
+  const r = await runCommand("systemctl show --type=service -p Id,ActiveState,SubState,MemoryCurrent,CPUUsageNSec,ActiveEnterTimestamp --no-pager");
+  if (r.exitCode !== 0) return { error: r.stderr || "systemctl 不可用" };
+  const services = [];
+  for (const block of r.stdout.split("\n\n")) {
+    const kv = {};
+    for (const line of block.split("\n")) {
+      const i = line.indexOf("=");
+      if (i > -1) kv[line.slice(0, i)] = line.slice(i + 1);
+    }
+    if (!kv.Id || !kv.ActiveState) continue;
+    services.push({
+      name: kv.Id.replace(/\.service$/, ""),
+      state: kv.ActiveState,
+      sub: kv.SubState,
+      memory: formatBytes(kv.MemoryCurrent),
+      cpu: formatCpu(kv.CPUUsageNSec),
+      started: kv.ActiveEnterTimestamp || "—",
+    });
+  }
+  services.sort((a, b) => a.name.localeCompare(b.name));
+  return { services };
+}
+
+function formatBytes(v) {
+  if (!v || v === "[not set]") return "—";
+  const n = Number(v);
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function formatCpu(v) {
+  if (!v || v === "[not set]") return "—";
+  const s = Math.round(Number(v) / 1e9);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m${s % 60}s`;
+}
+
 export async function collectAll(config) {
   return {
     system: await safe(collectSystem),
@@ -85,5 +124,6 @@ export async function collectAll(config) {
     services: await safe(() => collectServices(config)),
     databases: await safe(() => collectDatabases(config)),
     docker: await safe(collectDocker),
+    systemd: await safe(collectSystemd),
   };
 }
