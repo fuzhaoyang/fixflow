@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectServices, collectDatabases, collectSystemd } from "../src/metrics.js";
+import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -42,4 +42,15 @@ test("collectDatabases 支持 postgres/mysql/redis", async () => {
   const r = await collectDatabases({ databases: dbs });
   assert.equal(r.length, 2);
   assert.equal(typeof r[0].ok, "boolean");
+});
+
+test("collectProcesses 返回进程与僵尸统计", async () => {
+  const r = await collectProcesses();
+  assert.ok("top" in r && "zombies" in r || "error" in r);
+  if (r.top) assert.equal(typeof r.top, "string");
+});
+
+test("collectSsl 对空列表返回空 results，不抛错", async () => {
+  const r = await collectSsl([]);
+  assert.ok("results" in r || "error" in r);
 });

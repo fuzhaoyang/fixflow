@@ -115,6 +115,29 @@ function formatCpu(v) {
   return `${Math.floor(s / 60)}m${s % 60}s`;
 }
 
+export async function collectProcesses() {
+  const [top, zombie] = await Promise.all([
+    runCommand("ps aux --sort=-%cpu | head -21"),
+    runCommand("ps -eo stat,comm | awk '$1 ~ /Z/ {print $2}'"),
+  ]);
+  if (top.exitCode !== 0) return { error: top.stderr || "ps 不可用" };
+  const zombies = (zombie.stdout || "").split("\n").filter((l) => l.trim()).length;
+  return { top: top.stdout, zombies, zombieDetail: zombie.stdout.trim() };
+}
+
+export async function collectSsl(sites = []) {
+  const results = await Promise.all(sites.map(async (site) => {
+    const host = site.split(":")[0];
+    const port = site.includes(":") ? site.split(":")[1] : "443";
+    const r = await runCommand(`timeout 10 bash -c 'echo | openssl s_client -connect ${host}:${port} -servername ${host} 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null'`);
+    const m = (r.stdout || "").match(/notAfter=(.*)/);
+    if (!m) return { host, port, error: r.stderr || "无法读取证书" };
+    const daysLeft = Math.floor((new Date(m[1]) - Date.now()) / 86400000);
+    return { host, port, notAfter: m[1], daysLeft };
+  }));
+  return { results };
+}
+
 export async function collectAll(config) {
   return {
     system: await safe(collectSystem),
@@ -125,5 +148,7 @@ export async function collectAll(config) {
     databases: await safe(() => collectDatabases(config)),
     docker: await safe(collectDocker),
     systemd: await safe(collectSystemd),
+    processes: await safe(collectProcesses),
+    ssl: await safe(() => collectSsl(config.sslSites || [])),
   };
 }
