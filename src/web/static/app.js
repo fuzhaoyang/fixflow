@@ -104,6 +104,10 @@ function renderCards() {
         };
       };
     }
+    const sortCpu = card.querySelector("#sort-cpu");
+    const sortMem = card.querySelector("#sort-mem");
+    if (sortCpu) sortCpu.onclick = () => { procSort = "cpu"; renderCards(); };
+    if (sortMem) sortMem.onclick = () => { procSort = "mem"; renderCards(); };
     const dot = document.querySelector(`.menu-item[data-filter="${key}"] .dot`);
     if (dot) {
       const ok = Array.isArray(m) ? m.every((x) => x.ok) : m?.ok;
@@ -124,12 +128,24 @@ function renderSystemd(m) {
   return `<table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>内存</th><th>CPU</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+let procSort = "cpu";
+
 function renderProcesses(m) {
   if (!m?.top) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  const anomalies = (m.anomalies || []).map((a) => `<div style="color:var(--bad);font-size:12px">⚠️ ${escapeHtml(a)}</div>`).join("");
   const zombie = m.zombies > 0
     ? `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">⚠️ 僵尸进程 ${m.zombies} 个：${escapeHtml(m.zombieDetail || "")}</div>`
-    : `<div style="color:var(--ok);margin-bottom:6px;font-size:12px">✅ 无僵尸进程</div>`;
-  return zombie + `<pre>${escapeHtml(m.top)}</pre>`;
+    : "";
+  const sortBtns = `<div style="margin-bottom:6px;display:flex;gap:6px">
+    <button class="btn small ${procSort === "cpu" ? "report-active" : ""}" id="sort-cpu">按 CPU</button>
+    <button class="btn small ${procSort === "mem" ? "report-active" : ""}" id="sort-mem">按内存</button></div>`;
+  const list = [...m.top].sort((a, b) => procSort === "mem" ? b.memKb - a.memKb : b.cpu - a.cpu);
+  const rows = list.map((p) => {
+    const bad = p.cpu > 100;
+    const style = bad ? " style='background:rgba(248,113,113,0.15);color:var(--bad)'" : "";
+    return `<tr${style}><td>${p.pid}</td><td>${escapeHtml(p.user || "")}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td>${p.memKb ? Math.round(p.memKb / 1024) + "MB" : "—"}</td><td>${escapeHtml(p.service || "—")}</td><td>${escapeHtml(p.cmd || "")}</td></tr>`;
+  }).join("");
+  return `${anomalies}${zombie}${sortBtns}<table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function renderSsl(m) {
