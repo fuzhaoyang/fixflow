@@ -26,6 +26,8 @@ const MODULES = [
   ["services", "Python 服务"],
   ["databases", "数据库"],
   ["docker", "Docker"],
+  ["processes", "进程"],
+  ["ssl", "SSL 证书"],
   ["systemd", "服务"],
 ];
 
@@ -63,6 +65,10 @@ function renderCards() {
     card.className = "card";
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
+    } else if (key === "processes") {
+      card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
+    } else if (key === "ssl") {
+      card.innerHTML = `<h2>${label}</h2>${renderSsl(m)}`;
     } else if (key === "firewall" && m?.riskyPorts?.length) {
       const risk = `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">⚠️ 对全网开放端口：${m.riskyPorts.map((p) => `${p.proto}/${p.port}`).join("、")}</div>`;
       card.innerHTML = `<h2>${label}</h2>${risk}<pre>${escapeHtml(detail(m))}</pre>`;
@@ -88,6 +94,25 @@ function renderSystemd(m) {
     return `<tr><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.memory)}</td><td>${escapeHtml(s.cpu)}</td><td>${escapeHtml(s.started)}</td></tr>`;
   }).join("");
   return `<table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>内存</th><th>CPU</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderProcesses(m) {
+  if (!m?.top) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  const zombie = m.zombies > 0
+    ? `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">⚠️ 僵尸进程 ${m.zombies} 个：${escapeHtml(m.zombieDetail || "")}</div>`
+    : `<div style="color:var(--ok);margin-bottom:6px;font-size:12px">✅ 无僵尸进程</div>`;
+  return zombie + `<pre>${escapeHtml(m.top)}</pre>`;
+}
+
+function renderSsl(m) {
+  if (!m?.results) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  if (!m.results.length) return `<pre>（未配置监控域名，可在设置中配置）</pre>`;
+  const rows = m.results.map((s) => {
+    const cls = s.daysLeft > 30 ? "ok" : s.daysLeft > 0 ? "na" : "bad";
+    const expire = typeof s.daysLeft === "number" ? (s.daysLeft > 0 ? `${s.daysLeft} 天` : "已过期") : "—";
+    return `<tr><td>${escapeHtml(s.host)}:${escapeHtml(s.port)}</td><td>${escapeHtml(s.notAfter || "—")}</td><td class="${cls}">${expire}</td><td>${escapeHtml(s.error || "")}</td></tr>`;
+  }).join("");
+  return `<table class="svc-table"><thead><tr><th>域名</th><th>到期时间</th><th>剩余</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 function detail(m) {
@@ -460,6 +485,8 @@ const cfgApiKey = document.getElementById("cfg-api-key");
 const cfgKeyHint = document.getElementById("cfg-key-hint");
 const cfgModel = document.getElementById("cfg-model");
 const cfgModelStatus = document.getElementById("cfg-model-status");
+const cfgSslSites = document.getElementById("cfg-ssl-sites");
+const cfgPingTargets = document.getElementById("cfg-ping-targets");
 
 let currentKey = "";
 
@@ -492,6 +519,8 @@ async function openSettings() {
   cfgBaseUrl.value = cfg.baseUrl || "";
   cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
   currentKey = cfg.apiKey || "";
+  cfgSslSites.value = (cfg.sslSites || []).join("\n");
+  cfgPingTargets.value = (cfg.pingTargets || []).join("\n");
   settingsMask.classList.add("show");
   await loadModels();
   if (cfg.model) cfgModel.value = cfg.model;
@@ -518,6 +547,10 @@ document.getElementById("cfg-save").onclick = async () => {
   };
   const newKey = cfgApiKey.value.trim();
   if (newKey) body.apiKey = newKey;
+  const sslSites = cfgSslSites.value.trim().split("\n").map((s) => s.trim()).filter(Boolean);
+  const pingTargets = cfgPingTargets.value.trim().split("\n").map((s) => s.trim()).filter(Boolean);
+  if (sslSites.length) body.sslSites = sslSites;
+  if (pingTargets.length) body.pingTargets = pingTargets;
   const res = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { alert("保存失败：" + (data.error || res.status)); return; }

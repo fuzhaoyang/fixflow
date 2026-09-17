@@ -77,7 +77,7 @@ export async function startWeb(config = {}) {
         }
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "" }));
+        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets }));
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
@@ -93,7 +93,7 @@ export async function startWeb(config = {}) {
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "" }));
+        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets }));
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ messages: await readHistoryFile(historyPath) }));

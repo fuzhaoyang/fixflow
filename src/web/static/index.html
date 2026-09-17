@@ -64,6 +64,8 @@
       width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border);
       background: var(--bg); color: var(--text); font-size: 13px; outline: none; box-sizing: border-box;
     }
+    .field-textarea { width: 100%; padding: 9px 11px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; font-family: inherit; resize: vertical; }
+    .field-textarea:focus { border-color: var(--accent); }
     .field input:focus, .field select:focus { border-color: var(--accent); }
     .field .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
@@ -290,6 +292,8 @@
       <button class="menu-item" data-view="monitor" data-filter="services"><span class="dot"></span>Python 服务</button>
       <button class="menu-item" data-view="monitor" data-filter="databases"><span class="dot"></span>数据库</button>
       <button class="menu-item" data-view="monitor" data-filter="docker"><span class="dot"></span>Docker</button>
+      <button class="menu-item" data-view="monitor" data-filter="processes"><span class="dot"></span>进程</button>
+      <button class="menu-item" data-view="monitor" data-filter="ssl"><span class="dot"></span>SSL 证书</button>
       <button class="menu-item" data-view="monitor" data-filter="systemd"><span class="dot"></span>服务</button>
       <div class="group">操作</div>
       <button class="menu-item" data-view="chat"><span>💬</span>Agent 对话</button>
@@ -356,6 +360,14 @@
       <label>模型</label>
       <select id="cfg-model"></select>
       <div class="model-loading" id="cfg-model-status"></div>
+    </div>
+    <div class="field">
+      <label>SSL 监控域名（一行一个，如 example.com）</label>
+      <textarea id="cfg-ssl-sites" class="field-textarea" rows="3"></textarea>
+    </div>
+    <div class="field">
+      <label>连通性目标（一行一个，如 1.1.1.1）</label>
+      <textarea id="cfg-ping-targets" class="field-textarea" rows="3"></textarea>
     </div>
     <div class="modal-actions">
       <button class="btn" id="cfg-cancel">取消</button>
