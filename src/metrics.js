@@ -138,6 +138,33 @@ export async function collectSsl(sites = []) {
   return { results };
 }
 
+export async function collectConnectivity(targets = []) {
+  const results = await Promise.all(targets.map(async (target) => {
+    const [ping, dns] = await Promise.all([
+      runCommand(`ping -c 2 -W 3 ${target}`),
+      runCommand(`getent hosts ${target}`),
+    ]);
+    return {
+      target,
+      pingOk: ping.exitCode === 0,
+      pingDetail: ping.stdout.trim() || ping.stderr.trim(),
+      dns: dns.stdout.trim() || dns.stderr.trim() || "解析失败",
+    };
+  }));
+  return { results };
+}
+
+export async function collectPorts(port) {
+  if (!port) return collectNetwork();
+  const r = await runCommand(`ss -tulnp | grep ":${port} "`);
+  return {
+    listeners: {
+      ok: r.exitCode === 0,
+      detail: r.stdout || `端口 ${port} 无监听`,
+    },
+  };
+}
+
 export async function collectAll(config) {
   return {
     system: await safe(collectSystem),
@@ -150,5 +177,6 @@ export async function collectAll(config) {
     systemd: await safe(collectSystemd),
     processes: await safe(collectProcesses),
     ssl: await safe(() => collectSsl(config.sslSites || [])),
+    connectivity: await safe(() => collectConnectivity(config.pingTargets || [])),
   };
 }

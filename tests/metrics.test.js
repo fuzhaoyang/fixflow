@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl } from "../src/metrics.js";
+import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -53,4 +53,14 @@ test("collectProcesses 返回进程与僵尸统计", async () => {
 test("collectSsl 对空列表返回空 results，不抛错", async () => {
   const r = await collectSsl([]);
   assert.ok("results" in r || "error" in r);
+});
+
+test("collectConnectivity 对空目标返回空 results", async () => {
+  const r = await collectConnectivity([]);
+  assert.ok("results" in r || "error" in r);
+});
+
+test("collectPorts 无参返回监听列表", async () => {
+  const r = await collectPorts();
+  assert.ok("listeners" in r || "error" in r);
 });
