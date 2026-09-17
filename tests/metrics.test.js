@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall } from "../src/metrics.js";
+import { collectAll, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -69,4 +69,15 @@ test("collectFirewall 返回 riskyPorts 字段", async () => {
   const r = await collectFirewall();
   assert.ok("riskyPorts" in r, "缺少 riskyPorts 字段");
   assert.ok(Array.isArray(r.riskyPorts));
+});
+
+test("新增诊断采集函数不抛错", async () => {
+  const n = await collectNginxLogs();
+  assert.ok("errorLog" in n || "error" in n);
+  const p = await collectPyProcesses();
+  assert.ok("processes" in p || "error" in p);
+  const d = await collectDockerDetail();
+  assert.ok("stats" in d || "error" in d);
+  const db = await collectDbSlow({ databases: [] });
+  assert.ok(Array.isArray(db) || "error" in db);
 });

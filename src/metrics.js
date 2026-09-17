@@ -171,6 +171,48 @@ export async function collectPorts(port) {
   };
 }
 
+export async function collectNginxLogs() {
+  const [logs, sites] = await Promise.all([
+    runCommand("tail -50 /var/log/nginx/error.log 2>&1"),
+    runCommand("ls /etc/nginx/sites-enabled/ 2>/dev/null"),
+  ]);
+  if (logs.exitCode !== 0) return { error: logs.stderr || "nginx 日志不可用" };
+  return { errorLog: logs.stdout, sites: sites.stdout.trim() || "（无站点目录）" };
+}
+
+export async function collectPyProcesses() {
+  const [ps, venvs] = await Promise.all([
+    runCommand("pgrep -fl python 2>/dev/null | head -20"),
+    runCommand("ls -d /srv/*/venv /opt/*/venv ~/venv 2>/dev/null"),
+  ]);
+  if (ps.exitCode !== 0) return { error: "未发现 python 进程" };
+  return { processes: ps.stdout.trim() || "无 python 进程", venvs: venvs.stdout.trim() || "（无常见 venv 目录）" };
+}
+
+export async function collectDbSlow({ databases = [] }) {
+  const probes = {
+    postgres: "psql -tAc 'SELECT count(*) FROM pg_stat_activity' 2>&1",
+    mysql: "mysql -N -e 'SHOW GLOBAL STATUS LIKE \"Slow_queries\"' 2>&1 | tail -1",
+    redis: "redis-cli SLOWLOG LEN 2>&1",
+  };
+  return Promise.all(databases.map(async (d) => {
+    const cmd = probes[d.type];
+    if (!cmd) return { name: d.name, ok: false, detail: `未知类型 ${d.type}` };
+    const r = await runCommand(cmd);
+    return { name: d.name, ok: r.exitCode === 0, detail: (r.stdout || r.stderr).trim() || "无输出" };
+  }));
+}
+
+export async function collectDockerDetail() {
+  const [stats, logs, restarts] = await Promise.all([
+    runCommand("docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' 2>&1"),
+    runCommand("docker ps -q | head -3 | xargs -I{} docker logs --tail 20 --timestamps {} 2>&1"),
+    runCommand("for c in $(docker ps -aq); do docker inspect -f '{{.Name}} 重启{{.RestartCount}}次' $c; done 2>&1"),
+  ]);
+  if (stats.exitCode !== 0) return { error: stats.stderr || "docker 不可用" };
+  return { stats: stats.stdout, logs: logs.stdout || "（无容器日志）", restarts: restarts.stdout || "（无容器）" };
+}
+
 export async function collectAll(config) {
   return {
     system: await safe(collectSystem),
@@ -184,5 +226,9 @@ export async function collectAll(config) {
     processes: await safe(collectProcesses),
     ssl: await safe(() => collectSsl(config.sslSites || [])),
     connectivity: await safe(() => collectConnectivity(config.pingTargets || [])),
+    nginxLogs: await safe(collectNginxLogs),
+    pyProcesses: await safe(collectPyProcesses),
+    dbSlow: await safe(() => collectDbSlow(config)),
+    dockerDetail: await safe(collectDockerDetail),
   };
 }
