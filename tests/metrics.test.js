@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectSystem, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -75,6 +75,17 @@ test("collectConnectivity 对空目标返回空 results", async () => {
 test("collectPorts 无参返回监听列表", async () => {
   const r = await collectPorts();
   assert.ok("listeners" in r || "error" in r);
+});
+
+test("collectNetwork 返回结构化 listeners items", async () => {
+  const r = await collectNetwork();
+  assert.ok("listeners" in r || "error" in r);
+  if (r.listeners?.items) {
+    assert.ok(Array.isArray(r.listeners.items));
+    for (const i of r.listeners.items) {
+      assert.ok("proto" in i && "state" in i && "local" in i);
+    }
+  }
 });
 
 test("collectPorts 多端口批量与服务名映射", async () => {

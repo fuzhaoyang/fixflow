@@ -24,9 +24,28 @@ export async function collectSystem() {
   };
 }
 
+function parseSs(stdout) {
+  return (stdout || "").split("\n").slice(1).map((l) => {
+    const line = l.trimEnd();
+    if (!line.trim()) return null;
+    const m = line.match(/^(\S+)\s+(\S+)\s+\d+\s+\d+\s+(\S+)\s+(\S+)\s*(.*)$/);
+    if (!m) return null;
+    const procMatch = (m[5] || "").match(/users:\(\(\"([^\"]+)\",pid=(\d+)/);
+    return {
+      proto: m[1],
+      state: m[2],
+      local: m[3],
+      peer: m[4],
+      process: procMatch ? procMatch[1] : "",
+      pid: procMatch ? procMatch[2] : "",
+    };
+  }).filter(Boolean);
+}
+
 export async function collectNetwork() {
   const ss = await runCommand("ss -tulnp");
-  return { listeners: { ok: ss.exitCode === 0, detail: ss.stdout || ss.stderr } };
+  if (ss.exitCode !== 0) return { listeners: { ok: false, detail: ss.stderr || "ss 不可用" } };
+  return { listeners: { ok: true, items: parseSs(ss.stdout) } };
 }
 
 export async function collectNginx() {

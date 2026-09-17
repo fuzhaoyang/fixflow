@@ -68,15 +68,33 @@ function renderCards() {
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
     } else if (key === "system") {
-      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">📄 生成报告</button></h2><pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">复制</button> <button class="btn small" id="report-dl">下载 .md</button></div><pre id="report-out"></pre></div>`;
+      const health = m?.health?.items;
+      let healthHtml = "";
+      if (health?.length) {
+        const rows = health.map((h) => {
+          const icon = h.status === "ok" ? "✅" : h.status === "warn" ? "⚠️" : "❌";
+          const cls = h.status === "ok" ? "ok" : h.status === "warn" ? "na" : "bad";
+          return `<tr><td>${escapeHtml(h.name)}</td><td class="${cls}">${icon} ${h.status === "ok" ? "正常" : h.status === "warn" ? "警告" : "异常"}</td><td>${escapeHtml(h.detail)}</td>${h.advice ? `<td>${escapeHtml(h.advice)}</td>` : "<td>—</td>"}</tr>`;
+        }).join("");
+        healthHtml = `<div style="margin-bottom:8px"><table class="svc-table"><thead><tr><th>项目</th><th>状态</th><th>数值</th><th>建议</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      }
+      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">📄 生成报告</button></h2>${healthHtml}<pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">复制</button> <button class="btn small" id="report-dl">下载 .md</button></div><pre id="report-out"></pre></div>`;
     } else if (key === "network") {
       const scan = metrics.portScan;
       const ping = metrics.pingResult;
+      const items = m?.listeners?.items;
+      let netHtml = "";
+      if (items?.length) {
+        const rows = items.map((i) => `<tr><td>${escapeHtml(i.proto)}</td><td>${escapeHtml(i.state)}</td><td>${escapeHtml(i.local)}</td><td>${escapeHtml(i.process || "—")}</td><td>${i.pid ? `<a href="javascript:void(0)" onclick="return false" title="${i.pid}">${i.pid}</a>` : "—"}</td></tr>`).join("");
+        netHtml = `<div style="max-height:220px;overflow:auto"><table class="svc-table"><thead><tr><th>协议</th><th>状态</th><th>本地地址</th><th>进程</th><th>PID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+      } else {
+        netHtml = `<pre>${escapeHtml(detail(m))}</pre>`;
+      }
       let scanHtml = "";
       if (scan?.results?.length) {
         scanHtml = `<pre>【端口占用】${scan.results.map((p) => `${p.port} (${p.service}): ${p.ok ? "监听中" : "未监听"}\n${p.detail}`).join("\n----\n")}</pre>`;
       }
-      card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>${scanHtml}${ping ? `<pre>【连通性】${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
+      card.innerHTML = `<h2>${label}</h2>${netHtml}${scanHtml}${ping ? `<pre>【连通性】${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
     } else if (key === "processes") {
       card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
     } else if (key === "ssl") {
@@ -163,14 +181,30 @@ function renderSsl(m) {
   return `<table class="svc-table"><thead><tr><th>域名</th><th>到期时间</th><th>剩余</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
+function fmtVal(v) {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
 function detail(m) {
   if (Array.isArray(m)) {
     if (!m.length) return "（未配置）";
-    return m.map((x) => `${x.ok ? "✅" : "❌"} ${x.name}: ${x.detail ?? ""}`).join("\n");
+    return m.map((x) => {
+      if (typeof x !== "object" || x === null) return fmtVal(x);
+      const status = x.ok === false ? "❌" : x.ok === true ? "✅" : "";
+      const rest = Object.entries(x).filter(([k]) => !["ok"].includes(k))
+        .map(([k, v]) => `${k}: ${fmtVal(v)}`).join(", ");
+      return `${status} ${rest}`;
+    }).join("\n");
   }
   if (!m) return "N/A";
-  const parts = Object.entries(m).map(([k, v]) => `${k}: ${v?.detail ?? v?.ok ?? v ?? "N/A"}`);
-  return parts.join("\n");
+  if (m.error) return m.error;
+  return Object.entries(m).map(([k, v]) => {
+    if (Array.isArray(v) && !v.length) return null;
+    if (v && typeof v === "object") return null;
+    return `${k}: ${fmtVal(v)}`;
+  }).filter(Boolean).join("\n");
 }
 
 function escapeHtml(s) {
