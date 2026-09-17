@@ -193,15 +193,26 @@ export async function collectConnectivity(targets = []) {
   return { results };
 }
 
-export async function collectPorts(port) {
-  if (!port) return collectNetwork();
-  const r = await runCommand(`ss -tulnp | grep ":${port} "`);
-  return {
-    listeners: {
+export const PORT_SERVICES = {
+  22: "ssh", 25: "smtp", 53: "dns", 80: "http", 110: "pop3", 143: "imap",
+  443: "https", 3306: "mysql", 5432: "postgres", 6379: "redis", 8080: "http-alt",
+  8443: "https-alt", 9090: "prometheus", 27017: "mongodb", 9000: "php-fpm",
+  9418: "git", 5000: "docker-registry", 2375: "docker", 11211: "memcached",
+};
+
+export async function collectPorts(ports) {
+  if (!ports) return collectNetwork();
+  const list = String(ports).split(",").map((s) => s.trim()).filter(Boolean);
+  const results = await Promise.all(list.map(async (p) => {
+    const r = await runCommand(`ss -tulnp | grep ":${p} "`);
+    return {
+      port: p,
+      service: PORT_SERVICES[String(p)] || "未知服务",
       ok: r.exitCode === 0,
-      detail: r.stdout || `端口 ${port} 无监听`,
-    },
-  };
+      detail: r.stdout || `端口 ${p} 无监听`,
+    };
+  }));
+  return { results };
 }
 
 export async function collectNginxLogs() {

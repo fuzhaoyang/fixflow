@@ -77,6 +77,15 @@ test("collectPorts 无参返回监听列表", async () => {
   assert.ok("listeners" in r || "error" in r);
 });
 
+test("collectPorts 多端口批量与服务名映射", async () => {
+  const r = await collectPorts("22,3306,99999");
+  assert.ok("results" in r);
+  assert.equal(r.results.length, 3);
+  assert.equal(r.results[0].service, "ssh");
+  assert.equal(r.results[1].service, "mysql");
+  assert.equal(r.results[2].service, "未知服务");
+});
+
 test("collectFirewall 返回 riskyPorts 字段", async () => {
   const r = await collectFirewall();
   assert.ok("riskyPorts" in r, "缺少 riskyPorts 字段");
