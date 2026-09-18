@@ -165,3 +165,45 @@ test("apply_fix 被拒绝后继续直到有结论", async () => {
   assert.equal(JSON.parse(toolMsg2.content).confirmed, true);
   assert.ok(events.some((e) => e.type === "tool"));
 });
+
+test("工具执行抛错时仍为所有 tool_call 写响应并继续", async () => {
+  const s = createSession({
+    config: {},
+    onConfirm: async () => { throw new Error("用户确认被中止"); },
+    llmChat: fakeLlm([
+      {
+        text: "", toolCalls: [
+          { id: "c1", name: "apply_fix", args: { command: "rm -rf /", reason: "t" } },
+          { id: "c2", name: "run_command", args: { command: "echo hi" } },
+        ],
+      },
+      { text: "处理完成", toolCalls: [] },
+    ]),
+  });
+  const out = await s.send("测试");
+  assert.equal(out, "处理完成");
+  const tools = s.history.filter((m) => m.role === "tool");
+  assert.equal(tools.length, 2);
+  assert.deepEqual(tools.map((t) => t.tool_call_id), ["c1", "c2"]);
+  assert.ok(JSON.parse(tools[0].content).error);
+  assert.ok(!JSON.parse(tools[1].content).error);
+});
+
+test("onEvent 抛错不中断工具循环，历史仍完整", async () => {
+  const s = createSession({
+    config: {},
+    onEvent: () => { throw new Error("SSE 客户端断开"); },
+    llmChat: fakeLlm([
+      {
+        text: "", toolCalls: [
+          { id: "c1", name: "run_command", args: { command: "echo a" } },
+          { id: "c2", name: "run_command", args: { command: "echo b" } },
+        ],
+      },
+      { text: "ok", toolCalls: [] },
+    ]),
+  });
+  const out = await s.send("测试");
+  assert.equal(out, "ok");
+  assert.equal(s.history.filter((m) => m.role === "tool").length, 2);
+});

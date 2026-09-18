@@ -1,5 +1,5 @@
 import { writeFileSync } from "node:fs";
-import { spawnSync } from "node:child_process";
+import { spawnSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const UNIT_PATH = "/etc/systemd/system/fixflow.service";
@@ -40,4 +40,24 @@ export async function install({
     if (r.status !== 0) return { installed: false, reason: `systemctl ${args.join(" ")} 失败（exit ${r.status}），请检查 journalctl -u fixflow` };
   }
   return { installed: true };
+}
+
+export function restart({
+  exec = (cmd, args, opts) => spawnSync(cmd, args, opts),
+  spawnChild = spawn,
+  entry = process.argv[1],
+} = {}) {
+  try {
+    const active = exec("systemctl", ["is-active", "fixflow"], { stdio: "ignore" });
+    if (active.status === 0) {
+      exec("systemctl", ["restart", "fixflow"], { stdio: "ignore" });
+      return { method: "systemd" };
+    }
+  } catch {}
+  if (entry) {
+    const child = spawnChild(process.execPath, [entry, "web"], { detached: true, stdio: "ignore" });
+    child.unref();
+    return { method: "respawn" };
+  }
+  return { method: "none" };
 }

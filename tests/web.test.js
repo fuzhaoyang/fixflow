@@ -88,6 +88,17 @@ test("chat 与 abort 走通会话", async () => {
   w.close();
 });
 
+test("/api/restart 触发重启流程", async () => {
+  let restarted = false;
+  const w = await startWeb({ port: 0, services: [], databases: [], restart: () => { restarted = true; return { method: "respawn" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/restart`, { method: "POST" });
+  assert.equal(res.status, 200);
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(restarted, true);
+  w.close();
+});
+
 test("/api/report 返回 Markdown 报告", async () => {
   const w = await startWeb({ port: 0, services: [], databases: [] });
   const base = `http://127.0.0.1:${w.server.address().port}`;

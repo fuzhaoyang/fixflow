@@ -26,10 +26,11 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
   const history = [{ role: "system", content: SYSTEM_PROMPT }];
   const ctx = { onConfirm };
   let controller = new AbortController();
+  const safeEvent = (e) => { try { onEvent?.(e); } catch {} };
   function clearHistory() {
     history.length = 0;
     history.push({ role: "system", content: SYSTEM_PROMPT });
-    onEvent?.({ type: "clear" });
+    safeEvent({ type: "clear" });
     return { cleared: true };
   }
   ctx.clearHistory = clearHistory;
@@ -46,13 +47,13 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
       });
       if (result && typeof result[Symbol.asyncIterator] === "function") {
         for await (const chunk of result) {
-          if (chunk.delta) { text += chunk.delta; onEvent?.({ type: "delta", text: chunk.delta }); }
+          if (chunk.delta) { text += chunk.delta; safeEvent({ type: "delta", text: chunk.delta }); }
           if (Array.isArray(chunk.toolCalls)) toolCalls = chunk.toolCalls;
         }
       } else {
         text = result?.text || "";
         toolCalls = result?.toolCalls || [];
-        if (text) onEvent?.({ type: "text", text });
+        if (text) safeEvent({ type: "text", text });
       }
       const assistantMsg = { role: "assistant", content: text || null };
       if (toolCalls.length) {
@@ -61,10 +62,19 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
       history.push(assistantMsg);
       if (!toolCalls.length) return text || "";
       for (const call of toolCalls) {
-        const handler = HANDLERS[call.name];
-        const result2 = handler ? await handler(call.args, ctx) : { error: `未知工具 ${call.name}` };
-        onEvent?.({ type: "tool", name: call.name, args: call.args, result: result2 });
-        history.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result2) });
+        let result;
+        try {
+          if (ctx.signal?.aborted) {
+            result = { aborted: true };
+          } else {
+            const handler = HANDLERS[call.name];
+            result = handler ? await handler(call.args, ctx) : { error: `未知工具 ${call.name}` };
+          }
+        } catch (e) {
+          result = { error: String(e?.message || e) };
+        }
+        history.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+        safeEvent({ type: "tool", name: call.name, args: call.args, result });
       }
     }
   }

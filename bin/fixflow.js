@@ -4,7 +4,7 @@ import { loadConfig } from "../src/config.js";
 import { startFlow } from "../src/cli.js";
 import { startWeb } from "../src/web/server.js";
 import { runSetup, writeConfig, printSuccess, DEFAULT_CONFIG_PATH, needsReconfigure, clearReconfigureFlag, backupConfig } from "../src/setup.js";
-import { install as installService } from "../src/service.js";
+import { install as installService, restart as restartService } from "../src/service.js";
 import { runDoctor } from "../src/doctor.js";
 
 const [cmd] = process.argv.slice(2);
@@ -19,6 +19,17 @@ let config = loadConfig();
 
 if (cmd === "doctor") {
   await runDoctor({ config });
+  process.exit(0);
+}
+
+if (cmd === "restart") {
+  console.log("正在重启 fixflow 面板服务…");
+  const r = restartService();
+  if (r.method === "none") {
+    console.log("⚠ 无法自动重启（非 systemd 托管且无法自重启），请手动执行: fixflow web");
+    process.exit(1);
+  }
+  console.log(r.method === "systemd" ? "✓ 已通过 systemctl 重启，稍等几秒后重新访问面板。" : "✓ 已拉起新进程，稍等几秒后重新访问面板。");
   process.exit(0);
 }
 

@@ -620,8 +620,6 @@ const cfgApiKey = document.getElementById("cfg-api-key");
 const cfgKeyHint = document.getElementById("cfg-key-hint");
 const cfgModel = document.getElementById("cfg-model");
 const cfgModelStatus = document.getElementById("cfg-model-status");
-const cfgSslSites = document.getElementById("cfg-ssl-sites");
-const cfgPingTargets = document.getElementById("cfg-ping-targets");
 
 let currentKey = "";
 
@@ -654,8 +652,6 @@ async function openSettings() {
   cfgBaseUrl.value = cfg.baseUrl || "";
   cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
   currentKey = cfg.apiKey || "";
-  cfgSslSites.value = (cfg.sslSites || []).join("\n");
-  cfgPingTargets.value = (cfg.pingTargets || []).join("\n");
   settingsMask.classList.add("show");
   await loadModels();
   if (cfg.model) cfgModel.value = cfg.model;
@@ -670,10 +666,46 @@ function showSaveMsg(text) {
   saveMsgEl = document.createElement("div");
   saveMsgEl.className = "save-msg";
   saveMsgEl.textContent = text;
-  settingsMask.appendChild(saveMsgEl);
+  document.body.appendChild(saveMsgEl);
 }
 
-document.getElementById("open-settings").onclick = openSettings;
+const settingsMenu = document.getElementById("settings-menu");
+document.getElementById("open-settings").onclick = (e) => {
+  e.stopPropagation();
+  settingsMenu.classList.toggle("show");
+};
+document.addEventListener("click", () => settingsMenu.classList.remove("show"));
+document.querySelectorAll(".settings-item").forEach((item) => {
+  item.addEventListener("click", (e) => {
+    e.stopPropagation();
+    settingsMenu.classList.remove("show");
+    if (item.dataset.action === "config") openSettings();
+    else if (item.dataset.action === "restart") restartMask.classList.add("show");
+  });
+});
+
+const helpMask = document.getElementById("help-mask");
+document.getElementById("help-btn").onclick = () => helpMask.classList.add("show");
+document.getElementById("help-close").onclick = () => helpMask.classList.remove("show");
+
+const restartMask = document.getElementById("restart-mask");
+const restartConfirmBtn = document.getElementById("restart-confirm");
+document.getElementById("restart-cancel").onclick = () => restartMask.classList.remove("show");
+restartMask.addEventListener("click", (e) => { if (e.target === restartMask) restartMask.classList.remove("show"); });
+restartConfirmBtn.onclick = () => {
+  restartConfirmBtn.disabled = true;
+  restartConfirmBtn.textContent = "重启中…";
+  fetch("api/restart", { method: "POST" })
+    .then(() => {
+      showSaveMsg("✅ 已触发重启，页面将自动刷新…");
+      setTimeout(() => location.reload(), 3000);
+    })
+    .catch(() => {
+      restartConfirmBtn.disabled = false;
+      restartConfirmBtn.textContent = "确认重启";
+      showSaveMsg("❌ 重启请求失败");
+    });
+};
 
 document.getElementById("cfg-save").onclick = async () => {
   const body = {

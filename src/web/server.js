@@ -6,6 +6,7 @@ import { homedir } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
 import { loadConfig } from "../config.js";
+import { restart as restartService } from "../service.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
@@ -156,6 +157,14 @@ export async function startWeb(config = {}) {
         broadcast({ type: "aborted" });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end("{}");
+      } else if (url.pathname === "/api/restart" && req.method === "POST") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+        setTimeout(() => {
+          const r = (config.restart || restartService)();
+          console.log(`重启服务（${r.method}），进程即将退出。`);
+          if (!config.restart) process.exit(0);
+        }, 200);
       } else if (url.pathname === "/api/stream") {
         res.writeHead(200, { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.write(": connected\n\n");

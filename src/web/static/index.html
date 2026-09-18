@@ -41,12 +41,26 @@
     .menu-item .dot.ok { background: var(--ok); } .menu-item .dot.bad { background: var(--bad); }
     .menu-item .dot.na { background: var(--muted); }
     .settings-btn {
-      display: flex; align-items: center; gap: 8px; margin: 8px; padding: 9px 12px;
-      background: none; border: 1px solid var(--border); border-radius: 8px;
+      display: flex; align-items: center; gap: 8px; padding: 9px 12px;
+      background: none; border: none; border-radius: 8px;
       color: var(--muted); cursor: pointer; font-size: 13px; transition: all .2s;
     }
-    .settings-btn:hover { color: var(--text); background: var(--panel2); border-color: var(--accent); }
+    .settings-btn:hover { color: var(--text); background: var(--panel2); }
     .settings-btn svg { width: 16px; height: 16px; }
+    .settings-wrap { position: relative; margin: 8px; }
+    .settings-menu {
+      position: absolute; bottom: 100%; left: 0; min-width: 100%;
+      background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+      overflow: hidden; display: none; z-index: 50; box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    }
+    .settings-menu.show { display: block; }
+    .settings-item {
+      padding: 10px 14px; cursor: pointer; font-size: 13px; white-space: nowrap;
+      display: flex; align-items: center; gap: 8px; color: var(--text);
+    }
+    .settings-item:hover { background: var(--panel2); }
+    .settings-item.danger:hover { background: rgba(248,113,113,.12); color: var(--bad); }
+    .modal-text { font-size: 14px; color: var(--muted); line-height: 1.7; margin: 0 0 18px; }
     /* 设置弹层 */
     .modal-mask {
       position: fixed; inset: 0; background: rgba(0,0,0,.55); display: none;
@@ -87,6 +101,26 @@
     .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
     .conn-dot.ok { background: var(--ok); }
     .conn-dot.bad { background: var(--bad); }
+    .help-btn {
+      width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
+      background: none; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; transition: all .2s;
+    }
+    .help-btn:hover { color: var(--text); background: var(--panel2); border-color: var(--accent); }
+    .help-mask { position: fixed; inset: 0; background: var(--bg); z-index: 300; display: none; flex-direction: column; }
+    .help-mask.show { display: flex; }
+    .help-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
+    .help-header h2 { font-size: 16px; margin: 0; color: var(--text); }
+    .help-close { margin-left: auto; }
+    .help-body { flex: 1; overflow-y: auto; padding: 20px 28px 60px; max-width: 880px; margin: 0 auto; width: 100%; color: var(--text); font-size: 14px; line-height: 1.8; }
+    .help-body h3 { color: var(--accent); font-size: 16px; margin: 26px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
+    .help-body h4 { font-size: 14px; margin: 16px 0 6px; }
+    .help-body table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
+    .help-body th, .help-body td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+    .help-body th { background: var(--panel2); color: var(--muted); }
+    .help-body code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+    .help-body pre { background: #0b1220; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
+    .help-body ul { margin: 6px 0; padding-left: 20px; }
     .search-box {
       margin-left: 16px; padding: 6px 12px; width: 200px; border-radius: 8px;
       border: 1px solid var(--border); background: var(--bg); color: var(--text);
@@ -303,13 +337,19 @@
       <div class="group">操作</div>
       <button class="menu-item" data-view="chat"><span>💬</span>Agent 对话</button>
     </nav>
-    <button class="settings-btn" id="open-settings">
-      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.1-1.55 1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.88 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1.1 1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.88.34h.01a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.88-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.88v.01a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-      设置
-    </button>
+    <div class="settings-wrap">
+      <button class="settings-btn" id="open-settings">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.1-1.55 1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.88 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1.1 1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.88.34h.01a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.88-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.88v.01a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        设置
+      </button>
+      <div class="settings-menu" id="settings-menu">
+        <div class="settings-item" data-action="config">⚙️ 模型设置</div>
+        <div class="settings-item danger" data-action="restart">🔄 重启服务</div>
+      </div>
+    </div>
   </aside>
   <main>
-    <div class="toolbar"><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="conn-wrap"><i class="conn-dot" id="conn-dot"></i><span class="muted" id="conn">连接中…</span></span></div>
+    <div class="toolbar"><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="conn-wrap"><i class="conn-dot" id="conn-dot"></i><span class="muted" id="conn">连接中…</span><button class="help-btn" id="help-btn" title="使用文档">?</button></span></div>
     <div class="content" id="view-monitor">
       <div id="net-tools" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
         <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80">
@@ -372,18 +412,95 @@
       <select id="cfg-model"></select>
       <div class="model-loading" id="cfg-model-status"></div>
     </div>
-    <div class="field">
-      <label>SSL 监控域名（一行一个，如 example.com）</label>
-      <textarea id="cfg-ssl-sites" class="field-textarea" rows="3"></textarea>
-    </div>
-    <div class="field">
-      <label>连通性目标（一行一个，如 1.1.1.1）</label>
-      <textarea id="cfg-ping-targets" class="field-textarea" rows="3"></textarea>
-    </div>
     <div class="modal-actions">
       <button class="btn" id="cfg-cancel">取消</button>
       <button class="btn" id="cfg-save">保存</button>
     </div>
+  </div>
+</div>
+<div class="modal-mask" id="restart-mask">
+  <div class="modal">
+    <h2>🔄 重启服务</h2>
+    <p class="modal-text">重启后当前会话会重新开始（聊天记录保留在本地），页面将自动刷新。<br>确认重启 fixflow 服务吗？</p>
+    <div class="modal-actions">
+      <button class="btn" id="restart-cancel">取消</button>
+      <button class="btn" id="restart-confirm">确认重启</button>
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+<div class="help-mask" id="help-mask">
+  <div class="help-header">
+    <h2>📖 Fixflow 使用文档</h2>
+    <button class="btn small help-close" id="help-close">关闭</button>
+  </div>
+  <div class="help-body">
+    <h3>一、它是什么</h3>
+    <p>Fixflow 是装在你自己服务器上的 AI 运维助手。用中文描述问题，它会调用命令检查服务器、定位问题，并在你确认后执行修复。所有删除 / 修改 / 安装类操作都必须经你确认。</p>
+
+    <h3>二、快速开始</h3>
+    <ul>
+      <li>运行 <code>fixflow</code> 进入配置向导：选择服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
+      <li>配置完成后自动自检，看到「✅ 全部正常」即成功。</li>
+      <li>浏览器访问面板：<code>http://127.0.0.1:2222</code>。</li>
+      <li>随时自检：<code>fixflow doctor</code>。</li>
+    </ul>
+
+    <h3>三、命令行使用（CLI）</h3>
+    <p>运行 <code>fixflow</code> 进入对话，直接发指令，例如：</p>
+    <pre>检查磁盘空间并汇报
+防火墙开了哪些端口
+帮我清理 /var/log 下 30 天前的日志</pre>
+    <h4>内置命令</h4>
+    <table>
+      <tr><th>操作</th><th>作用</th></tr>
+      <tr><td><code>help</code> / <code>?</code></td><td>显示帮助</td></tr>
+      <tr><td><code>clear</code> / 清空历史</td><td>清空当前会话对话</td></tr>
+      <tr><td><code>exit</code> / <code>quit</code></td><td>退出会话</td></tr>
+      <tr><td>↑ / ↓ 方向键</td><td>切换历史输入过的命令</td></tr>
+      <tr><td>Ctrl+C（任务运行中）</td><td>中止当前任务（同时中断模型请求）</td></tr>
+      <tr><td>Ctrl+C（空闲时）</td><td>退出会话</td></tr>
+    </table>
+
+    <h3>四、Web 面板</h3>
+    <ul>
+      <li><b>监控</b>：CPU / 内存 / 磁盘 / 网络端口 / Nginx / 防火墙 / Docker / 进程，每 5 秒刷新。</li>
+      <li><b>AI 对话</b>：直接打字让助手干活，回复逐字显示；修复操作弹「确认执行 / 拒绝」。</li>
+      <li><b>设置</b>：左下角「⚙️」→ 模型设置（改 API 地址 / Key / 模型）或重启服务。</li>
+      <li><b>清空历史</b>：对话输入框上方「清空历史」按钮。</li>
+    </ul>
+
+    <h3>五、工具与安全</h3>
+    <table>
+      <tr><th>工具</th><th>用途</th><th>权限</th></tr>
+      <tr><td>run_command</td><td>执行命令检查 / 操作</td><td>只读自动执行；删除/修改/安装类需确认</td></tr>
+      <tr><td>read_file</td><td>读取日志、配置</td><td>自动执行</td></tr>
+      <tr><td>apply_fix</td><td>执行修复命令</td><td>必须确认</td></tr>
+      <tr><td>clear_history</td><td>清空会话历史</td><td>自动执行</td></tr>
+    </table>
+    <p>所有写入 / 删除 / 修改操作执行前都会弹确认，输入 <code>y</code> 才执行。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
+
+    <h3>六、重置模型 / 服务商 / Key</h3>
+    <ul>
+      <li>面板：左下角「⚙️ 设置」→ 模型设置，保存即生效。</li>
+      <li>命令：<code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code> 向导。</li>
+      <li>直接编辑 <code>~/.config/fixflow/config.json</code>（baseUrl / model / apiKey）。</li>
+      <li>每次重新安装后会自动要求重新配置，旧配置备份为 config.json.bak。</li>
+    </ul>
+
+    <h3>七、重启服务</h3>
+    <p>遇到对话异常（如模型返回 400 报错）可一键重启服务解决：左下角「⚙️ 设置」→「重启服务」，或命令行 <code>fixflow restart</code>。重启会清空内存会话（异常上下文随之消失），聊天记录保留在本地。</p>
+
+    <h3>八、常见问题</h3>
+    <table>
+      <tr><th>现象</th><th>处理</th></tr>
+      <tr><td>向导提示"无法连接"</td><td>服务器访问不了该 API 地址，检查外网 / 防火墙 / 地址</td></tr>
+      <tr><td>提示"API Key 无效"</td><td>重新复制粘贴 Key</td></tr>
+      <tr><td>面板打不开</td><td>运行 <code>fixflow doctor</code> 检查；未运行就 <code>fixflow web</code></td></tr>
+      <tr><td>对话报 LLM API 400</td><td>多发生在会话上下文异常，点「重启服务」一键修复</td></tr>
+      <tr><td>监控显示 N/A</td><td>对应组件没装（如没装 Docker），不影响其他功能</td></tr>
+    </table>
   </div>
 </div>
 <script src="app.js"></script>

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildServiceUnit, install } from "../src/service.js";
+import { buildServiceUnit, install, restart } from "../src/service.js";
 
 test("buildServiceUnit 生成合法 unit", () => {
   const unit = buildServiceUnit({ node: "/usr/bin/node", bin: "/opt/fixflow/bin/fixflow.js" });
@@ -43,4 +43,24 @@ test("root 写入 unit 并依次执行 systemctl 序列", async () => {
 test("systemctl 执行失败返回未安装", async () => {
   const r = await install({ getuid: () => 0, exec: () => ({ status: 1 }) });
   assert.equal(r.installed, false);
+});
+
+test("restart：systemd 激活时走 systemctl restart", () => {
+  const calls = [];
+  const r = restart({
+    exec: (cmd, args) => { calls.push([cmd, args.join(" ")]); return { status: 0 }; },
+  });
+  assert.equal(r.method, "systemd");
+  assert.deepEqual(calls, [["systemctl", "is-active fixflow"], ["systemctl", "restart fixflow"]]);
+});
+
+test("restart：非 systemd 时自重启新进程", () => {
+  let spawned = false;
+  const r = restart({
+    exec: () => { const e = new Error(); e.status = 1; throw e; },
+    spawnChild: () => ({ unref() { spawned = true; } }),
+    entry: "/opt/fixflow/bin/fixflow.js",
+  });
+  assert.equal(r.method, "respawn");
+  assert.equal(spawned, true);
 });
