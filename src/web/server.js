@@ -176,7 +176,17 @@ export async function startWeb(config = {}) {
     }
   });
 
-  await new Promise((resolve) => server.listen(config.port ?? 8080, "127.0.0.1", resolve));
+  await new Promise((resolve, reject) => {
+    const srv = server.listen(config.port ?? 8080, "127.0.0.1", resolve);
+    srv.on("error", (e) => {
+      if (e.code === "EADDRINUSE") {
+        console.error(`\n⚠ 端口 ${config.port ?? 8080} 已被占用（面板可能已在运行）。`);
+        console.error(`  直接访问 http://127.0.0.1:${config.port ?? 8080}，或先停止旧进程再启动。`);
+        process.exit(1);
+      }
+      reject(e);
+    });
+  });
   const address = server.address();
   console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {

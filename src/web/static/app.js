@@ -507,6 +507,7 @@ function connectStream() {
       streamingText += ev.text;
       if (!streamingEl) streamingEl = renderMsg("", "assistant");
       streamingEl.querySelector(".bubble").textContent = streamingText;
+      log.scrollTop = log.scrollHeight;
     }
     else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }
     else if (ev.type === "confirm") {

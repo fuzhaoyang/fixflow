@@ -1,9 +1,70 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeConfig, writeConfig, DEFAULT_CONFIG_PATH } from "../src/setup.js";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mergeConfig, writeConfig, DEFAULT_CONFIG_PATH, runSetup, verifyApiKey, PROVIDERS, backupConfig } from "../src/setup.js";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+const makeAsk = (answers) => { let i = 0; return async () => answers[i++]; };
+const fakeVerify = async () => ({ ok: true, models: ["m1", "m2"] });
+
+test("verifyApiKey：Key 无效返回 key 类错误", async () => {
+  const r = await verifyApiKey({ baseUrl: "https://x/v1", apiKey: "bad", fetchFn: async () => ({ status: 401, ok: false, json: async () => ({}) }) });
+  assert.equal(r.ok, false);
+  assert.equal(r.kind, "key");
+});
+
+test("verifyApiKey：网络异常返回 network 类错误", async () => {
+  const r = await verifyApiKey({ baseUrl: "https://x/v1", apiKey: "k", fetchFn: async () => { throw new Error("ECONNREFUSED"); } });
+  assert.equal(r.ok, false);
+  assert.equal(r.kind, "network");
+});
+
+test("runSetup：选服务商预设 + 校验 + 选模型 + 启动面板", async () => {
+  const cfg = await runSetup({ ask: makeAsk(["1", "key1", "2", "y"]), verify: fakeVerify });
+  assert.equal(cfg.baseUrl, "https://api.deepseek.com/v1");
+  assert.equal(cfg.apiKey, "key1");
+  assert.equal(cfg.model, "m2");
+  assert.equal(cfg._startPanel, true);
+});
+
+test("runSetup：Key 无效时重试，跳过面板启动", async () => {
+  const cfg = await runSetup({
+    ask: makeAsk(["1", "bad", "good", "1", "n"]),
+    verify: async ({ apiKey }) => apiKey === "bad"
+      ? { ok: false, kind: "key", message: "无效" }
+      : { ok: true, models: ["m1"] },
+  });
+  assert.equal(cfg.apiKey, "good");
+  assert.equal(cfg.model, "m1");
+  assert.equal(cfg._startPanel, false);
+});
+
+test("runSetup：自定义地址", async () => {
+  const cfg = await runSetup({ ask: makeAsk(["4", "https://custom/v1", "k", "m-custom", "n"]), verify: fakeVerify });
+  assert.equal(cfg.baseUrl, "https://custom/v1");
+  assert.equal(cfg.model, "m-custom");
+});
+
+test("PROVIDERS 提供常见服务商预设", () => {
+  assert.ok(PROVIDERS.length >= 3);
+  assert.ok(PROVIDERS.some((p) => p.name.includes("DeepSeek")));
+});
+
+test("backupConfig 复制旧配置为 .bak", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  writeFileSync(cfg, JSON.stringify({ apiKey: "old", baseUrl: "https://old/v1" }));
+  const bak = backupConfig(cfg);
+  assert.equal(bak, cfg + ".bak");
+  const saved = JSON.parse(readFileSync(bak, "utf8"));
+  assert.equal(saved.apiKey, "old");
+});
+
+test("backupConfig 无旧配置时返回 null", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  assert.equal(backupConfig(join(dir, "none.json")), null);
+});
 
 test("mergeConfig 保留已有字段，只更新模型三项", () => {
   const existing = { port: 8099, services: [{ name: "s" }], apiKey: "old" };

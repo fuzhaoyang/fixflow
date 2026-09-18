@@ -66,6 +66,7 @@ export async function startFlow(config) {
         log(`工具调用: ${toolLabel(e)}`);
         spinner.setText(`正在执行: ${toolLabel(e)}`);
       } else if (e.type === "text") spinner.setText("思考中…");
+      else if (e.type === "delta") spinner.setText("正在输出回复…");
     },
   });
   console.log("fixflow 服务器运维 Agent · 输入指令开始检查，Ctrl+C 退出");
