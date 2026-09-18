@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chat } from "../src/agent.js";
+import { chat, streamChat } from "../src/agent.js";
 
 test("解析 tool_calls 与纯文本回复", async () => {
   const orig = globalThis.fetch;
@@ -34,6 +34,58 @@ test("API 错误抛异常", async () => {
   const orig = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: false, status: 401, text: async () => "unauthorized" });
   await assert.rejects(() => chat({ apiKey: "", baseUrl: "x", model: "m", messages: [], tools: [] }));
+  globalThis.fetch = orig;
+});
+
+test("streamChat 流式解析内容增量与 tool_calls", async () => {
+  const orig = globalThis.fetch;
+  const enc = new TextEncoder();
+  globalThis.fetch = async (url, opts) => {
+    assert.equal(JSON.parse(opts.body).stream, true);
+    return {
+      ok: true,
+      body: new ReadableStream({
+        start(ctrl) {
+          ctrl.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"你好，"}}]}\n\n'));
+          ctrl.enqueue(enc.encode('data: {"choices":[{"delta":{"content":"运维助手"}}]}\n\n'));
+          ctrl.enqueue(enc.encode('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"c1","function":{"name":"run_command","arguments":"{\\"command\\":\\"df -h\\"}"}}]}}]}\n\n'));
+          ctrl.enqueue(enc.encode("data: [DONE]\n\n"));
+          ctrl.close();
+        },
+      }),
+    };
+  };
+  const deltas = [];
+  let toolCalls = null;
+  for await (const chunk of streamChat({ apiKey: "k1", baseUrl: "https://x/v1", model: "m1", messages: [], tools: [] })) {
+    if (chunk.delta) deltas.push(chunk.delta);
+    if (Array.isArray(chunk.toolCalls)) toolCalls = chunk.toolCalls;
+  }
+  assert.deepEqual(deltas, ["你好，", "运维助手"]);
+  assert.deepEqual(toolCalls, [{ id: "c1", name: "run_command", args: { command: "df -h" } }]);
+  globalThis.fetch = orig;
+});
+
+test("streamChat 分片数据跨块拼接", async () => {
+  const orig = globalThis.fetch;
+  const enc = new TextEncoder();
+  const body = 'data: {"choices":[{"delta":{"content":"分段"}}]}\n\ndata: [DONE]\n\n';
+  const mid = Math.floor(body.length / 2);
+  globalThis.fetch = async () => ({
+    ok: true,
+    body: new ReadableStream({
+      start(ctrl) {
+        ctrl.enqueue(enc.encode(body.slice(0, mid)));
+        ctrl.enqueue(enc.encode(body.slice(mid)));
+        ctrl.close();
+      },
+    }),
+  });
+  const deltas = [];
+  for await (const chunk of streamChat({ apiKey: "k", baseUrl: "https://x/v1", model: "m", messages: [], tools: [] })) {
+    if (chunk.delta) deltas.push(chunk.delta);
+  }
+  assert.deepEqual(deltas, ["分段"]);
   globalThis.fetch = orig;
 });
 

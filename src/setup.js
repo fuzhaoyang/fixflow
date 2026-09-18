@@ -98,13 +98,18 @@ export async function runSetup({ configPath = DEFAULT_CONFIG_PATH, readConfig = 
   return config;
 }
 
-export function printSuccess(config, { configPath = DEFAULT_CONFIG_PATH } = {}) {
+export function printSuccess(config, { configPath = DEFAULT_CONFIG_PATH, serviceInstalled = false } = {}) {
   console.log(`\n✓ 配置已保存：${configPath}`);
   console.log(`  Base URL: ${config.baseUrl}`);
   console.log(`  模型: ${config.model}`);
   console.log(`\n=== 面板访问 ===`);
-  console.log(`  启动面板: fixflow web`);
-  console.log(`  访问地址: http://127.0.0.1:${config.port}`);
+  if (serviceInstalled) {
+    console.log(`  面板服务已由 systemd 托管（开机自启，崩溃自动恢复）`);
+    console.log(`  访问地址: http://127.0.0.1:${config.port}`);
+  } else {
+    console.log(`  启动面板: fixflow web`);
+    console.log(`  访问地址: http://127.0.0.1:${config.port}`);
+  }
   console.log(`\n=== 不使用面板（CLI）===\n`);
   console.log(`  直接运行: fixflow`);
   console.log(`  然后输入运维指令，例如:`);

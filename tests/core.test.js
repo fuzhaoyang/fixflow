@@ -10,6 +10,46 @@ function fakeLlm(plan) {
   };
 }
 
+function fakeStreamLlm(plan) {
+  let i = 0;
+  return async function* () {
+    const step = plan[i++] || plan[plan.length - 1];
+    for (const delta of step.deltas || []) yield { delta };
+    yield { toolCalls: step.toolCalls || [] };
+  };
+}
+
+test("流式 llmChat：逐段广播 delta 事件并累积完整历史", async () => {
+  const events = [];
+  const s = createSession({
+    config: {},
+    onEvent: (e) => events.push(e),
+    llmChat: fakeStreamLlm([{ deltas: ["磁盘", "占用", "正常"], toolCalls: [] }]),
+  });
+  const out = await s.send("检查磁盘");
+  assert.equal(out, "磁盘占用正常");
+  assert.equal(events.filter((e) => e.type === "delta").length, 3);
+  assert.deepEqual(events.filter((e) => e.type === "delta").map((e) => e.text), ["磁盘", "占用", "正常"]);
+  const assistant = s.history.filter((m) => m.role === "assistant")[0];
+  assert.equal(assistant.content, "磁盘占用正常");
+});
+
+test("流式 llmChat：工具循环后收尾", async () => {
+  const events = [];
+  const s = createSession({
+    config: {},
+    onEvent: (e) => events.push(e),
+    llmChat: fakeStreamLlm([
+      { deltas: [], toolCalls: [{ id: "c1", name: "run_command", args: { command: "df -h" } }] },
+      { deltas: ["处理完成"], toolCalls: [] },
+    ]),
+  });
+  const out = await s.send("检查磁盘");
+  assert.equal(out, "处理完成");
+  assert.ok(events.some((e) => e.type === "tool"));
+  assert.equal(s.history.filter((m) => m.role === "tool").length, 1);
+});
+
 test("纯文本回复直接返回", async () => {
   const s = createSession({ config: {}, llmChat: fakeLlm([{ text: "一切正常", toolCalls: [] }]) });
   assert.equal(await s.send("检查磁盘"), "一切正常");

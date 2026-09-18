@@ -1,4 +1,4 @@
-import { chat as defaultChat } from "./agent.js";
+import { chat as defaultChat, streamChat } from "./agent.js";
 import { runCommand, readFile, applyFix, isWriteCommand } from "./tools.js";
 
 const TOOLS = [
@@ -22,7 +22,7 @@ const HANDLERS = {
   clear_history: (args, ctx) => ctx.clearHistory(),
 };
 
-export function createSession({ config, onConfirm = async () => false, onEvent, llmChat = defaultChat }) {
+export function createSession({ config, onConfirm = async () => false, onEvent, llmChat = streamChat }) {
   const history = [{ role: "system", content: SYSTEM_PROMPT }];
   const ctx = { onConfirm };
   let controller = new AbortController();
@@ -38,22 +38,33 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
     ctx.signal = controller.signal;
     history.push({ role: "user", content: images.length ? [{ type: "text", text: input }, ...images.map((url) => ({ type: "image_url", image_url: { url } }))] : input });
     for (;;) {
-      const { text, toolCalls } = await llmChat({
+      let text = "";
+      let toolCalls = [];
+      const result = await llmChat({
         apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model,
         messages: history, tools: TOOLS, signal: controller.signal,
       });
+      if (result && typeof result[Symbol.asyncIterator] === "function") {
+        for await (const chunk of result) {
+          if (chunk.delta) { text += chunk.delta; onEvent?.({ type: "delta", text: chunk.delta }); }
+          if (Array.isArray(chunk.toolCalls)) toolCalls = chunk.toolCalls;
+        }
+      } else {
+        text = result?.text || "";
+        toolCalls = result?.toolCalls || [];
+        if (text) onEvent?.({ type: "text", text });
+      }
       const assistantMsg = { role: "assistant", content: text || "" };
       if (toolCalls.length) {
         assistantMsg.tool_calls = toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }));
       }
       history.push(assistantMsg);
-      if (text) onEvent?.({ type: "text", text });
       if (!toolCalls.length) return text || "";
       for (const call of toolCalls) {
         const handler = HANDLERS[call.name];
-        const result = handler ? await handler(call.args, ctx) : { error: `未知工具 ${call.name}` };
-        onEvent?.({ type: "tool", name: call.name, args: call.args, result });
-        history.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+        const result2 = handler ? await handler(call.args, ctx) : { error: `未知工具 ${call.name}` };
+        onEvent?.({ type: "tool", name: call.name, args: call.args, result: result2 });
+        history.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result2) });
       }
     }
   }

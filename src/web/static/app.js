@@ -121,7 +121,7 @@ function renderCards() {
       reportBtn.onclick = async () => {
         const box = document.getElementById("report-box");
         const out = document.getElementById("report-out");
-        const res = await fetch("/api/report");
+        const res = await fetch("api/report");
         const report = await res.text();
         out.textContent = report;
         box.style.display = "";
@@ -223,7 +223,7 @@ function escapeHtml(s) {
 
 async function refreshMetrics() {
   try {
-    const res = await fetch("/api/metrics");
+    const res = await fetch("api/metrics");
     metrics = await res.json();
     renderCards();
   } catch {}
@@ -391,7 +391,7 @@ function hideWelcome() { welcome.style.display = "none"; }
 // ---------- 历史记录（服务端文件存储） ----------
 async function loadHistory() {
   try {
-    const res = await fetch("/api/history");
+    const res = await fetch("api/history");
     const data = await res.json();
     chatHistory = data.messages || [];
   } catch {}
@@ -399,7 +399,7 @@ async function loadHistory() {
 
 function saveHistory() {
   const msgs = chatHistory.slice(-200);
-  fetch("/api/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: msgs }) });
+  fetch("api/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ messages: msgs }) });
 }
 
 function restoreHistory() {
@@ -433,6 +433,17 @@ function now() {
 }
 
 let typingEl = null;
+let streamingEl = null;
+let streamingText = "";
+
+function finishStreaming() {
+  if (!streamingEl) return;
+  const text = streamingText;
+  streamingEl.querySelector(".bubble").innerHTML = text ? renderMarkdown(text) : "";
+  if (text) { chatHistory.push({ role: "assistant", text }); saveHistory(); }
+  streamingEl = null;
+  streamingText = "";
+}
 
 function showTyping() {
   if (typingEl) return;
@@ -484,14 +495,20 @@ function toolSummary(ev) {
 }
 
 function connectStream() {
-  const es = new EventSource("/api/stream");
+  const es = new EventSource("api/stream");
   const dot = document.getElementById("conn-dot");
   es.onopen = () => { conn.textContent = "已连接"; dot.className = "conn-dot ok"; };
   es.onerror = () => { conn.textContent = "连接断开，重连中…"; dot.className = "conn-dot bad"; };
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
     if (ev.type === "text") addMsg(ev.text, "assistant");
-    else if (ev.type === "tool") addSimpleMsg(toolSummary(ev), "tool");
+    else if (ev.type === "delta") {
+      hideTyping();
+      streamingText += ev.text;
+      if (!streamingEl) streamingEl = renderMsg("", "assistant");
+      streamingEl.querySelector(".bubble").textContent = streamingText;
+    }
+    else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }
     else if (ev.type === "confirm") {
       addSimpleMsg(`⚠️ 需确认执行：${ev.command}`, "confirm");
       const row = document.createElement("div");
@@ -506,8 +523,8 @@ function connectStream() {
         span.textContent = label;
         row.appendChild(span);
       };
-      yes.onclick = () => { finish("✅ 已确认执行，正在运行…"); fetch("/api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) }); };
-      no.onclick = () => { finish("❌ 已拒绝执行"); fetch("/api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
+      yes.onclick = () => { finish("✅ 已确认执行，正在运行…"); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) }); };
+      no.onclick = () => { finish("❌ 已拒绝执行"); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
       row.append(yes, no);
       log.appendChild(row);
       log.scrollTop = log.scrollHeight;
@@ -515,13 +532,16 @@ function connectStream() {
       clearHistory();
       addSimpleMsg("🧹 聊天历史已清空", "system", { keepWelcome: true });
     } else if (ev.type === "done") {
+      finishStreaming();
       setBusy(false);
       hideTyping();
     } else if (ev.type === "aborted") {
+      finishStreaming();
       setBusy(false);
       hideTyping();
       addSimpleMsg("⚠️ 执行已中止", "system");
     } else if (ev.type === "error") {
+      finishStreaming();
       setBusy(false);
       hideTyping();
       addSimpleMsg(`❌ ${ev.text}`, "error");
@@ -540,7 +560,7 @@ function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
 
 function clearHistory() {
   chatHistory = [];
-  fetch("/api/history/clear", { method: "POST" });
+  fetch("api/history/clear", { method: "POST" });
   log.innerHTML = "";
   welcome.style.display = "";
   hideTyping();
@@ -549,7 +569,7 @@ function clearHistory() {
 
 async function send() {
   if (busy) {
-    await fetch("/api/abort", { method: "POST" });
+    await fetch("api/abort", { method: "POST" });
     return;
   }
   const text = input.value.trim();
@@ -562,11 +582,11 @@ async function send() {
   addMsg(text, "user");
   setBusy(true);
   showTyping();
-  await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: text, images }) });
+  await fetch("api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: text, images }) });
 }
 
 sendBtn.onclick = send;
-stopBtn.onclick = () => fetch("/api/abort", { method: "POST" });
+stopBtn.onclick = () => fetch("api/abort", { method: "POST" });
 clearBtn.onclick = () => { clearHistory(); addSimpleMsg("🧹 聊天历史已清空", "system", { keepWelcome: true }); };
 input.addEventListener("input", () => { charCount.textContent = input.value.length ? input.value.length + "/5000" : ""; });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
@@ -576,14 +596,14 @@ const pingBtn = document.getElementById("ping-btn");
 portBtn.onclick = async () => {
   const port = document.getElementById("port-input").value.trim();
   if (!port) return;
-  const res = await fetch(`/api/metrics?port=${encodeURIComponent(port)}`);
+  const res = await fetch(`api/metrics?port=${encodeURIComponent(port)}`);
   metrics.portScan = (await res.json()).portScan;
   renderCards();
 };
 pingBtn.onclick = async () => {
   const target = document.getElementById("ping-input").value.trim();
   if (!target) return;
-  const res = await fetch(`/api/metrics?ping=${encodeURIComponent(target)}`);
+  const res = await fetch(`api/metrics?ping=${encodeURIComponent(target)}`);
   metrics.pingResult = (await res.json()).pingResult;
   renderCards();
 };
@@ -608,7 +628,7 @@ async function loadModels() {
   cfgModelStatus.textContent = "拉取模型中…";
   cfgModelStatus.className = "model-loading";
   try {
-    const res = await fetch("/api/models");
+    const res = await fetch("api/models");
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
     cfgModel.innerHTML = "";
@@ -628,7 +648,7 @@ async function loadModels() {
 async function openSettings() {
   if (saveMsgEl) saveMsgEl.remove();
   saveMsgEl = null;
-  const res = await fetch("/api/config");
+  const res = await fetch("api/config");
   const cfg = await res.json();
   cfgBaseUrl.value = cfg.baseUrl || "";
   cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
@@ -665,7 +685,7 @@ document.getElementById("cfg-save").onclick = async () => {
   const pingTargets = cfgPingTargets.value.trim().split("\n").map((s) => s.trim()).filter(Boolean);
   if (sslSites.length) body.sslSites = sslSites;
   if (pingTargets.length) body.pingTargets = pingTargets;
-  const res = await fetch("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { alert("保存失败：" + (data.error || res.status)); return; }
   cfgApiKey.value = "";
