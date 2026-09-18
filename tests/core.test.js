@@ -207,3 +207,23 @@ test("onEvent 抛错不中断工具循环，历史仍完整", async () => {
   assert.equal(out, "ok");
   assert.equal(s.history.filter((m) => m.role === "tool").length, 2);
 });
+
+test("发送前净化缺失 tool 响应的残缺 tool_calls", async () => {
+  let seen = null;
+  const s = createSession({
+    config: {},
+    llmChat: async ({ messages }) => { seen = messages; return { text: "ok", toolCalls: [] }; },
+  });
+  s.history.push({
+    role: "assistant", content: "我先看看",
+    tool_calls: [
+      { id: "ghost1", type: "function", function: { name: "run_command", arguments: "{}" } },
+      { id: "real1", type: "function", function: { name: "read_file", arguments: "{}" } },
+    ],
+  });
+  s.history.push({ role: "tool", tool_call_id: "real1", content: "{}" });
+  await s.send("继续");
+  const broken = seen.filter((m) => m.role === "assistant" && m.tool_calls)[0];
+  assert.equal(broken.tool_calls.length, 1);
+  assert.equal(broken.tool_calls[0].id, "real1");
+});

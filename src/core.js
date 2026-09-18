@@ -22,6 +22,27 @@ const HANDLERS = {
   clear_history: (args, ctx) => ctx.clearHistory(),
 };
 
+function sanitizeHistory(history) {
+  const responded = new Set();
+  for (const m of history) {
+    if (m.role === "tool") responded.add(m.tool_call_id);
+  }
+  const out = [];
+  for (const m of history) {
+    if (m.role === "assistant" && Array.isArray(m.tool_calls) && m.tool_calls.length) {
+      const kept = m.tool_calls.filter((tc) => responded.has(tc.id));
+      if (!kept.length) {
+        if (m.content) out.push({ role: "assistant", content: m.content });
+        continue;
+      }
+      out.push({ ...m, tool_calls: kept });
+      continue;
+    }
+    out.push(m);
+  }
+  return out;
+}
+
 export function createSession({ config, onConfirm = async () => false, onEvent, llmChat = streamChat }) {
   const history = [{ role: "system", content: SYSTEM_PROMPT }];
   const ctx = { onConfirm };
@@ -43,7 +64,7 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
       let toolCalls = [];
       const result = await llmChat({
         apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model,
-        messages: history, tools: TOOLS, signal: controller.signal,
+        messages: sanitizeHistory(history), tools: TOOLS, signal: controller.signal,
       });
       if (result && typeof result[Symbol.asyncIterator] === "function") {
         for await (const chunk of result) {
