@@ -41,6 +41,42 @@ export function toolLabel(ev) {
   return args.command ?? args.path ?? ev.name;
 }
 
+export const HELP_TEXT = `=== Fixflow 帮助 ===
+
+【怎么用】直接输入运维指令，例如：
+   - 检查磁盘空间并汇报
+   - 防火墙开了哪些端口
+   - 帮我清理 /var/log 下 30 天前的日志
+
+【内置命令】
+   help / ?          显示本帮助
+   clear / 清空历史  清空当前会话对话
+   exit / quit       退出会话
+   Ctrl+C（任务运行中） 中止当前任务（同时中断模型请求），回到提示符
+   Ctrl+C（空闲时）     退出会话
+   ↑ / ↓             切换历史输入过的命令
+
+【工具说明（模型自动调用，无需手写）】
+   run_command    执行命令检查/操作，删除/修改/安装类命令需先确认
+   read_file      读取文件（日志、配置等）
+   apply_fix      执行修复命令，执行前必须确认
+   clear_history  按你的要求清空会话历史
+
+【退出 / 终止 / 回退】
+   - 终止当前任务：任务运行中按 Ctrl+C
+   - 退出会话：exit / quit，或空闲时按 Ctrl+C
+   - 已执行的修改无法自动撤销，但所有写操作执行前都会先经你确认
+
+【重置模型 / 服务商 / Key】
+   - 推荐：删除配置后重新进入配置向导
+       rm -rf ~/.config/fixflow && fixflow
+   - 或直接编辑 ~/.config/fixflow/config.json（baseUrl / model / apiKey）
+   - 网页面板：左下角“设置”修改，保存即生效
+
+【查看历史命令】
+   - 当前会话：↑ / ↓ 方向键回看
+   - Web 面板：历史自动保存于 ~/.config/fixflow/history.json，刷新自动恢复`;
+
 export function makeConfirm(rl) {
   return async (command) => {
     const answer = await rl.question(`\n[y/N] 执行: ${command}\n`);
@@ -51,6 +87,7 @@ export function makeConfirm(rl) {
 export async function startFlow(config) {
   const rl = readline.createInterface({ input: stdin, output: stdout });
   const spinner = createSpinner();
+  let busy = false;
   const session = createSession({
     config,
     onConfirm: async (command) => {
@@ -69,7 +106,16 @@ export async function startFlow(config) {
       else if (e.type === "delta") spinner.setText("正在输出回复…");
     },
   });
-  console.log("fixflow 服务器运维 Agent · 输入指令开始检查，Ctrl+C 退出");
+  rl.on("SIGINT", () => {
+    if (busy) {
+      console.log("\n⏹ 正在中止当前任务（同时中断模型请求）…");
+      session.abort();
+    } else {
+      console.log("\n再见！");
+      process.exit(0);
+    }
+  });
+  console.log("fixflow 服务器运维 Agent · Ctrl+C 中止任务/退出，↑↓ 切换历史命令");
   console.log("输入 clear 清除会话历史，exit/quit 退出");
   for (;;) {
     let input;
@@ -80,6 +126,10 @@ export async function startFlow(config) {
     }
     if (input.trim() === "exit" || input.trim() === "quit") break;
     if (!input.trim()) continue;
+    if (/^(help|帮助|\?)\s*$/i.test(input.trim())) {
+      console.log(`\n${HELP_TEXT}\n`);
+      continue;
+    }
     if (/^(clear|清除历史|清空历史)\s*$/i.test(input.trim())) {
       session.clear();
       console.log("\n🧹 会话历史已清空\n");
@@ -88,6 +138,7 @@ export async function startFlow(config) {
     const start = Date.now();
     log(`用户指令: ${input}`);
     spinner.start("模型思考中…");
+    busy = true;
     try {
       const out = await session.send(input);
       spinner.stop();
@@ -96,7 +147,10 @@ export async function startFlow(config) {
     } catch (e) {
       spinner.stop();
       log(`执行失败(${((Date.now() - start) / 1000).toFixed(1)}s): ${e.message}`);
-      console.log(`\n❌ 执行失败: ${e.message}\n`);
+      if (e.name === "AbortError") console.log("\n⏹ 已中止当前任务\n");
+      else console.log(`\n❌ 执行失败: ${e.message}\n`);
+    } finally {
+      busy = false;
     }
   }
   rl.close();

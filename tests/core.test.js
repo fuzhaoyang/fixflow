@@ -66,6 +66,7 @@ test("带 tool_calls 的 assistant 消息原样回传", async () => {
   await s.send("检查磁盘");
   const assistant = s.history.filter((m) => m.role === "assistant")[0];
   assert.equal(assistant.tool_calls.length, 1);
+  assert.equal(assistant.content, null);
   assert.equal(assistant.tool_calls[0].function.name, "run_command");
   assert.equal(JSON.parse(assistant.tool_calls[0].function.arguments).command, "df -h");
 });

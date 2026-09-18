@@ -54,7 +54,7 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
         toolCalls = result?.toolCalls || [];
         if (text) onEvent?.({ type: "text", text });
       }
-      const assistantMsg = { role: "assistant", content: text || "" };
+      const assistantMsg = { role: "assistant", content: text || null };
       if (toolCalls.length) {
         assistantMsg.tool_calls = toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }));
       }
