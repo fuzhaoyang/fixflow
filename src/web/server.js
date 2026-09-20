@@ -7,6 +7,7 @@ import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
 import { loadConfig } from "../config.js";
 import { restart as restartService } from "../service.js";
+import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
@@ -37,7 +38,7 @@ async function fetchModels(baseUrl, apiKey) {
   return (data.data || []).map((m) => m.id);
 }
 
-export async function startWeb(config = {}) {
+export async function startWeb(config = {}, deps = {}) {
   config.sslSites = config.sslSites || [];
   config.pingTargets = config.pingTargets || [];
   const clients = new Set();
@@ -45,6 +46,28 @@ export async function startWeb(config = {}) {
   let seq = 0;
   const configPath = config.configPath || defaultConfigPath();
   const historyPath = config.historyPath || defaultHistoryPath();
+  const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
+  const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
+  const readConfigFile = async () => {
+    try { return JSON.parse(await readFile(configPath, "utf8")); } catch { return {}; }
+  };
+  const writeAuth = async (auth) => {
+    const existing = await readConfigFile();
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, JSON.stringify({ ...existing, auth }, null, 2));
+  };
+  const readAuth = async () => (await readConfigFile()).auth || null;
+
+  const authHeader = (req) => {
+    const cookie = parseCookie(req.headers.cookie || "");
+    const token = cookie.fixflow_token || "";
+    return sessions.valid(token) ? token : "";
+  };
+
+  const send401 = (res, message = "未登录或会话已过期") => {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: message }));
+  };
 
   const broadcast = (event) => {
     const data = `data: ${JSON.stringify(event)}\n\n`;
@@ -61,10 +84,73 @@ export async function startWeb(config = {}) {
     }),
   });
 
+  const captchaIdFromCookie = (req) => parseCookie(req.headers.cookie || "").fixflow_captcha || "";
+
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     try {
-      if (url.pathname === "/api/metrics") {
+      const isPublic = url.pathname === "/api/login" || url.pathname === "/api/register" || url.pathname === "/api/status" || url.pathname === "/api/captcha" || url.pathname === "/login.css" || url.pathname === "/login.js";
+      const needsAuth = url.pathname.startsWith("/api/") && !isPublic;
+      if (needsAuth && !authHeader(req)) { send401(res); return; }
+
+      if (url.pathname === "/api/captcha" && req.method === "GET") {
+        const { id, code } = captchas.create();
+        res.writeHead(200, {
+          "Content-Type": "image/svg+xml; charset=utf-8",
+          "Cache-Control": "no-store",
+          "Set-Cookie": `fixflow_captcha=${id}; Path=/; HttpOnly; Max-Age=300; SameSite=Lax`,
+        });
+        res.end(captchaSvg(code));
+      } else if (url.pathname === "/api/status" && req.method === "GET") {
+        const auth = await readAuth();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ registered: Boolean(auth), loggedIn: Boolean(authHeader(req)) }));
+      } else if (url.pathname === "/api/register" && req.method === "POST") {
+        const existing = await readAuth();
+        if (existing) { res.writeHead(409, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "已注册账号，请直接登录" })); return; }
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { username, password, captchaCode } = JSON.parse(body || "{}");
+        if (!captchas.verify(captchaIdFromCookie(req), captchaCode)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "验证码错误或已过期" }));
+          return;
+        }
+        if (!username || !password || password.length < 6) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "用户名和至少 6 位密码必填" }));
+          return;
+        }
+        const { salt, hash } = hashPassword(password);
+        await writeAuth({ username, salt, hash });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/login" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { username, password, captchaCode } = JSON.parse(body || "{}");
+        if (!captchas.verify(captchaIdFromCookie(req), captchaCode)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "验证码错误或已过期" }));
+          return;
+        }
+        const auth = await readAuth();
+        if (!auth || auth.username !== username || !verifyPassword(password, auth)) {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "用户名或密码错误" }));
+          return;
+        }
+        const token = sessions.create();
+        res.writeHead(200, {
+          "Content-Type": "application/json",
+          "Set-Cookie": `fixflow_token=${token}; HttpOnly; Path=/; Max-Age=43200; SameSite=Lax`,
+        });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/logout" && req.method === "POST") {
+        sessions.revoke(authHeader(req));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;
         const data = await collectAll(config);
         if (q.get("port")) data.portScan = await collectPorts(q.get("port"));
@@ -171,11 +257,26 @@ export async function startWeb(config = {}) {
         clients.add(res);
         req.on("close", () => clients.delete(res));
       } else if (url.pathname === "/") {
+        if (!authHeader(req)) {
+          res.writeHead(302, { Location: "/login" });
+          res.end();
+          return;
+        }
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(await readFile(join(STATIC, "index.html")));
+      } else if (url.pathname === "/login") {
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(await readFile(join(STATIC, "login.html")));
       } else if (url.pathname === "/app.js") {
+        if (!authHeader(req)) { send401(res); return; }
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
         res.end(await readFile(join(STATIC, "app.js")));
+      } else if (url.pathname === "/login.js") {
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        res.end(await readFile(join(STATIC, "login.js")));
+      } else if (url.pathname === "/login.css") {
+        res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
+        res.end(await readFile(join(STATIC, "login.css")));
       } else {
         res.writeHead(404); res.end("Not Found");
       }

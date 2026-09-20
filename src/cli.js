@@ -78,7 +78,11 @@ export const HELP_TEXT = `=== Fixflow 帮助 ===
    - Web 面板：历史自动保存于 ~/.config/fixflow/history.json，刷新自动恢复
 
 【卸载】
-   ⚠ 卸载请运行 fixflow uninstall（会停服务+卸载全局包+清缓存），不要直接用 npm uninstall。`;
+   ⚠ 卸载请运行 fixflow uninstall（会停服务+卸载全局包+清缓存），不要直接用 npm uninstall。
+
+【面板账号】
+   - 首次访问面板需注册账号密码；忘记密码在服务器运行 fixflow reset-password
+   - CLI 使用不受面板登录影响`;
 
 export function makeConfirm(rl) {
   return async (command) => {

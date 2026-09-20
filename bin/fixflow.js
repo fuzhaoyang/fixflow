@@ -7,6 +7,8 @@ import { runSetup, writeConfig, printSuccess, DEFAULT_CONFIG_PATH, needsReconfig
 import { install as installService, restart as restartService } from "../src/service.js";
 import { runUninstall } from "../scripts/uninstall.js";
 import { runDoctor } from "../src/doctor.js";
+import { hashPassword } from "../src/auth.js";
+import readline from "node:readline/promises";
 
 const [cmd] = process.argv.slice(2);
 
@@ -19,6 +21,27 @@ if (cmd === "--version" || cmd === "-v") {
 if (cmd === "uninstall") {
   console.log("正在卸载 fixflow（停止服务 + 卸载全局包 + 清理缓存，配置 config.json 保留）…");
   runUninstall();
+  process.exit(0);
+}
+
+if (cmd === "reset-password") {
+  const { writeFile, mkdir } = await import("node:fs/promises");
+  const { dirname } = await import("node:path");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  let current = {};
+  try { current = JSON.parse(readFileSync(DEFAULT_CONFIG_PATH, "utf8")); } catch {}
+  if (!current.auth) {
+    console.log("尚未注册账号，请直接访问面板完成注册。");
+    process.exit(1);
+  }
+  console.log(`当前账号：${current.auth.username}`);
+  const pwd = await rl.question("请输入新密码（至少 6 位）: ");
+  if (!pwd || pwd.length < 6) { console.log("密码过短，未修改。"); process.exit(1); }
+  const { salt, hash } = hashPassword(pwd);
+  current.auth = { ...current.auth, salt, hash };
+  await mkdir(dirname(DEFAULT_CONFIG_PATH), { recursive: true });
+  await writeFile(DEFAULT_CONFIG_PATH, JSON.stringify(current, null, 2));
+  console.log("✓ 密码已重置，请用新密码登录面板。");
   process.exit(0);
 }
 

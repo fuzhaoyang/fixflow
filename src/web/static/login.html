@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fixflow 登录</title>
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="auth-logo">
+        <div class="brand-logo"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l2.1 5.7L20 8l-4.5 3.6L17 18l-5-3.3L7 18l1.5-6.4L4 8l5.9-.3L12 2z" fill="currentColor"/></svg></div>
+        <div>
+          <h2 id="auth-title">登录 Fixflow</h2>
+          <p class="sub" id="auth-sub">登录后即可使用服务器运维面板</p>
+        </div>
+      </div>
+      <div class="auth-err" id="auth-err"></div>
+      <form id="auth-form" autocomplete="on">
+        <div class="field">
+          <label>用户名</label>
+          <input id="auth-username" type="text" autocomplete="username" placeholder="请输入用户名" required>
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input id="auth-password" type="password" autocomplete="current-password" placeholder="请输入密码" required>
+        </div>
+        <div class="field">
+          <label>验证码</label>
+          <div class="captcha-row">
+            <input id="auth-captcha" type="text" maxlength="4" placeholder="输入图中数字" required>
+            <img id="auth-captcha-img" src="/api/captcha" alt="验证码" title="点击刷新">
+          </div>
+        </div>
+        <div class="forgot" id="auth-forgot" style="display:none"><a id="auth-forgot-link">忘记密码？</a></div>
+        <button class="btn" style="width:100%;padding:10px" id="auth-submit">登录</button>
+        <div class="auth-tip" id="auth-tip"></div>
+      </form>
+    </div>
+  </div>
+  <script src="login.js"></script>
+</body>
+</html>

@@ -344,7 +344,8 @@
       </button>
       <div class="settings-menu" id="settings-menu">
         <div class="settings-item" data-action="config">⚙️ 模型设置</div>
-        <div class="settings-item danger" data-action="restart">🔄 重启服务</div>
+        <div class="settings-item" data-action="restart">🔄 重启服务</div>
+        <div class="settings-item danger" data-action="logout">🚪 退出登录</div>
       </div>
     </div>
   </aside>
@@ -465,10 +466,12 @@
 
     <h3>四、Web 面板</h3>
     <ul>
+      <li><b>登录</b>：首次访问需注册账号密码，之后登录使用；会话 12 小时有效，可左下角「⚙️」退出登录。</li>
       <li><b>监控</b>：CPU / 内存 / 磁盘 / 网络端口 / Nginx / 防火墙 / Docker / 进程，每 5 秒刷新。</li>
       <li><b>AI 对话</b>：直接打字让助手干活，回复逐字显示；修复操作弹「确认执行 / 拒绝」。</li>
       <li><b>设置</b>：左下角「⚙️」→ 模型设置（改 API 地址 / Key / 模型）或重启服务。</li>
       <li><b>清空历史</b>：对话输入框上方「清空历史」按钮。</li>
+      <li><b>忘记密码</b>：在服务器上运行 <code>fixflow reset-password</code> 重置。</li>
     </ul>
 
     <h3>五、工具与安全</h3>

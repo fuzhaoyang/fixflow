@@ -65,7 +65,6 @@ document.querySelectorAll(".menu-item").forEach((item) => {
   });
 });
 window.addEventListener("hashchange", applyRoute);
-applyRoute();
 
 // ---------- 监控 ----------
 function renderCards() {
@@ -621,10 +620,13 @@ pingBtn.onclick = async () => {
   metrics.pingResult = (await res.json()).pingResult;
   renderCards();
 };
-refreshMetrics();
-setInterval(refreshMetrics, 5000);
-(async () => { await loadHistory(); restoreHistory(); })();
-connectStream();
+function initPanel() {
+  applyRoute();
+  refreshMetrics();
+  setInterval(refreshMetrics, 5000);
+  (async () => { await loadHistory(); restoreHistory(); })();
+  connectStream();
+}
 
 // ---------- 设置 ----------
 const settingsMask = document.getElementById("settings-mask");
@@ -694,6 +696,9 @@ document.querySelectorAll(".settings-item").forEach((item) => {
     settingsMenu.classList.remove("show");
     if (item.dataset.action === "config") openSettings();
     else if (item.dataset.action === "restart") restartMask.classList.add("show");
+    else if (item.dataset.action === "logout") {
+      fetch("api/logout", { method: "POST" }).finally(() => location.reload());
+    }
   });
 });
 
@@ -739,3 +744,5 @@ document.getElementById("cfg-save").onclick = async () => {
   showSaveMsg("✅ 配置成功！");
   setTimeout(() => settingsMask.classList.remove("show"), 2000);
 };
+
+initPanel();
