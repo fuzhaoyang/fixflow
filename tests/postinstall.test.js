@@ -6,15 +6,37 @@ import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { runPostinstall } from "../scripts/postinstall.js";
 import { needsReconfigure, clearReconfigureFlag, setReconfigureFlag } from "../src/setup.js";
 
-test("无环境变量时写重配标记且不改写配置", async () => {
+test("无环境变量时写重配标记、不改写配置，且重启已在运行的服务", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-"));
   const cfg = join(dir, "config.json");
   const flag = join(dir, "reconfigure.flag");
   writeFileSync(cfg, JSON.stringify({ apiKey: "old", baseUrl: "https://x/v1", model: "m" }));
-  const r = await runPostinstall({ configPath: cfg, markerPath: flag, env: {} });
+  let restarted = false;
+  const r = await runPostinstall({
+    configPath: cfg,
+    markerPath: flag,
+    env: {},
+    restart: async () => { restarted = true; return { active: true }; },
+  });
   assert.equal(r.done, false);
+  assert.equal(restarted, true);
+  assert.equal(r.restarted, true);
   assert.equal(JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8")).apiKey, "old");
   assert.ok(existsSync(flag));
+});
+
+test("无环境变量且服务未运行时不报错", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  const flag = join(dir, "reconfigure.flag");
+  const r = await runPostinstall({
+    configPath: cfg,
+    markerPath: flag,
+    env: {},
+    restart: async () => ({ active: false }),
+  });
+  assert.equal(r.done, false);
+  assert.equal(r.restarted, false);
 });
 
 test("needsReconfigure 反映标记状态", () => {

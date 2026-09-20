@@ -227,3 +227,26 @@ test("发送前净化缺失 tool 响应的残缺 tool_calls", async () => {
   assert.equal(broken.tool_calls.length, 1);
   assert.equal(broken.tool_calls[0].id, "real1");
 });
+
+test("并发 send 被串行化，历史不被交错插入", async () => {
+  const llmCalls = [];
+  let releaseA;
+  const gate = new Promise((r) => { releaseA = r; });
+  const s = createSession({
+    config: {},
+    llmChat: async ({ messages }) => {
+      llmCalls.push(messages.filter((m) => m.role === "user").map((m) => m.content));
+      if (llmCalls.length === 1) await gate;
+      return { text: "ok", toolCalls: [] };
+    },
+  });
+  const pA = s.send("A");
+  const pB = s.send("B");
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(llmCalls.length, 1, "第二个 send 必须等第一个完成后才开始");
+  releaseA();
+  await Promise.all([pA, pB]);
+  assert.equal(llmCalls.length, 2);
+  const users = s.history.filter((m) => m.role === "user");
+  assert.deepEqual(users.map((m) => m.content), ["A", "B"]);
+});

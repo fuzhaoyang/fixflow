@@ -3,19 +3,21 @@ import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { DEFAULT_BASE_URL, setReconfigureFlag, clearReconfigureFlag, RECONFIGURE_FLAG } from "../src/setup.js";
-import { install as installService } from "../src/service.js";
+import { install as installService, restartIfActive } from "../src/service.js";
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), ".config", "fixflow", "config.json");
 
-export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerPath = RECONFIGURE_FLAG, env = process.env, write = writeFileSync, log = console.log, install = installService } = {}) {
+export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerPath = RECONFIGURE_FLAG, env = process.env, write = writeFileSync, log = console.log, install = installService, restart = restartIfActive } = {}) {
   const apiKey = env.FIXFLOW_API_KEY?.trim();
   if (!apiKey) {
     setReconfigureFlag(markerPath);
+    const r = await restart();
     log("\nfixflow 安装完成！");
-    log("  每次安装后都需要重新配置模型 / 地址 / Key。");
+    if (r.active) log("✓ 已重启正在运行的 fixflow 服务，新版本已生效");
     log("  请运行 fixflow 进入配置向导（选择服务商 → 粘贴 API Key → 选模型）。");
     log("  或用环境变量自动配置：FIXFLOW_API_KEY=... FIXFLOW_BASE_URL=... FIXFLOW_MODEL=... npm i -g fixflow-0.1.0.tgz");
-    return { done: false, reason: "需运行 fixflow 配置" };
+    log("  ⚠ 卸载请务必运行 fixflow uninstall（会停服务+卸载包），不要直接用 npm uninstall。");
+    return { done: false, reason: "需运行 fixflow 配置", restarted: r.active };
   }
   const config = {
     apiKey,
@@ -36,6 +38,7 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
   } else {
     log(`\n⚠ 面板未注册为系统服务：${svc.reason}`);
   }
+  log("  ⚠ 卸载请务必运行 fixflow uninstall（会停服务+卸载包），不要直接用 npm uninstall。");
   return { done: true, config, service: svc };
 }
 

@@ -1,3 +1,25 @@
+import { setDefaultResultOrder } from "node:dns";
+
+setDefaultResultOrder("ipv4first");
+
+function cause(e) {
+  const c = e?.cause;
+  if (!c) return "";
+  const m = c.message || c.code || String(c);
+  return `（${m}）`;
+}
+
+async function fetchWithRetry(url, opts, { retries = 1, delay = 800 } = {}) {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fetch(url, opts);
+    } catch (e) {
+      if (attempt >= retries || (opts.signal && opts.signal.aborted)) throw e;
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+}
+
 export async function chat({ apiKey, baseUrl, model, messages, tools, signal, timeout = 120000 }) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(new Error(`LLM 请求超时（${timeout / 1000}s 无响应）`)), timeout);
@@ -5,7 +27,7 @@ export async function chat({ apiKey, baseUrl, model, messages, tools, signal, ti
   signal?.addEventListener("abort", onAbort, { once: true });
   let res;
   try {
-    res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    res = await fetchWithRetry(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model, messages, tools, tool_choice: "auto" }),
@@ -13,7 +35,7 @@ export async function chat({ apiKey, baseUrl, model, messages, tools, signal, ti
     });
   } catch (e) {
     if (ctrl.signal.aborted && !signal?.aborted) throw new Error(`LLM 请求超时（${timeout / 1000}s 无响应）`);
-    throw e;
+    throw new Error(`无法连接 LLM 服务: ${e.message}${cause(e)}`);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);
@@ -36,7 +58,7 @@ export async function* streamChat({ apiKey, baseUrl, model, messages, tools, sig
   signal?.addEventListener("abort", onAbort, { once: true });
   let res;
   try {
-    res = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
+    res = await fetchWithRetry(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model, messages, tools, tool_choice: "auto", stream: true }),
@@ -44,7 +66,7 @@ export async function* streamChat({ apiKey, baseUrl, model, messages, tools, sig
     });
   } catch (e) {
     if (ctrl.signal.aborted && !signal?.aborted) throw new Error(`LLM 请求超时（${timeout / 1000}s 无响应）`);
-    throw e;
+    throw new Error(`无法连接 LLM 服务: ${e.message}${cause(e)}`);
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener("abort", onAbort);

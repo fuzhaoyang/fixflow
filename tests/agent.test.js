@@ -37,6 +37,30 @@ test("API 错误抛异常", async () => {
   globalThis.fetch = orig;
 });
 
+test("网络失败自动重试一次，仍失败则暴露底层原因", async () => {
+  const orig = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async (url, opts) => {
+    calls++;
+    if (calls < 2) { const e = new Error("fetch failed"); e.cause = { code: "ECONNRESET" }; throw e; }
+    return { ok: true, json: async () => ({ choices: [{ message: { content: "ok", tool_calls: undefined } }] }) };
+  };
+  const r = await chat({ apiKey: "k", baseUrl: "https://x/v1", model: "m", messages: [], tools: [] });
+  assert.equal(calls, 2);
+  assert.equal(r.text, "ok");
+  globalThis.fetch = orig;
+});
+
+test("重试耗尽后抛出带底层原因的错误", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => { const e = new Error("fetch failed"); e.cause = { code: "ECONNREFUSED" }; throw e; };
+  await assert.rejects(
+    () => chat({ apiKey: "k", baseUrl: "https://x/v1", model: "m", messages: [], tools: [] }),
+    /ECONNREFUSED/,
+  );
+  globalThis.fetch = orig;
+});
+
 test("streamChat 流式解析内容增量与 tool_calls", async () => {
   const orig = globalThis.fetch;
   const enc = new TextEncoder();

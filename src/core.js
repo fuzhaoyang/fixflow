@@ -55,7 +55,7 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
     return { cleared: true };
   }
   ctx.clearHistory = clearHistory;
-  async function send(input, images = []) {
+  async function doSend(input, images = []) {
     controller = new AbortController();
     ctx.signal = controller.signal;
     history.push({ role: "user", content: images.length ? [{ type: "text", text: input }, ...images.map((url) => ({ type: "image_url", image_url: { url } }))] : input });
@@ -98,6 +98,12 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
         safeEvent({ type: "tool", name: call.name, args: call.args, result });
       }
     }
+  }
+  let sendChain = Promise.resolve();
+  function send(input, images = []) {
+    const task = sendChain.then(() => doSend(input, images));
+    sendChain = task.catch(() => {});
+    return task;
   }
   return {
     send,

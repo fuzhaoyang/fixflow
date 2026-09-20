@@ -5,6 +5,7 @@ import { startFlow } from "../src/cli.js";
 import { startWeb } from "../src/web/server.js";
 import { runSetup, writeConfig, printSuccess, DEFAULT_CONFIG_PATH, needsReconfigure, clearReconfigureFlag, backupConfig } from "../src/setup.js";
 import { install as installService, restart as restartService } from "../src/service.js";
+import { runUninstall } from "../scripts/uninstall.js";
 import { runDoctor } from "../src/doctor.js";
 
 const [cmd] = process.argv.slice(2);
@@ -12,6 +13,12 @@ const [cmd] = process.argv.slice(2);
 if (cmd === "--version" || cmd === "-v") {
   const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   console.log(version);
+  process.exit(0);
+}
+
+if (cmd === "uninstall") {
+  console.log("正在卸载 fixflow（停止服务 + 卸载全局包 + 清理缓存，配置 config.json 保留）…");
+  runUninstall();
   process.exit(0);
 }
 
@@ -33,12 +40,27 @@ if (cmd === "restart") {
   process.exit(0);
 }
 
-if (!config.apiKey || needsReconfigure()) {
-  console.log(needsReconfigure() ? "检测到重新安装，需重新配置（模型 / 地址 / Key）...\n" : "检测到尚未配置 API Key，进入配置向导...\n");
+if (cmd === "web") {
+  startWeb(config);
+} else if (!config.apiKey || !config.baseUrl || !config.model || needsReconfigure()) {
+  console.log(needsReconfigure() ? "检测到重新安装，需重新配置（模型 / 地址 / Key）...\n" : "检测到尚未配置完整（模型 / 地址 / Key），进入配置向导...\n");
   const saved = await runSetup({ readConfig: () => { try { return JSON.parse(readFileSync(DEFAULT_CONFIG_PATH, "utf8")); } catch { return {}; } } });
   if (!saved) {
     console.log("配置未完成。可重新运行 fixflow 进入向导。");
     process.exit(1);
+  }
+  while (!saved.apiKey || !saved.baseUrl || !saved.model) {
+    console.log("\n⚠ 以下配置仍为空，未配置完无法使用 fixflow：");
+    if (!saved.baseUrl) console.log("  · API 地址（baseUrl）");
+    if (!saved.apiKey) console.log("  · API Key");
+    if (!saved.model) console.log("  · 模型（model）");
+    console.log("请继续完成配置。\n");
+    const again = await runSetup({ readConfig: () => saved });
+    if (!again) {
+      console.log("配置未完成，可重新运行 fixflow 进入向导。");
+      process.exit(1);
+    }
+    for (const k of ["baseUrl", "apiKey", "model"]) if (again[k]) saved[k] = again[k];
   }
   const startPanel = saved._startPanel !== false;
   delete saved._startPanel;
@@ -56,6 +78,7 @@ if (!config.apiKey || needsReconfigure()) {
       console.log(`  管理命令: systemctl status fixflow / restart fixflow / stop fixflow`);
     } else {
       console.log(`\n⚠ 面板未注册为系统服务：${svc.reason}`);
+      console.log(`  （已临时启动面板进程，浏览器可访问）`);
     }
     await new Promise((r) => setTimeout(r, 500));
     await runDoctor({ config });
@@ -66,8 +89,4 @@ if (!config.apiKey || needsReconfigure()) {
   process.exit(0);
 }
 
-if (cmd === "web") {
-  startWeb(config);
-} else {
-  startFlow(config);
-}
+startFlow(config);

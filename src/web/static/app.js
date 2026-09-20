@@ -435,9 +435,22 @@ function now() {
 let typingEl = null;
 let streamingEl = null;
 let streamingText = "";
+let streamRenderTimer = null;
+
+function scheduleStreamRender() {
+  if (streamRenderTimer) return;
+  streamRenderTimer = setTimeout(() => {
+    streamRenderTimer = null;
+    if (streamingEl) {
+      streamingEl.querySelector(".bubble").innerHTML = streamingText ? renderMarkdown(streamingText) : "";
+      log.scrollTop = log.scrollHeight;
+    }
+  }, 120);
+}
 
 function finishStreaming() {
   if (!streamingEl) return;
+  if (streamRenderTimer) { clearTimeout(streamRenderTimer); streamRenderTimer = null; }
   const text = streamingText;
   streamingEl.querySelector(".bubble").innerHTML = text ? renderMarkdown(text) : "";
   if (text) { chatHistory.push({ role: "assistant", text }); saveHistory(); }
@@ -506,7 +519,7 @@ function connectStream() {
       hideTyping();
       streamingText += ev.text;
       if (!streamingEl) streamingEl = renderMsg("", "assistant");
-      streamingEl.querySelector(".bubble").textContent = streamingText;
+      scheduleStreamRender();
       log.scrollTop = log.scrollHeight;
     }
     else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }

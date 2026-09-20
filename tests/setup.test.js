@@ -46,6 +46,30 @@ test("runSetup：自定义地址", async () => {
   assert.equal(cfg.model, "m-custom");
 });
 
+test("runSetup：有旧配置时全跳过保留旧值", async () => {
+  const existing = { baseUrl: "https://old/v1", apiKey: "old-key", model: "old-model" };
+  const cfg = await runSetup({ readConfig: () => existing, ask: makeAsk(["", "", "", "n"]), verify: fakeVerify });
+  assert.equal(cfg.baseUrl, "https://old/v1");
+  assert.equal(cfg.apiKey, "old-key");
+  assert.equal(cfg.model, "old-model");
+});
+
+test("runSetup：有旧配置时输入新值强制覆盖", async () => {
+  const existing = { baseUrl: "https://old/v1", apiKey: "old-key", model: "old-model" };
+  const cfg = await runSetup({ readConfig: () => existing, ask: makeAsk(["2", "new-key", "m-new", "n"]), verify: fakeVerify });
+  assert.equal(cfg.baseUrl, "https://api.moonshot.cn/v1");
+  assert.equal(cfg.apiKey, "new-key");
+  assert.equal(cfg.model, "m-new");
+});
+
+test("runSetup：全新安装且模型列表为空时模型必填", async () => {
+  const cfg = await runSetup({
+    ask: makeAsk(["1", "k", "", "m1", "n"]),
+    verify: async () => ({ ok: true, models: [] }),
+  });
+  assert.equal(cfg.model, "m1");
+});
+
 test("PROVIDERS 提供常见服务商预设", () => {
   assert.ok(PROVIDERS.length >= 3);
   assert.ok(PROVIDERS.some((p) => p.name.includes("DeepSeek")));

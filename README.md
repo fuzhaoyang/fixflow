@@ -206,7 +206,7 @@ tail -f ~/.config/fixflow/cli.log   # 实时看操作日志
 | 对话没反应 | 看右上角连接状态；`fixflow doctor` 检查 API 连通性 |
 | 回复要等很久 | 生成较长的回复需要时间，现已支持逐字显示，首字很快 |
 | 监控显示 N/A | 对应组件没装（如没装 Docker），不影响其他功能 |
-| 想彻底卸载 | `npm uninstall -g fixflow`，再 `rm -rf ~/.config/fixflow` |
+| 想彻底卸载 | `fixflow uninstall`（停止服务+卸载全局包+清理缓存，配置保留），**不要**直接用 `npm uninstall`（不会停止服务） |
 
 ---
 

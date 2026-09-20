@@ -82,7 +82,7 @@ function lineReader() {
 }
 
 export async function runSetup({ configPath = DEFAULT_CONFIG_PATH, readConfig = () => {}, ask = lineReader(), verify = verifyApiKey } = {}) {
-  const existing = readConfig();
+  const existing = readConfig() || {};
   const config = { ...existing };
   const q = async (prompt) => {
     const a = await ask(prompt);
@@ -91,19 +91,18 @@ export async function runSetup({ configPath = DEFAULT_CONFIG_PATH, readConfig = 
 
   console.log("\n=== Fixflow 配置向导 ===\n");
   console.log("接下来几步就能配好，放心跟着提示走。");
-  if (existing?.apiKey) {
-    console.log(`\n旧配置参考：地址=${existing.baseUrl}，模型=${existing.model || "未指定"}`);
-    console.log("本次重新配置会覆盖以上三项，旧配置将备份为 config.json.bak");
-  }
+  console.log("提示：每项直接回车 = 保留当前已配置的值不修改。");
 
   const providers = [...PROVIDERS, { name: "其他 / 自定义地址", baseUrl: "" }];
   console.log("\n第一步：选择模型服务商");
   console.log("（API Key 去对应官网注册申请，新用户通常有免费额度）");
   providers.forEach((p, i) => console.log(`  ${i + 1}) ${p.name}${p.applyUrl ? `（${p.applyUrl} 申请）` : ""}`));
-  let baseUrl = "";
+  if (config.baseUrl) console.log(`  （当前地址：${config.baseUrl}，回车保留）`);
+  let baseUrl = config.baseUrl || "";
   for (;;) {
     const answer = await q("请选择编号: ");
     if (answer === null) return null;
+    if (!answer && config.baseUrl) break;
     const idx = Number(answer);
     if (Number.isInteger(idx) && idx >= 1 && idx <= providers.length) {
       const sel = providers[idx - 1];
@@ -117,13 +116,15 @@ export async function runSetup({ configPath = DEFAULT_CONFIG_PATH, readConfig = 
   }
   config.baseUrl = baseUrl;
 
-  console.log(`\n第二步：输入 API Key`);
+  console.log(`\n第二步：API Key`);
+  if (config.apiKey) console.log(`  （当前已配置 Key：••••${config.apiKey.slice(-4)}，回车保留）`);
   let models = [];
   for (;;) {
     const apiKey = await q("API Key: ");
     if (apiKey === null) return null;
+    if (!apiKey && config.apiKey) break;
     if (!apiKey) { console.log("Key 不能为空。"); continue; }
-    console.log("正在校验 Key…");
+    console.log("正在验证 Key…");
     const r = await verify({ baseUrl, apiKey });
     if (!r.ok) { console.log(`\n✗ ${r.message}`); continue; }
     models = r.models;
@@ -131,23 +132,30 @@ export async function runSetup({ configPath = DEFAULT_CONFIG_PATH, readConfig = 
     break;
   }
 
-  let model = "";
+  let model = config.model || "";
   console.log("\n第三步：选择模型");
+  if (config.model) console.log(`  （当前模型：${config.model}，回车保留）`);
   if (models.length) {
     console.log("可用模型：");
     models.forEach((m, i) => console.log(`  ${i + 1}. ${m}`));
     for (;;) {
       const answer = await q("输入编号或直接输入模型名: ");
       if (answer === null) return null;
-      if (!answer) continue;
+      if (!answer && config.model) break;
+      if (!answer) { console.log("模型不能为空。"); continue; }
       const idx = Number(answer);
       if (Number.isInteger(idx) && idx >= 1 && idx <= models.length) { model = models[idx - 1]; break; }
       if (!Number.isNaN(idx)) { console.log("编号超出范围，请重新输入。"); continue; }
       model = answer; break;
     }
   } else {
-    model = await q("输入模型名（如 deepseek-chat）: ");
-    if (model === null) return null;
+    for (;;) {
+      const answer = await q(config.model ? "输入模型名（回车保留）: " : "输入模型名（如 deepseek-chat）: ");
+      if (answer === null) return null;
+      if (answer) { model = answer; break; }
+      if (config.model) break;
+      console.log("模型不能为空。");
+    }
   }
   config.model = model;
 
