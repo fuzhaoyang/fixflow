@@ -792,17 +792,22 @@ document.getElementById("open-settings").onclick = (e) => {
   settingsMenu.classList.toggle("show");
 };
 document.addEventListener("click", () => settingsMenu.classList.remove("show"));
+const logoutMask = document.getElementById("logout-mask");
 document.querySelectorAll(".settings-item").forEach((item) => {
   item.addEventListener("click", (e) => {
     e.stopPropagation();
     settingsMenu.classList.remove("show");
     if (item.dataset.action === "config") openSettings();
     else if (item.dataset.action === "restart") restartMask.classList.add("show");
-    else if (item.dataset.action === "logout") {
-      fetch("api/logout", { method: "POST" }).finally(() => location.reload());
-    }
+    else if (item.dataset.action === "logout") logoutMask.classList.add("show");
   });
 });
+
+document.getElementById("logout-cancel").onclick = () => logoutMask.classList.remove("show");
+logoutMask.addEventListener("click", (e) => { if (e.target === logoutMask) logoutMask.classList.remove("show"); });
+document.getElementById("logout-confirm").onclick = () => {
+  fetch("api/logout", { method: "POST" }).finally(() => location.reload());
+};
 
 const helpMask = document.getElementById("help-mask");
 document.getElementById("help-btn").onclick = () => helpMask.classList.add("show");
