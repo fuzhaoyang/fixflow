@@ -628,6 +628,108 @@ function initPanel() {
   connectStream();
 }
 
+// ---------- 登录 / 注册 ----------
+const authMask = document.getElementById("auth-mask");
+const authTitle = document.getElementById("auth-title");
+const authSub = document.getElementById("auth-sub");
+const authErr = document.getElementById("auth-err");
+const authForm = document.getElementById("auth-form");
+const authUsername = document.getElementById("auth-username");
+const authPassword = document.getElementById("auth-password");
+const authCaptcha = document.getElementById("auth-captcha");
+const authCaptchaImg = document.getElementById("auth-captcha-img");
+const authSubmit = document.getElementById("auth-submit");
+const authForgot = document.getElementById("auth-forgot");
+const authForgotLink = document.getElementById("auth-forgot-link");
+const authTip = document.getElementById("auth-tip");
+
+let authMode = "login";
+
+function showAuthErr(msg) {
+  authErr.textContent = msg;
+  authErr.classList.add("show");
+}
+
+function clearAuthErr() {
+  authErr.textContent = "";
+  authErr.classList.remove("show");
+}
+
+function refreshCaptcha() {
+  authCaptchaImg.src = `api/captcha?t=${Date.now()}`;
+}
+
+function setAuthMode(mode, registered) {
+  authMode = mode;
+  clearAuthErr();
+  authCaptcha.value = "";
+  if (mode === "login") {
+    authTitle.textContent = "登录 Fixflow";
+    authSub.textContent = "登录后即可使用服务器运维面板";
+    authSubmit.textContent = "登录";
+    authForgot.style.display = registered ? "" : "none";
+    authTip.innerHTML = registered ? "" : '<button type="button" id="auth-toggle">没有账号？去注册</button>';
+  } else {
+    authTitle.textContent = "注册 Fixflow";
+    authSub.textContent = "首次使用，设置面板登录账号";
+    authSubmit.textContent = "注册并登录";
+    authForgot.style.display = "none";
+    authTip.innerHTML = '<button type="button" id="auth-toggle">已有账号？去登录</button>';
+  }
+  document.getElementById("auth-toggle")?.addEventListener("click", () => setAuthMode("login", true));
+  document.getElementById("auth-forgot-link")?.addEventListener("click", () => {
+    clearAuthErr();
+    authSub.textContent = "请在服务器上运行 fixflow reset-password 重置密码。";
+  });
+  refreshCaptcha();
+}
+
+function setupAuth() {
+  (async () => {
+    const res = await fetch("api/status");
+    const data = await res.json();
+    if (data.loggedIn) { authMask.style.display = "none"; initPanel(); return; }
+    setAuthMode(data.registered ? "login" : "register", Boolean(data.registered));
+    authMask.style.display = "flex";
+  })();
+  authForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    clearAuthErr();
+    const payload = {
+      username: authUsername.value.trim(),
+      password: authPassword.value,
+      captchaCode: authCaptcha.value.trim(),
+    };
+    authSubmit.disabled = true;
+    try {
+      const res = await fetch("api/" + authMode, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showAuthErr(data.error || "操作失败");
+        refreshCaptcha();
+        return;
+      }
+      if (authMode === "register") {
+        const loginRes = await fetch("api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!loginRes.ok) { setAuthMode("login", true); showAuthErr("注册成功，请登录"); return; }
+      }
+      authMask.style.display = "none";
+      location.reload();
+    } finally {
+      authSubmit.disabled = false;
+    }
+  });
+  authCaptchaImg.addEventListener("click", refreshCaptcha);
+}
+
 // ---------- 设置 ----------
 const settingsMask = document.getElementById("settings-mask");
 const cfgBaseUrl = document.getElementById("cfg-base-url");
@@ -745,4 +847,4 @@ document.getElementById("cfg-save").onclick = async () => {
   setTimeout(() => settingsMask.classList.remove("show"), 2000);
 };
 
-initPanel();
+setupAuth();

@@ -89,7 +89,7 @@ export async function startWeb(config = {}, deps = {}) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     try {
-      const isPublic = url.pathname === "/api/login" || url.pathname === "/api/register" || url.pathname === "/api/status" || url.pathname === "/api/captcha" || url.pathname === "/login.css" || url.pathname === "/login.js";
+      const isPublic = url.pathname === "/api/login" || url.pathname === "/api/register" || url.pathname === "/api/status" || url.pathname === "/api/captcha";
       const needsAuth = url.pathname.startsWith("/api/") && !isPublic;
       if (needsAuth && !authHeader(req)) { send401(res); return; }
 
@@ -257,26 +257,11 @@ export async function startWeb(config = {}, deps = {}) {
         clients.add(res);
         req.on("close", () => clients.delete(res));
       } else if (url.pathname === "/") {
-        if (!authHeader(req)) {
-          res.writeHead(302, { Location: "/login" });
-          res.end();
-          return;
-        }
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
         res.end(await readFile(join(STATIC, "index.html")));
-      } else if (url.pathname === "/login") {
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(await readFile(join(STATIC, "login.html")));
       } else if (url.pathname === "/app.js") {
-        if (!authHeader(req)) { send401(res); return; }
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
         res.end(await readFile(join(STATIC, "app.js")));
-      } else if (url.pathname === "/login.js") {
-        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-        res.end(await readFile(join(STATIC, "login.js")));
-      } else if (url.pathname === "/login.css") {
-        res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
-        res.end(await readFile(join(STATIC, "login.css")));
       } else {
         res.writeHead(404); res.end("Not Found");
       }

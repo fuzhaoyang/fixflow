@@ -301,9 +301,61 @@
     .welcome .tag-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 20px; }
     .welcome .tag { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; font-size: 13px; color: var(--text); }
     .welcome .tip { font-size: 12px; color: var(--muted); opacity: .8; }
+    /* 登录 / 注册 */
+    #auth-mask { position: fixed; inset: 0; background: rgba(15,23,42,.92); z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .auth-card { width: 360px; max-width: 94vw; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); }
+    .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .auth-logo .brand-logo { width: 40px; height: 40px; font-size: 18px; }
+    .auth-card h2 { margin: 0 0 4px; font-size: 18px; }
+    .auth-card p.sub { margin: 0 0 18px; font-size: 12px; color: var(--muted); }
+    .auth-err { background: rgba(248,113,113,.12); color: var(--bad); font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; display: none; }
+    .auth-err.show { display: block; }
+    .field input { width: 100%; padding: 9px 11px; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; box-sizing: border-box; }
+    .field input:focus { border-color: var(--accent); }
+    .captcha-row { display: flex; gap: 10px; align-items: stretch; }
+    .captcha-row input { flex: 1; }
+    .captcha-row img { height: 40px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: #fff; align-self: stretch; box-sizing: border-box; }
+    .forgot { text-align: right; margin: -6px 0 14px; font-size: 11px; color: var(--muted); }
+    .forgot a { color: var(--muted); cursor: pointer; }
+    .forgot a:hover { color: var(--accent); }
+    .auth-tip { font-size: 12px; color: var(--muted); margin-top: 16px; text-align: center; }
+    .auth-tip button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12px; padding: 0; }
+    .auth-tip button:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
+<div id="auth-mask">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="brand-logo"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l2.1 5.7L20 8l-4.5 3.6L17 18l-5-3.3L7 18l1.5-6.4L4 8l5.9-.3L12 2z" fill="currentColor"/></svg></div>
+      <div>
+        <h2 id="auth-title">登录 Fixflow</h2>
+        <p class="sub" id="auth-sub">登录后即可使用服务器运维面板</p>
+      </div>
+    </div>
+    <div class="auth-err" id="auth-err"></div>
+    <form id="auth-form">
+      <div class="field">
+        <label>用户名</label>
+        <input id="auth-username" type="text" autocomplete="username" placeholder="请输入用户名" required>
+      </div>
+      <div class="field">
+        <label>密码</label>
+        <input id="auth-password" type="password" autocomplete="current-password" placeholder="请输入密码" required>
+      </div>
+      <div class="field">
+        <label>验证码</label>
+        <div class="captcha-row">
+          <input id="auth-captcha" type="text" maxlength="4" placeholder="输入图中数字" required>
+          <img id="auth-captcha-img" src="api/captcha" alt="验证码" title="点击刷新">
+        </div>
+      </div>
+      <div class="forgot" id="auth-forgot" style="display:none"><a id="auth-forgot-link">忘记密码？</a></div>
+      <button class="btn" style="width:100%;padding:10px" id="auth-submit">登录</button>
+      <div class="auth-tip" id="auth-tip"></div>
+    </form>
+  </div>
+</div>
 <div class="layout">
   <aside>
     <div class="brand">

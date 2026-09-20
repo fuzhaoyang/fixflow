@@ -33,14 +33,14 @@ async function registerAndLogin(base) {
   return cookie;
 }
 
-test("未登录访问首页重定向到 /login，登录后 200", async () => {
+test("首页始终可访问（登录由前端遮罩控制）", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const page = await fetch(`${base}/`, { redirect: "manual" });
-  assert.equal(page.status, 302);
-  assert.equal(page.headers.get("location"), "/login");
-  const loginPage = await fetch(`${base}/login`);
-  assert.equal(loginPage.status, 200);
+  const page = await fetch(`${base}/`);
+  assert.equal(page.status, 200);
+  const body = await page.text();
+  assert.match(body, /id="auth-mask"/);
+  assert.match(body, /id="auth-captcha-img"/);
 
   const cookie = await registerAndLogin(base);
   const authed = await fetch(`${base}/`, { headers: { Cookie: cookie } });
