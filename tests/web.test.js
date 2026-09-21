@@ -195,6 +195,7 @@ test("未登录访问受保护接口返回 401，登录后可访问", async () =
   assert.equal(authed.status, 200);
   const after = await (await fetch(`${base}/api/status`, { headers: { Cookie: cookie } })).json();
   assert.equal(after.loggedIn, true);
+  assert.equal(after.username, "admin");
   w.close();
 });
 

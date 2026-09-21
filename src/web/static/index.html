@@ -97,16 +97,27 @@
     .toolbar { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--border); }
     .toolbar h1 { font-size: 15px; margin: 0; }
     .conn-wrap { margin-left: auto; display: flex; align-items: center; gap: 6px; }
-    #conn { font-size: 12px; color: var(--muted); }
-    .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex-shrink: 0; }
-    .conn-dot.ok { background: var(--ok); }
-    .conn-dot.bad { background: var(--bad); }
+    .model-status { flex: 1; text-align: center; font-size: 13px; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 6px; overflow: hidden; white-space: nowrap; }
+    .model-status.on { color: var(--ok); animation: blink 1.6s ease-in-out infinite; }
+    .model-status .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex-shrink: 0; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
     .help-btn {
       width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border);
       background: none; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer;
       display: inline-flex; align-items: center; justify-content: center; transition: all .2s;
     }
     .help-btn:hover { color: var(--text); background: var(--panel2); border-color: var(--accent); }
+    .user-wrap { position: relative; }
+    .user-btn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--panel2); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; color: var(--text); font-size: 13px; }
+    .user-btn:hover { border-color: var(--accent); }
+    .user-icon { display: flex; align-items: center; }
+    .user-icon svg { width: 16px; height: 16px; }
+    .user-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .user-menu { position: absolute; top: 100%; right: 0; margin-top: 6px; min-width: 150px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; display: none; z-index: 60; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+    .user-menu.show { display: block; }
+    .user-menu .settings-item { padding: 10px 14px; cursor: pointer; font-size: 13px; white-space: nowrap; display: flex; align-items: center; gap: 8px; color: var(--text); }
+    .user-menu .settings-item:hover { background: var(--panel2); }
+    .user-menu .settings-item.danger:hover { background: rgba(248,113,113,.12); color: var(--bad); }
     .help-mask { position: fixed; inset: 0; background: var(--bg); z-index: 300; display: none; flex-direction: column; }
     .help-mask.show { display: flex; }
     .help-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
@@ -143,8 +154,9 @@
     .svc-table th { background: var(--panel2); color: var(--muted); }
     .svc-table td.ok { color: var(--ok); } .svc-table td.bad { color: var(--bad); } .svc-table td.na { color: var(--muted); }
     /* 对话区 */
-    #view-chat { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0; }
-    #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+    #view-chat { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0; position: relative; }
+    .chat-help { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 40; background: rgba(15,23,42,.85); border-color: var(--panel2); color: var(--muted); }
+    #log { flex: 1; overflow-y: auto; padding: 16px 25px; display: flex; flex-direction: column; gap: 16px; }
     /* 消息结构（参考 ChatPanel/MessageItem） */
     .message-item { display: flex; flex-direction: column; gap: 6px; animation: message-in .3s ease-out; }
     .message-item.user { align-items: flex-end; }
@@ -155,8 +167,12 @@
       width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center;
       flex-shrink: 0; font-size: 13px;
     }
+    .avatar.bot { background: var(--panel2); color: var(--accent); animation: bot-float 2.4s ease-in-out infinite; }
     .avatar.user { background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 92%, #fff), var(--accent)); color: #fff; }
-    .avatar.bot { background: var(--panel2); color: var(--accent); }
+    @keyframes bot-float {
+      0%, 100% { transform: translateY(0); box-shadow: 0 0 0 0 rgba(59,130,246,.25); }
+      50% { transform: translateY(-3px); box-shadow: 0 0 12px 2px rgba(59,130,246,.4); }
+    }
     .msg-name { font-size: 13px; font-weight: 600; color: var(--text); }
     .msg-time { font-size: 11px; color: var(--muted); }
     .bubble {
@@ -396,13 +412,11 @@
       </button>
       <div class="settings-menu" id="settings-menu">
         <div class="settings-item" data-action="config">⚙️ 模型设置</div>
-        <div class="settings-item" data-action="restart">🔄 重启服务</div>
-        <div class="settings-item danger" data-action="logout">🚪 退出登录</div>
       </div>
     </div>
   </aside>
   <main>
-    <div class="toolbar"><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="conn-wrap"><i class="conn-dot" id="conn-dot"></i><span class="muted" id="conn">连接中…</span><button class="help-btn" id="help-btn" title="使用文档">?</button></span></div>
+    <div class="toolbar"><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="model-status" id="model-status"></span><span class="conn-wrap"><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout">🚪 退出登录</div></div></span></span></div>
     <div class="content" id="view-monitor">
       <div id="net-tools" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
         <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80">
@@ -448,6 +462,7 @@
     </div>
   </main>
 </div>
+<button class="help-btn chat-help" id="help-btn" title="使用文档">?</button>
 <div class="modal-mask" id="settings-mask">
   <div class="modal">
     <h2>⚙️ 模型设置</h2>
@@ -496,7 +511,7 @@
 <div class="help-mask" id="help-mask">
   <div class="help-header">
     <h2>📖 Fixflow 使用文档</h2>
-    <button class="btn small help-close" id="help-close">关闭</button>
+    <button class="btn small help-close" id="help-close">返回</button>
   </div>
   <div class="help-body">
     <h3>一、它是什么</h3>

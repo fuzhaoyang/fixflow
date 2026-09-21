@@ -104,7 +104,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/status" && req.method === "GET") {
         const auth = await readAuth();
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ registered: Boolean(auth), loggedIn: Boolean(authHeader(req)) }));
+        res.end(JSON.stringify({ registered: Boolean(auth), loggedIn: Boolean(authHeader(req)), username: authHeader(req) ? (auth?.username || "") : "" }));
       } else if (url.pathname === "/api/register" && req.method === "POST") {
         const existing = await readAuth();
         if (existing) { res.writeHead(409, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "已注册账号，请直接登录" })); return; }

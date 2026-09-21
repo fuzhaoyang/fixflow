@@ -9,7 +9,6 @@ const attachBtn = document.getElementById("attach");
 const fileInput = document.getElementById("file");
 const preview = document.getElementById("preview");
 const clearBtn = document.getElementById("clear-history");
-const conn = document.getElementById("conn");
 const searchBox = document.getElementById("search");
 const netTools = document.getElementById("net-tools");
 const viewTitle = document.getElementById("view-title");
@@ -508,9 +507,6 @@ function toolSummary(ev) {
 
 function connectStream() {
   const es = new EventSource("api/stream");
-  const dot = document.getElementById("conn-dot");
-  es.onopen = () => { conn.textContent = "已连接"; dot.className = "conn-dot ok"; };
-  es.onerror = () => { conn.textContent = "连接断开，重连中…"; dot.className = "conn-dot bad"; };
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
     if (ev.type === "text") addMsg(ev.text, "assistant");
@@ -626,6 +622,20 @@ function initPanel() {
   setInterval(refreshMetrics, 5000);
   (async () => { await loadHistory(); restoreHistory(); })();
   connectStream();
+  loadModelStatus();
+}
+
+const modelStatus = document.getElementById("model-status");
+async function loadModelStatus() {
+  try {
+    const res = await fetch("api/config");
+    const cfg = await res.json();
+    modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(cfg.model || "未设置模型")} · 已连接`;
+    modelStatus.classList.add("on");
+  } catch {
+    modelStatus.textContent = "模型连接失败";
+    modelStatus.classList.remove("on");
+  }
 }
 
 // ---------- 登录 / 注册 ----------
@@ -688,7 +698,7 @@ function setupAuth() {
   (async () => {
     const res = await fetch("api/status");
     const data = await res.json();
-    if (data.loggedIn) { authMask.style.display = "none"; initPanel(); return; }
+    if (data.loggedIn) { setUserName(data.username); authMask.style.display = "none"; initPanel(); return; }
     setAuthMode(data.registered ? "login" : "register", Boolean(data.registered));
     authMask.style.display = "flex";
   })();
@@ -791,17 +801,31 @@ document.getElementById("open-settings").onclick = (e) => {
   e.stopPropagation();
   settingsMenu.classList.toggle("show");
 };
-document.addEventListener("click", () => settingsMenu.classList.remove("show"));
+const userBtn = document.getElementById("user-btn");
+const userMenu = document.getElementById("user-menu");
+userBtn.onclick = (e) => {
+  e.stopPropagation();
+  userMenu.classList.toggle("show");
+};
+document.addEventListener("click", () => {
+  settingsMenu.classList.remove("show");
+  userMenu.classList.remove("show");
+});
 const logoutMask = document.getElementById("logout-mask");
-document.querySelectorAll(".settings-item").forEach((item) => {
+document.querySelectorAll(".settings-menu .settings-item, .user-menu .settings-item").forEach((item) => {
   item.addEventListener("click", (e) => {
     e.stopPropagation();
     settingsMenu.classList.remove("show");
+    userMenu.classList.remove("show");
     if (item.dataset.action === "config") openSettings();
     else if (item.dataset.action === "restart") restartMask.classList.add("show");
     else if (item.dataset.action === "logout") logoutMask.classList.add("show");
   });
 });
+const userNameEl = document.getElementById("user-name");
+function setUserName(name) {
+  userNameEl.textContent = name || "账号";
+}
 
 document.getElementById("logout-cancel").onclick = () => logoutMask.classList.remove("show");
 logoutMask.addEventListener("click", (e) => { if (e.target === logoutMask) logoutMask.classList.remove("show"); });
