@@ -212,7 +212,6 @@
     .msg.confirm { align-self: flex-start; background: #451a03; border-left-color: var(--warn); }
     .msg.error { align-self: flex-start; background: #450a0a; border-left-color: var(--bad); color: #fecaca; }
     .msg.system { align-self: center; background: none; border: none; color: var(--muted); font-size: 12px; font-family: inherit; }
-    .confirm-row { display: flex; gap: 8px; margin-top: 8px; }
     /* markdown 样式 */
     .bubble.bot h1, .bubble.bot h2, .bubble.bot h3 { margin: 10px 0 6px; font-size: 15px; }
     .bubble.bot h1 { font-size: 17px; }
@@ -308,6 +307,15 @@
     @keyframes spin { to { transform: rotate(360deg); } }
     .confirm-row { display: flex; gap: 8px; margin-top: 8px; }
     .confirm-row .btn-yes { background: var(--ok); color: #052e16; } .confirm-row .btn-no { background: var(--bad); }
+    .approval-card { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+    .approval-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .approval-row { display: flex; gap: 8px; font-size: 12px; }
+    .approval-row .lbl { color: var(--muted); flex-shrink: 0; min-width: 56px; }
+    .approval-row code { background: rgba(255,255,255,.08); padding: 1px 6px; border-radius: 4px; font-size: 12px; word-break: break-all; }
+    .risk-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+    .risk-badge.risk-high { background: rgba(248,113,113,.2); color: var(--bad); }
+    .risk-badge.risk-mid { background: rgba(251,191,36,.2); color: var(--warn); }
+    .risk-badge.risk-low { background: rgba(74,222,128,.2); color: var(--ok); }
     .typing { color: var(--muted); font-size: 12px; padding: 4px 2px; }
     .typing .dots::after { content: "…"; animation: blink 1.2s infinite; }
     @keyframes blink { 0% { opacity: .2; } 50% { opacity: 1; } 100% { opacity: .2; } }

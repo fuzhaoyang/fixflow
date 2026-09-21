@@ -85,9 +85,18 @@ export const HELP_TEXT = `=== Fixflow 帮助 ===
    - CLI 使用不受面板登录影响`;
 
 export function makeConfirm(rl) {
-  return async (command) => {
-    const answer = await rl.question(`\n[y/N] 执行: ${command}\n`);
-    return /^y/i.test(answer.trim());
+  return async (info) => {
+    const { command = "", reason = "", riskLevel = "medium", impact = "" } = info || {};
+    const riskLabel = { low: "低", medium: "中", high: "高" }[riskLevel] || "中";
+    console.log(`\n── 变更审批单 ────────────────`);
+    console.log(`  风险等级: ${riskLabel}${riskLevel === "high" ? " ⚠️ 高风险" : ""}`);
+    if (impact) console.log(`  影响范围: ${impact}`);
+    if (reason) console.log(`  变更理由: ${reason}`);
+    console.log(`  命令: ${command}`);
+    console.log(`────────────────────────────────`);
+    const prompt = riskLevel === "high" ? `\n高风险变更，输入 yes 确认执行 [yes/NO]: ` : `\n[y/N] 确认执行: `;
+    const answer = await rl.question(prompt);
+    return riskLevel === "high" ? answer.trim().toLowerCase() === "yes" : /^y/i.test(answer.trim());
   };
 }
 

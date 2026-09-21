@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { runCommand, readFile, applyFix, isWriteCommand } from "../src/tools.js";
+import { runCommand, readFile, applyFix, isWriteCommand, redactSecrets } from "../src/tools.js";
 
 test("isWriteCommand：识别写入/删除/修改类命令", () => {
   for (const c of [
@@ -31,6 +31,21 @@ test("isWriteCommand：识别写入/删除/修改类命令", () => {
   ]) assert.ok(!isWriteCommand(c), `不应识别为写入: ${c}`);
 });
 
+test("isWriteCommand：只读诊断命令（含 2>/dev/null、docker 只读）放行", () => {
+  for (const c of [
+    "du -xh -d1 / 2>/dev/null | sort -rh | head -20",
+    "ls -lh /var/log 2>/dev/null | head -30",
+    "journalctl --disk-usage 2>/dev/null",
+    "find / -xdev -type f -size +100M 2>/dev/null | head -30",
+    "docker system df 2>/dev/null",
+    "docker ps 2>/dev/null",
+    "ls -lh /var/lib/docker 2>/dev/null",
+    "ls -lSh /var/lib/dnf 2>/dev/null | head",
+    "du -sh /var/log 2>/dev/null; du -sh /var/lib 2>/dev/null",
+    "df -h", "free -m",
+  ]) assert.ok(!isWriteCommand(c), `只读命令被误判: ${c}`);
+});
+
 test("runCommand 返回标准输出", async () => {
   const r = await runCommand("printf hello");
   assert.equal(r.exitCode, 0);
@@ -59,11 +74,31 @@ test("runCommand 支持 AbortSignal 中止", async () => {
   assert.equal(r.aborted, true);
 });
 
-test("applyFix：确认后执行，拒绝则不执行", async () => {
-  const yes = await applyFix("printf fixed", async () => true);
-  assert.equal(yes.confirmed, true);
-  assert.equal(yes.stdout.trim(), "fixed");
-  const no = await applyFix("printf bad", async () => false);
-  assert.equal(no.confirmed, false);
-  assert.equal(no.stdout, undefined);
+test("applyFix：非 root 环境拒绝执行（沙箱限制）", async () => {
+  let asked = false;
+  const r = await applyFix({ command: "touch /tmp/x", reason: "测试" }, async () => { asked = true; return true; });
+  assert.equal(r.confirmed, false);
+  assert.equal(r.blocked, true);
+  assert.equal(asked, false);
+});
+
+test("applyFix：危险命令被拦截且不询问", async () => {
+  let asked = false;
+  const r = await applyFix({ command: "rm -rf /", reason: "t" }, async () => { asked = true; return true; });
+  assert.equal(r.blocked, true);
+  assert.equal(asked, false);
+});
+
+test("redactSecrets：脱敏各类敏感凭证", () => {
+  assert.equal(redactSecrets("key sk-abcdef1234567890 end"), "key ****** end");
+  assert.equal(redactSecrets("Authorization: Bearer abcdefghijklmnopqrstuvwxyz1234567890"), "Authorization: ******");
+  assert.equal(redactSecrets("password=supersecretvalue"), "******");
+  assert.equal(redactSecrets("-----BEGIN RSA PRIVATE KEY-----\nABC\n-----END RSA PRIVATE KEY-----"), "******");
+  assert.equal(redactSecrets("普通文本没有密钥"), "普通文本没有密钥");
+});
+
+test("runCommand 输出自动脱敏敏感凭证", async () => {
+  const r = await runCommand("printf 'sk-abcdef1234567890 secret'");
+  assert.ok(!r.stdout.includes("sk-abcdef1234567890"));
+  assert.match(r.stdout, /\*\*\*\*\*\*/);
 });

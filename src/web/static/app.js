@@ -46,6 +46,8 @@ function applyRoute() {
     viewMonitor.style.display = "none";
     viewChat.style.display = "flex";
     viewTitle.textContent = "Agent 对话";
+    searchBox.style.display = "none";
+    netTools.style.display = "none";
   } else {
     currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
     viewMonitor.classList.toggle("single", currentFilter !== "all");
@@ -519,23 +521,34 @@ function connectStream() {
     }
     else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }
     else if (ev.type === "confirm") {
-      addSimpleMsg(`⚠️ 需确认执行：${ev.command}`, "confirm");
-      const row = document.createElement("div");
-      row.className = "msg confirm";
+      const riskLabel = { low: "低", medium: "中", high: "高" }[ev.riskLevel] || "中";
+      const riskCls = ev.riskLevel === "high" ? "risk-high" : ev.riskLevel === "low" ? "risk-low" : "risk-mid";
+      const card = document.createElement("div");
+      card.className = "msg confirm";
+      card.innerHTML = `
+        <div class="approval-card">
+          <div class="approval-head"><b>🔒 变更审批单</b><span class="risk-badge ${riskCls}">风险 ${riskLabel}${ev.riskLevel === "high" ? " ⚠️" : ""}</span></div>
+          ${ev.reason ? `<div class="approval-row"><span class="lbl">变更理由</span><span>${escapeHtml(ev.reason)}</span></div>` : ""}
+          ${ev.impact ? `<div class="approval-row"><span class="lbl">影响范围</span><span>${escapeHtml(ev.impact)}</span></div>` : ""}
+          <div class="approval-row"><span class="lbl">变更命令</span><code>${escapeHtml(ev.command || "")}</code></div>
+        </div>`;
+      const btnRow = document.createElement("div");
+      btnRow.className = "confirm-row";
       const yes = document.createElement("button");
       yes.className = "btn btn-yes small"; yes.textContent = "确认执行";
       const no = document.createElement("button");
       no.className = "btn btn-no small"; no.textContent = "拒绝";
       const finish = (label) => {
-        row.innerHTML = "";
-        const span = document.createElement("span");
+        card.querySelector(".confirm-row")?.remove();
+        const span = document.createElement("div");
         span.textContent = label;
-        row.appendChild(span);
+        card.appendChild(span);
       };
       yes.onclick = () => { finish("✅ 已确认执行，正在运行…"); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) }); };
       no.onclick = () => { finish("❌ 已拒绝执行"); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
-      row.append(yes, no);
-      log.appendChild(row);
+      btnRow.append(yes, no);
+      card.appendChild(btnRow);
+      log.appendChild(card);
       log.scrollTop = log.scrollHeight;
     } else if (ev.type === "clear") {
       clearHistory();

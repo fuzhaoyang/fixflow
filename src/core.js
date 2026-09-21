@@ -4,21 +4,30 @@ import { runCommand, readFile, applyFix, isWriteCommand } from "./tools.js";
 const TOOLS = [
   { type: "function", function: { name: "run_command", description: "执行 shell 命令检查服务器状态（只读诊断用）。", parameters: { type: "object", properties: { command: { type: "string", description: "要执行的命令" } }, required: ["command"] } } },
   { type: "function", function: { name: "read_file", description: "读取服务器上的文件内容（日志、配置等）。", parameters: { type: "object", properties: { path: { type: "string", description: "文件绝对路径" } }, required: ["path"] } } },
-  { type: "function", function: { name: "apply_fix", description: "执行修复操作。调用前必须向用户说明原因，此命令需用户确认后才能执行。", parameters: { type: "object", properties: { command: { type: "string", description: "修复命令" }, reason: { type: "string", description: "为什么要执行这条命令" } }, required: ["command", "reason"] } } },
+  { type: "function", function: { name: "apply_fix", description: "执行修复操作。调用前必须向用户说明原因，此命令需用户确认后才能执行。必须提供风险等级和影响范围。", parameters: { type: "object", properties: { command: { type: "string", description: "修复命令" }, reason: { type: "string", description: "为什么要执行这条命令" }, riskLevel: { type: "string", enum: ["low", "medium", "high"], description: "风险等级" }, impact: { type: "string", description: "预期影响范围/爆炸半径" } }, required: ["command", "reason", "riskLevel", "impact"] } } },
   { type: "function", function: { name: "clear_history", description: "清空当前会话的聊天历史。用户要求清除/清空历史时调用。", parameters: { type: "object", properties: {}, required: [] } } },
 ];
 
-const SYSTEM_PROMPT = "你是 fixflow，一名专业的服务器运维助手。检查与汇报全部使用 Markdown 格式输出：标题用 #、列表用 -、表格用 |、代码块用 ```。需要用户确认的修复动作，先说明原因再调用 apply_fix。用户要求清空/清除聊天历史时，调用 clear_history。";
+const SYSTEM_PROMPT = `你是 fixflow，一名专业的服务器运维助手。
+
+【职责边界】你只提供排障建议、配置草案、脚本建议和变更预检。不要编造服务器状态或日志内容，信息不足时先向用户提出澄清问题。
+
+【安全红线】
+- 不得直接修改生产系统（所有改动都必须先给方案，经用户确认后再通过工具执行）
+- 不得输出密码、私钥、Token、API Key 或其他敏感凭证（工具返回中已自动脱敏，你也不要推测或拼写）
+- 遇到重启服务、修改防火墙、修改 Nginx、更新 SSL 证书、删除数据、修改生产配置等高风险操作，必须先输出变更计划和风险说明，并明确标记【需人工审批】；用户批准后才可执行。
+
+【输出格式】检查与汇报全部使用 Markdown：标题用 #、列表用 -、表格用 |、代码块用 \`\`\`。需要用户确认的修复动作，先说明原因再调用 apply_fix。用户要求清空/清除聊天历史时，调用 clear_history。`;
 
 const HANDLERS = {
   run_command: async ({ command }, ctx) => {
     if (isWriteCommand(command)) {
-      return applyFix(command, ctx.onConfirm);
+      return applyFix({ command, riskLevel: "medium" }, ctx.onConfirm);
     }
     return runCommand(command, { signal: ctx.signal });
   },
   read_file: ({ path }) => readFile(path),
-  apply_fix: ({ command }, ctx) => applyFix(command, ctx.onConfirm),
+  apply_fix: (args, ctx) => applyFix(args, ctx.onConfirm),
   clear_history: (args, ctx) => ctx.clearHistory(),
 };
 

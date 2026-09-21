@@ -77,10 +77,10 @@ export async function startWeb(config = {}, deps = {}) {
   const session = createSession({
     config,
     onEvent: broadcast,
-    onConfirm: (command) => new Promise((resolve) => {
+    onConfirm: (info) => new Promise((resolve) => {
       const id = String(++seq);
       waiters.set(id, resolve);
-      broadcast({ type: "confirm", id, command });
+      broadcast({ type: "confirm", id, ...info });
     }),
   });
 

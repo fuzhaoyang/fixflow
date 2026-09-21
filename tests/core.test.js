@@ -127,7 +127,7 @@ test("配置热更新：修改 config 对象后 llmChat 收到新值", async () 
   assert.equal(seen.apiKey, "old");
 });
 
-test("run_command 命中写操作时需确认，拒绝则不执行", async () => {
+test("run_command 命中写操作时需确认（非 root 环境被沙箱拒绝）", async () => {
   const confirmations = [];
   const s = createSession({
     config: {},
@@ -139,20 +139,21 @@ test("run_command 命中写操作时需确认，拒绝则不执行", async () =>
   });
   const out = await s.send("清理临时文件");
   assert.equal(out, "已处理");
-  assert.deepEqual(confirmations, ["rm -rf /tmp/x"]);
   const toolMsg = s.history.filter((m) => m.role === "tool")[0];
-  assert.equal(JSON.parse(toolMsg.content).confirmed, false);
+  const content = JSON.parse(toolMsg.content);
+  assert.equal(content.blocked, true);
+  assert.equal(content.confirmed, false);
 });
 
-test("apply_fix 被拒绝后继续直到有结论", async () => {
+test("apply_fix 被拦截后继续直到有结论", async () => {
   const events = [];
   const s = createSession({
     config: {},
     onConfirm: async (cmd) => cmd.includes("allow"),
     onEvent: (e) => events.push(e),
     llmChat: fakeLlm([
-      { text: "", toolCalls: [{ id: "c1", name: "apply_fix", args: { command: "rm -rf /", reason: "危险" } }] },
-      { text: "", toolCalls: [{ id: "c2", name: "apply_fix", args: { command: "ufw allow 8080", reason: "放行" } }] },
+      { text: "", toolCalls: [{ id: "c1", name: "apply_fix", args: { command: "rm -rf /", reason: "危险", riskLevel: "high", impact: "全部" } }] },
+      { text: "", toolCalls: [{ id: "c2", name: "apply_fix", args: { command: "ufw allow 8080", reason: "放行", riskLevel: "high", impact: "防火墙" } }] },
       { text: "已处理", toolCalls: [] },
     ]),
   });
@@ -160,9 +161,9 @@ test("apply_fix 被拒绝后继续直到有结论", async () => {
   assert.equal(out, "已处理");
   assert.equal(s.history.filter((m) => m.role === "tool").length, 2);
   const toolMsg = s.history.filter((m) => m.role === "tool")[0];
-  assert.equal(JSON.parse(toolMsg.content).confirmed, false);
+  assert.equal(JSON.parse(toolMsg.content).blocked, true);
   const toolMsg2 = s.history.filter((m) => m.role === "tool")[1];
-  assert.equal(JSON.parse(toolMsg2.content).confirmed, true);
+  assert.equal(JSON.parse(toolMsg2.content).blocked, true);
   assert.ok(events.some((e) => e.type === "tool"));
 });
 
@@ -173,7 +174,7 @@ test("工具执行抛错时仍为所有 tool_call 写响应并继续", async () 
     llmChat: fakeLlm([
       {
         text: "", toolCalls: [
-          { id: "c1", name: "apply_fix", args: { command: "rm -rf /", reason: "t" } },
+          { id: "c1", name: "apply_fix", args: { command: "rm -rf /", reason: "t", riskLevel: "high", impact: "x" } },
           { id: "c2", name: "run_command", args: { command: "echo hi" } },
         ],
       },
@@ -185,7 +186,7 @@ test("工具执行抛错时仍为所有 tool_call 写响应并继续", async () 
   const tools = s.history.filter((m) => m.role === "tool");
   assert.equal(tools.length, 2);
   assert.deepEqual(tools.map((t) => t.tool_call_id), ["c1", "c2"]);
-  assert.ok(JSON.parse(tools[0].content).error);
+  assert.ok(JSON.parse(tools[0].content).blocked);
   assert.ok(!JSON.parse(tools[1].content).error);
 });
 
