@@ -8,6 +8,9 @@ import { collectAll, collectPorts, collectConnectivity, formatDateTime } from ".
 import { loadConfig } from "../config.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
+import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
+import { parseDf, parseFree, parseLoad } from "../health.js";
+import { runCommand } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
@@ -84,6 +87,28 @@ export async function startWeb(config = {}, deps = {}) {
     }),
   });
 
+  const monitor = createMonitor();
+  const monitorTimer = setInterval(() => monitor.tick(), 1000);
+
+  async function collectStatus() {
+    const [uptime, mem, df, nproc] = await Promise.all([
+      runCommand("uptime"),
+      runCommand("free -m"),
+      runCommand("df -h /"),
+      runCommand("nproc"),
+    ]);
+    const ncpu = parseInt(nproc.stdout.trim() || "1", 10) || 1;
+    const load = parseLoad(uptime.stdout || "").load;
+    const memPct = parseFree(mem.stdout || "").usedPct;
+    const disk = parseDf(df.stdout || "").find((d) => d.mount === "/")?.usedPct ?? 0;
+    return {
+      load: { pct: Math.min(100, Math.round((load / Math.max(1, ncpu)) * 100)), load, ncpu },
+      cpu: { pct: monitor.cpu() },
+      mem: { pct: memPct },
+      disk: { pct: disk },
+    };
+  }
+
   const captchaIdFromCookie = (req) => parseCookie(req.headers.cookie || "").fixflow_captcha || "";
 
   const server = createServer(async (req, res) => {
@@ -157,6 +182,17 @@ export async function startWeb(config = {}, deps = {}) {
         if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify(data));
+      } else if (url.pathname === "/api/overview") {
+        const net = monitor.net();
+        const io = monitor.io();
+        const nics = Object.keys(net.last || {}).filter((n) => n !== "lo");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          status: await collectStatus(),
+          nics,
+          net: net.samples,
+          io: io.samples,
+        }));
       } else if (url.pathname === "/api/report") {
         const data = await collectAll(config);
         const s = data.system;
@@ -262,6 +298,9 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/app.js") {
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
         res.end(await readFile(join(STATIC, "app.js")));
+      } else if (url.pathname === "/echarts.min.js") {
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        res.end(await readFile(join(STATIC, "echarts.min.js")));
       } else {
         res.writeHead(404); res.end("Not Found");
       }
@@ -286,6 +325,6 @@ export async function startWeb(config = {}, deps = {}) {
   console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {
     server,
-    close: () => new Promise((resolve) => server.close(resolve)),
+    close: () => new Promise((resolve) => { clearInterval(monitorTimer); server.close(resolve); }),
   };
 }

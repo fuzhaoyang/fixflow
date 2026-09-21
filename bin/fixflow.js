@@ -64,7 +64,7 @@ if (cmd === "restart") {
 }
 
 if (cmd === "web") {
-  startWeb(config);
+  await startWeb(config);
 } else if (!config.apiKey || !config.baseUrl || !config.model || needsReconfigure()) {
   console.log(needsReconfigure() ? "检测到重新安装，需重新配置（模型 / 地址 / Key）...\n" : "检测到尚未配置完整（模型 / 地址 / Key），进入配置向导...\n");
   const saved = await runSetup({ readConfig: () => { try { return JSON.parse(readFileSync(DEFAULT_CONFIG_PATH, "utf8")); } catch { return {}; } } });
@@ -110,6 +110,6 @@ if (cmd === "web") {
   }
   printSuccess(config, { serviceInstalled: svcInstalled, startPanel });
   process.exit(0);
+} else {
+  startFlow(config);
 }
-
-startFlow(config);

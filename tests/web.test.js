@@ -232,3 +232,39 @@ test("注册密码过短返回 400", async () => {
   assert.equal(res.status, 400);
   w.close();
 });
+
+test("overview 接口返回状态与流量/IO 采样结构", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  await new Promise((r) => setTimeout(r, 2100));
+  const res = await fetch(`${base}/api/overview`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.ok(Array.isArray(data.nics));
+  assert.equal(typeof data.status.load.pct, "number");
+  assert.equal(typeof data.status.cpu.pct, "number");
+  assert.equal(typeof data.status.mem.pct, "number");
+  assert.equal(typeof data.status.disk.pct, "number");
+  assert.ok(Array.isArray(data.net));
+  assert.ok(Array.isArray(data.io));
+  w.close();
+});
+
+test("overview 接口未登录返回 401", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/overview`);
+  assert.equal(res.status, 401);
+  w.close();
+});
+
+test("echarts.min.js 静态资源可访问", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/echarts.min.js`);
+  assert.equal(res.status, 200);
+  const body = await res.text();
+  assert.match(body, /echarts/i);
+  w.close();
+});

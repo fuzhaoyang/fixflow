@@ -153,6 +153,31 @@
     .svc-table th, .svc-table td { border: 1px solid var(--border); padding: 5px 8px; text-align: left; word-break: break-all; min-width: 120px; }
     .svc-table th { background: var(--panel2); color: var(--muted); }
     .svc-table td.ok { color: var(--ok); } .svc-table td.bad { color: var(--bad); } .svc-table td.na { color: var(--muted); }
+    /* 总览页 */
+    #overview { display: flex; flex-direction: column; gap: 14px; }
+    .status-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .ring-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+    .ring { width: 100px; height: 100px; flex-shrink: 0; }
+    .ring-info { display: flex; flex-direction: column; gap: 3px; }
+    .ring-info .label { font-size: 13px; color: var(--muted); }
+    .ring-info .value { font-size: 20px; font-weight: 700; }
+    .ring-info .sub { font-size: 11px; color: var(--muted); }
+    .traffic-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .traffic-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+    .seg-tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--border); }
+    .seg-tab { padding: 8px 16px; font-size: 14px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; background: none; border-top: none; border-left: none; border-right: none; font-weight: 400; }
+    .seg-tab.active { color: #000; font-weight: 700; border-bottom-color: #22c55e; }
+    .traffic-head .spacer { flex: 1; }
+    .traffic-head select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none; }
+    .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+    .kpi { display: flex; flex-direction: column; gap: 3px; }
+    .kpi .key { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+    .kpi .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .kpi .dot.up { background: #f97316; } .kpi .dot.down { background: #3b82f6; }
+    .kpi .val { font-size: 18px; font-weight: 700; }
+    .chart-wrap { position: relative; height: 560px; }
+    .chart-wrap .unit { position: absolute; top: 4px; right: 4px; z-index: 5; }
+    .chart-wrap select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 11px; outline: none; }
     /* 对话区 */
     #view-chat { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0; position: relative; }
     .chat-help { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 40; background: rgba(15,23,42,.85); border-color: var(--panel2); color: var(--muted); }
@@ -432,6 +457,35 @@
         <input id="ping-input" class="search-box" placeholder="连通性检测目标，如 1.1.1.1">
         <button class="btn small" id="ping-btn">检测</button>
       </div>
+      <div id="overview" style="display:none">
+        <div class="status-bar">
+          <div class="ring-card"><div class="ring" id="ring-load"></div><div class="ring-info"><span class="label">负载状态</span><span class="value" id="val-load">--</span><span class="sub" id="sub-load"></span></div></div>
+          <div class="ring-card"><div class="ring" id="ring-cpu"></div><div class="ring-info"><span class="label">CPU 使用率</span><span class="value" id="val-cpu">--</span><span class="sub" id="sub-cpu"></span></div></div>
+          <div class="ring-card"><div class="ring" id="ring-mem"></div><div class="ring-info"><span class="label">内存使用率</span><span class="value" id="val-mem">--</span><span class="sub" id="sub-mem"></span></div></div>
+          <div class="ring-card"><div class="ring" id="ring-disk"></div><div class="ring-info"><span class="label">磁盘使用率</span><span class="value" id="val-disk">--</span><span class="sub" id="sub-disk"></span></div></div>
+        </div>
+        <div class="traffic-card">
+          <div class="traffic-head">
+            <div class="seg-tabs">
+              <button class="seg-tab active" id="tab-traffic">流量</button>
+              <button class="seg-tab" id="tab-io">磁盘IO</button>
+            </div>
+            <div class="spacer"></div>
+            <select id="nic-select" title="网卡"><option value="all">所有</option></select>
+          </div>
+          <div class="kpi-row" id="kpi-row">
+            <div class="kpi"><span class="key" id="kpi-up-key"><span class="dot up"></span>上行</span><span class="val" id="kpi-up">--</span></div>
+            <div class="kpi"><span class="key" id="kpi-down-key"><span class="dot down"></span>下行</span><span class="val" id="kpi-down">--</span></div>
+            <div class="kpi"><span class="key" id="kpi-tx-key">总发送</span><span class="val" id="kpi-tx">--</span></div>
+            <div class="kpi"><span class="key" id="kpi-rx-key">总接收</span><span class="val" id="kpi-rx">--</span></div>
+          </div>
+          <div class="chart-wrap">
+            <div class="unit"><select id="unit-select"><option value="KB/s">单位 KB/s</option><option value="MB/s">单位 MB/s</option></select></div>
+            <div id="traffic-chart" style="width:100%;height:100%"></div>
+            <div id="io-chart" style="width:100%;height:100%;display:none"></div>
+          </div>
+        </div>
+      </div>
       <section class="cards" id="cards"></section>
     </div>
     <div class="content" id="view-chat">
@@ -591,6 +645,7 @@
     </table>
   </div>
 </div>
+<script src="echarts.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

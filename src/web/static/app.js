@@ -14,6 +14,7 @@ const netTools = document.getElementById("net-tools");
 const viewTitle = document.getElementById("view-title");
 const viewMonitor = document.getElementById("view-monitor");
 const viewChat = document.getElementById("view-chat");
+const overviewEl = document.getElementById("overview");
 
 let pendingImages = [];
 let chatHistory = [];
@@ -57,7 +58,10 @@ function applyRoute() {
     viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
     searchBox.style.display = currentFilter === "systemd" ? "" : "none";
     netTools.style.display = currentFilter === "network" ? "flex" : "none";
-    renderCards();
+    overviewEl.style.display = currentFilter === "all" ? "flex" : "none";
+    cards.style.display = currentFilter === "all" ? "none" : "";
+    if (currentFilter === "all") refreshOverview();
+    else renderCards();
   }
 }
 document.querySelectorAll(".menu-item").forEach((item) => {
@@ -66,6 +70,286 @@ document.querySelectorAll(".menu-item").forEach((item) => {
   });
 });
 window.addEventListener("hashchange", applyRoute);
+
+// ---------- 总览：状态圆环 + 流量/磁盘IO ----------
+let ringCharts = {};
+let trafficChart = null;
+let ioChart = null;
+let overviewData = null;
+let nicFilter = "all";
+let unitDivider = 1;
+let trafficTab = "traffic";
+let unitTouched = false;
+
+function fmtRate(v) {
+  const x = (v || 0) / (unitDivider || 1);
+  return x >= 100 ? Math.round(x) + (unitDivider >= 1024 * 1024 ? " MB/s" : " KB/s") : (x >= 10 ? x.toFixed(1) : x.toFixed(2)) + (unitDivider >= 1024 * 1024 ? " MB/s" : " KB/s");
+}
+
+function fmtTotal(bytes) {
+  const b = bytes || 0;
+  if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(2) + " MB";
+  if (b >= 1024) return (b / 1024).toFixed(1) + " KB";
+  return b + " B";
+}
+
+function ringColor(pct) {
+  if (pct >= 90) return "#ef4444";
+  if (pct >= 80) return "#f59e0b";
+  return "#22c55e";
+}
+
+function ringLabel(pct) {
+  if (pct >= 90) return "危险";
+  if (pct >= 80) return "警戒";
+  return "正常";
+}
+
+function initRings() {
+  for (const key of ["load", "cpu", "mem", "disk"]) {
+    ringCharts[key] = echarts.init(document.getElementById("ring-" + key));
+    ringCharts[key].setOption({
+      series: [{
+        type: "pie",
+        radius: ["72%", "88%"],
+        center: ["50%", "50%"],
+        silent: true,
+        label: { show: false },
+        data: [{ value: 0, itemStyle: { color: ringColor(0) } }, { value: 100, itemStyle: { color: "#334155" } }],
+      }],
+    });
+  }
+}
+
+function renderRings(status) {
+  const map = {
+    load: { label: "负载状态", val: status?.load?.pct ?? 0, sub: status?.load ? `${status.load.load}/${status.load.ncpu} 核` : "" },
+    cpu: { label: "CPU 使用率", val: status?.cpu?.pct ?? 0, sub: "实时" },
+    mem: { label: "内存使用率", val: status?.mem?.pct ?? 0, sub: "" },
+    disk: { label: "磁盘使用率", val: status?.disk?.pct ?? 0, sub: "根分区" },
+  };
+  for (const key of ["load", "cpu", "mem", "disk"]) {
+    const it = map[key];
+    const pct = Math.min(100, Math.max(0, it.val));
+    ringCharts[key].setOption({
+      series: [{ data: [{ value: pct, itemStyle: { color: ringColor(pct) } }, { value: 100, itemStyle: { color: "#334155" } }] }],
+    });
+    document.getElementById("val-" + key).textContent = (Number.isInteger(pct) ? pct : pct.toFixed(1)) + "%";
+    document.getElementById("val-" + key).style.color = ringColor(pct);
+    document.getElementById("sub-" + key).textContent = it.sub + " · " + ringLabel(pct);
+  }
+}
+
+function nicTotals() {
+  if (!overviewData?.net?.length) return {};
+  const last = overviewData.net[overviewData.net.length - 1];
+  return last.totals || {};
+}
+
+function kpiOf(nic) {
+  const totals = nicTotals();
+  const last = overviewData?.net?.[overviewData.net.length - 1];
+  let up = 0, down = 0;
+  if (last) {
+    for (const [name, v] of Object.entries(last.up || {})) {
+      if (nic !== "all" && name !== nic) continue;
+      up += v;
+    }
+    for (const [name, v] of Object.entries(last.down || {})) {
+      if (nic !== "all" && name !== nic) continue;
+      down += v;
+    }
+  }
+  let tx = 0, rx = 0;
+  for (const [name, v] of Object.entries(totals)) {
+    if (nic !== "all" && name !== nic) continue;
+    tx += v.tx || 0;
+    rx += v.rx || 0;
+  }
+  return { up, down, tx, rx };
+}
+
+function renderKpi() {
+  if (trafficTab === "io") {
+    const last = overviewData?.io?.[overviewData.io.length - 1];
+    let readB = 0, writeB = 0;
+    for (const x of Object.values(last?.read || {})) readB += x;
+    for (const x of Object.values(last?.write || {})) writeB += x;
+    document.getElementById("kpi-up").textContent = fmtBytes(readB);
+    document.getElementById("kpi-down").textContent = fmtBytes(writeB);
+    document.getElementById("kpi-tx").textContent = `${last?.iops ?? 0} 次`;
+    const lat = document.getElementById("kpi-rx");
+    lat.textContent = `${last?.latency ?? 0} ms`;
+    lat.style.color = "#22c55e";
+    return;
+  }
+  const k = kpiOf(nicFilter);
+  document.getElementById("kpi-up").textContent = fmtRate(k.up);
+  document.getElementById("kpi-down").textContent = fmtRate(k.down);
+  document.getElementById("kpi-tx").textContent = fmtTotal(k.tx);
+  document.getElementById("kpi-rx").textContent = fmtTotal(k.rx);
+  document.getElementById("kpi-rx").style.color = "";
+}
+
+function fmtBytes(b) {
+  const v = b || 0;
+  if (v >= 1024 * 1024) return (v / 1024 / 1024).toFixed(2) + " MB";
+  if (v >= 1024) return (v / 1024).toFixed(2) + " KB";
+  return v + " B";
+}
+
+function chartOption(mode) {
+  if (!overviewData) return null;
+  const points = mode === "traffic" ? overviewData.net : overviewData.io;
+  if (!points?.length) return null;
+  const times = points.map((p) => {
+    const d = new Date(p.t * 1000);
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  });
+  let upData, downData;
+  if (mode === "traffic") {
+    upData = points.map((p) => {
+      let v = 0;
+      for (const [name, x] of Object.entries(p.up || {})) if (nicFilter === "all" || name === nicFilter) v += x;
+      return (v / (unitDivider || 1)).toFixed(2);
+    });
+    downData = points.map((p) => {
+      let v = 0;
+      for (const [name, x] of Object.entries(p.down || {})) if (nicFilter === "all" || name === nicFilter) v += x;
+      return (v / (unitDivider || 1)).toFixed(2);
+    });
+  } else {
+    upData = points.map((p) => {
+      let v = 0;
+      for (const x of Object.values(p.read || {})) v += x;
+      return (v / (unitDivider || 1)).toFixed(2);
+    });
+    downData = points.map((p) => {
+      let v = 0;
+      for (const x of Object.values(p.write || {})) v += x;
+      return (v / (unitDivider || 1)).toFixed(2);
+    });
+  }
+  const [upName, downName, upColor, downColor] = mode === "traffic"
+    ? ["上行", "下行", "#f97316", "#3b82f6"]
+    : ["读取", "写入", "#ec4899", "#06b6d4"];
+  return {
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: "#ffffff",
+      borderColor: "#e2e8f0",
+      borderWidth: 1,
+      padding: [10, 14],
+      textStyle: { color: "#334155", fontSize: 12 },
+      extraCssText: "box-shadow: 0 4px 16px rgba(0,0,0,.12); border-radius: 8px;",
+    },
+    grid: { left: 52, right: 16, top: 40, bottom: 28 },
+    xAxis: {
+      type: "category", data: times, boundaryGap: false,
+      axisLine: { lineStyle: { color: "#334155" } },
+      axisLabel: { color: "#94a3b8", fontSize: 11 },
+    },
+    yAxis: {
+      type: "value", min: 0,
+      max: unitDivider >= 1024 * 1024 ? undefined : (mode === "io" ? 2.5 : 50),
+      interval: unitDivider >= 1024 * 1024 ? undefined : (mode === "io" ? 0.5 : 10),
+      axisLabel: { color: "#94a3b8", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#1e293b" } },
+    },
+    series: [
+      {
+        name: downName, type: "line", data: downData, smooth: true, symbol: "none",
+        lineStyle: { color: downColor, width: 1.5 },
+        areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: hexToRgba(downColor, 0.45) }, { offset: 1, color: hexToRgba(downColor, 0.08) }] } },
+      },
+      {
+        name: upName, type: "line", data: upData, smooth: true, symbol: "none",
+        lineStyle: { color: upColor, width: 1.5 },
+        areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: hexToRgba(upColor, 0.4) }, { offset: 1, color: hexToRgba(upColor, 0.05) }] } },
+      },
+    ],
+  };
+}
+
+function hexToRgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+}
+
+function renderChart() {
+  const chart = trafficTab === "traffic" ? trafficChart : ioChart;
+  const option = chartOption(trafficTab);
+  if (option) chart.setOption(option, true);
+  renderKpi();
+}
+
+async function refreshOverview() {
+  try {
+    const res = await fetch("api/overview");
+    overviewData = await res.json();
+    renderRings(overviewData.status);
+    const sel = document.getElementById("nic-select");
+    const prev = sel.value;
+    const nics = (overviewData.nics || []).filter((n) => n !== "lo");
+    sel.innerHTML = '<option value="all">所有</option>' + nics.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
+    if (nics.includes(prev)) sel.value = prev;
+    renderChart();
+  } catch {}
+}
+
+document.getElementById("tab-traffic").onclick = () => switchTrafficTab("traffic");
+document.getElementById("tab-io").onclick = () => switchTrafficTab("io");
+function switchTrafficTab(mode) {
+  trafficTab = mode;
+  document.getElementById("tab-traffic").classList.toggle("active", mode === "traffic");
+  document.getElementById("tab-io").classList.toggle("active", mode === "io");
+  const isTraffic = mode === "traffic";
+  document.getElementById("traffic-chart").style.display = isTraffic ? "" : "none";
+  document.getElementById("io-chart").style.display = isTraffic ? "none" : "";
+  document.getElementById("nic-select").style.display = isTraffic ? "" : "none";
+  document.getElementById("kpi-row").style.display = "";
+  const dots = document.querySelectorAll("#kpi-row .dot");
+  if (isTraffic) {
+    document.getElementById("kpi-up-key").innerHTML = '<span class="dot up"></span>上行';
+    document.getElementById("kpi-down-key").innerHTML = '<span class="dot down"></span>下行';
+    document.getElementById("kpi-tx-key").textContent = "总发送";
+    document.getElementById("kpi-rx-key").textContent = "总接收";
+    dots[0].style.background = "#f97316";
+    dots[1].style.background = "#3b82f6";
+  } else {
+    document.getElementById("kpi-up-key").innerHTML = '<span class="dot" style="background:#ec4899"></span>读取';
+    document.getElementById("kpi-down-key").innerHTML = '<span class="dot" style="background:#06b6d4"></span>写入';
+    document.getElementById("kpi-tx-key").textContent = "每秒读写 (IOPS)";
+    document.getElementById("kpi-rx-key").textContent = "IO 延迟";
+    dots[0].style.background = "#ec4899";
+    dots[1].style.background = "#06b6d4";
+  }
+  if (!unitTouched) {
+    const unitSel = document.getElementById("unit-select");
+    if (isTraffic) { unitSel.value = "KB/s"; unitDivider = 1; }
+    else { unitSel.value = "MB/s"; unitDivider = 1024 * 1024; }
+  }
+  const chart = isTraffic ? trafficChart : ioChart;
+  setTimeout(() => chart.resize(), 0);
+  renderChart();
+}
+document.getElementById("nic-select").onchange = (e) => { nicFilter = e.target.value; renderChart(); };
+document.getElementById("unit-select").onchange = (e) => {
+  unitTouched = true;
+  unitDivider = e.target.value === "MB/s" ? 1024 * 1024 : 1;
+  renderChart();
+};
+
+function initOverview() {
+  initRings();
+  trafficChart = echarts.init(document.getElementById("traffic-chart"));
+  ioChart = echarts.init(document.getElementById("io-chart"));
+  switchTrafficTab("traffic");
+  document.getElementById("unit-select").value = "KB/s";
+  unitDivider = 1;
+  refreshOverview();
+}
 
 // ---------- 监控 ----------
 function renderCards() {
@@ -631,8 +915,10 @@ pingBtn.onclick = async () => {
 };
 function initPanel() {
   applyRoute();
+  initOverview();
   refreshMetrics();
   setInterval(refreshMetrics, 5000);
+  setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 2000);
   (async () => { await loadHistory(); restoreHistory(); })();
   connectStream();
   loadModelStatus();
