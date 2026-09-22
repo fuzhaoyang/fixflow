@@ -69,9 +69,11 @@
     .modal-mask.show { display: flex; }
     .modal {
       width: 440px; max-width: 92vw; background: var(--panel); border: 1px solid var(--border);
-      border-radius: 14px; padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,.5);
+      border-radius: 14px; padding: 20px; box-shadow: 0 16px 48px rgba(0,0,0,.5); position: relative;
     }
     .modal h2 { font-size: 16px; margin: 0 0 16px; }
+    .modal-close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: var(--muted); font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+    .modal-close:hover { color: var(--text); background: rgba(255,255,255,.08); }
     .field { margin-bottom: 14px; }
     .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; }
     .field input, .field select {
@@ -543,6 +545,7 @@
 <button class="help-btn chat-help" id="help-btn" title="使用文档">?</button>
 <div class="modal-mask" id="settings-mask">
   <div class="modal">
+    <button class="modal-close" id="cfg-close" title="关闭">✕</button>
     <h2>⚙️ 模型设置</h2>
     <div class="field">
       <label>API 地址（Base URL）</label>

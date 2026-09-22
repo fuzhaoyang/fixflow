@@ -447,3 +447,13 @@ test("首页包含 SSL 管理所需元素", async () => {
   }
   w.close();
 });
+
+test("设置弹窗有 X 关闭按钮且不响应遮罩点击", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const page = await (await fetch(`${base}/`)).text();
+  assert.match(page, /id="cfg-close"/);
+  const js = await (await fetch(`${base}/app.js`)).text();
+  assert.doesNotMatch(js, /settingsMask\.addEventListener\("click"/);
+  w.close();
+});

@@ -1217,7 +1217,7 @@ async function openSettings() {
 }
 
 settingsMask.querySelector("#cfg-cancel").onclick = () => settingsMask.classList.remove("show");
-settingsMask.addEventListener("click", (e) => { if (e.target === settingsMask) settingsMask.classList.remove("show"); });
+settingsMask.querySelector("#cfg-close").onclick = () => settingsMask.classList.remove("show");
 
 let saveMsgEl = null;
 function showSaveMsg(text) {
