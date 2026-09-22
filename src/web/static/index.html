@@ -675,6 +675,19 @@
     </div>
   </div>
 </div>
+<div class="modal-mask" id="nginx-conf-mask">
+  <div class="modal" style="max-width:840px;width:90%">
+    <button class="modal-close" id="nginx-conf-close" title="关闭">✕</button>
+    <h2 id="nginx-conf-title">📄 Nginx 配置</h2>
+    <textarea id="nginx-conf-content" class="field-textarea" spellcheck="false" style="min-height:420px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" readonly></textarea>
+    <div class="hint" id="nginx-conf-err" style="color:var(--bad)"></div>
+    <div class="modal-actions">
+      <button class="btn" id="nginx-conf-edit">编辑</button>
+      <button class="btn" id="nginx-conf-cancel">关闭</button>
+      <button class="btn" id="nginx-conf-save" style="display:none">保存并重载</button>
+    </div>
+  </div>
+</div>
 <div class="modal-mask" id="logout-mask">
   <div class="modal">
     <h2>🚪 退出登录</h2>

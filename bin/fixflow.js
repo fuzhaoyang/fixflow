@@ -10,6 +10,14 @@ import { runDoctor } from "../src/doctor.js";
 import { hashPassword } from "../src/auth.js";
 import readline from "node:readline/promises";
 
+// 兜底：记录崩溃堆栈，避免偶发的未处理异常/拒绝直接终止面板
+process.on("unhandledRejection", (reason) => {
+  console.error("[fixflow] 未处理的 Promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[fixflow] 未捕获异常:", err);
+});
+
 const [cmd] = process.argv.slice(2);
 
 if (cmd === "--version" || cmd === "-v") {

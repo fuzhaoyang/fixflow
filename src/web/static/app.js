@@ -405,6 +405,9 @@ function renderCards() {
       card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
     } else if (key === "ssl") {
       card.innerHTML = `<h2>${label}</h2>${renderSsl(m)}`;
+    } else if (key === "nginx") {
+      card.innerHTML = `<h2>${label}</h2>${renderNginx(m, metrics.nginxLogs)}`;
+      setTimeout(loadNginxConfs, 0);
     } else if (key === "firewall") {
       card.innerHTML = `<h2>${label}</h2>${renderFirewall(m)}`;
     } else {
@@ -460,6 +463,66 @@ function renderSystemd(m) {
   if (!rows.length) return `<pre>${escapeHtml(q ? `未找到匹配「${q}」的服务` : "（无匹配服务，可在设置中配置服务白名单）")}</pre>`;
   const filtered = q ? rows.filter((r) => r.toLowerCase().includes(q)) : rows;
   return `<div class="card-body"><table class="svc-table"><thead><tr><th>类型</th><th>名称</th><th>状态</th><th>占用cpu</th><th>占用内存%</th><th>内容大小</th><th>PID</th><th>启动时间</th></tr></thead><tbody>${filtered.join("")}</tbody></table></div>`;
+}
+
+function renderNginx(m, logs) {
+  if (m?.error) return `<pre>${escapeHtml(m.error)}</pre>`;
+  const info = `<div class="sys-info" style="font-size:14px">
+    <span class="${m.status?.ok ? "ok" : "bad"}">● ${escapeHtml(m.status?.detail || "未知")}</span>
+    <span class="sep"></span>版本 ${escapeHtml(m.version || "—")}
+    <span class="sep"></span>配置校验 <span class="${m.config?.ok ? "ok" : "bad"}">${m.config?.ok ? "通过" : "失败"}</span>
+    <span class="sep"></span>worker ${m.workers || 0}
+    <span class="sep"></span>运行 ${escapeHtml(m.uptime || "—")}
+  </div>`;
+  const running = Boolean(m.status?.ok);
+  const ops = `<div style="display:flex;gap:8px;margin:10px 0">
+    <button class="btn small" data-nginx-op="reload">重载配置</button>
+    <button class="btn small" data-nginx-op="restart">重启服务</button>
+    ${running
+      ? `<button class="btn small" data-nginx-op="stop">停止服务</button>`
+      : `<button class="btn small" data-nginx-op="start">启动服务</button>`}
+  </div>`;
+  const errLog = logs?.errorLog ? `<details style="margin-top:10px"><summary style="cursor:pointer">最近错误日志</summary><pre>${escapeHtml(logs.errorLog)}</pre></details>` : "";
+  return `${info}${ops}<h3 style="font-size:14px;margin:12px 0 4px">配置文件</h3><div id="nginx-confs"><pre>加载中…</pre></div>${errLog}`;
+}
+
+async function loadNginxConfs() {
+  const box = document.getElementById("nginx-confs");
+  if (!box) return;
+  try {
+    const res = await fetch("api/nginx/confs");
+    const data = await res.json();
+    const confs = data.confs || [];
+    const listens = metrics.nginx?.listens || [];
+    if (!confs.length && !listens.length) { box.innerHTML = `<pre>${escapeHtml(data.error || "（无配置文件）")}</pre>`; return; }
+    const byFile = new Map();
+    for (const l of listens) {
+      if (!l.file) continue;
+      if (!byFile.has(l.file)) byFile.set(l.file, []);
+      byFile.get(l.file).push(l);
+    }
+    const seen = new Set();
+    const entries = [];
+    for (const c of confs) {
+      if (seen.has(c.path)) continue;
+      seen.add(c.path);
+      entries.push({ name: c.name, path: c.path });
+    }
+    for (const file of byFile.keys()) {
+      if (seen.has(file)) continue;
+      seen.add(file);
+      entries.push({ name: file.split("/").pop(), path: file });
+    }
+    const rows = entries.map((c) => {
+      const ls = byFile.get(c.path) || [];
+      const ports = [...new Set(ls.map((l) => l.port).filter(Boolean))].join(", ") || "—";
+      const names = [...new Set(ls.map((l) => l.serverName).filter(Boolean))].join(", ") || "—";
+      return `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.path)}</td><td>${escapeHtml(ports)}</td><td>${escapeHtml(names)}</td><td><span class="proc-ops"><a href="javascript:void(0)" data-nginx-conf="${escapeHtml(c.path)}">查看</a><a href="javascript:void(0)" data-nginx-conf="${escapeHtml(c.path)}" data-nginx-edit="1">编辑</a></span></td></tr>`;
+    }).join("");
+    box.innerHTML = `<div class="card-body"><table class="svc-table"><thead><tr><th>文件</th><th>路径</th><th>监听端口</th><th>server_name</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  } catch (e) {
+    box.innerHTML = `<pre>加载失败：${escapeHtml(String(e))}</pre>`;
+  }
 }
 
 let procSort = "cpu";
@@ -606,9 +669,11 @@ function renderFirewall(m) {
   const rules = Array.isArray(m.rules) ? m.rules : [];
   const risky = Array.isArray(m.riskyPorts) ? m.riskyPorts : [];
   const dangerCount = risky.filter((p) => p.dangerous).length;
-  const ufwActive = /ufw active/.test(m.status?.detail || "");
+  const backend = m.backend || "ufw";
+  const canClose = backend === "ufw";
+  const stateLabel = backend === "firewalld" ? "firewalld 已启用" : backend === "ufw" ? "ufw 已启用" : "未启用 / 降级";
   const summary = `<div class="fw-summary">
-    <div class="fw-stat"><span class="k">UFW 状态</span><span class="v">${ufwActive ? "已启用" : "未启用 / 降级"}</span></div>
+    <div class="fw-stat"><span class="k">防火墙状态</span><span class="v">${stateLabel}</span></div>
     <div class="fw-stat"><span class="k">放行规则</span><span class="v">${rules.length}</span></div>
     <div class="fw-stat"><span class="k">对全网开放</span><span class="v ${dangerCount ? "bad" : ""}">${risky.length}${dangerCount ? `（危险 ${dangerCount}）` : ""}</span></div>
   </div>`;
@@ -623,10 +688,11 @@ function renderFirewall(m) {
     }).join("");
     rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>#</th><th>动作</th><th>协议</th><th>端口</th><th>来源</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   } else {
-    rulesHtml = `<pre>${escapeHtml(m.raw || "未检测到 ufw 规则，或 ufw 未启用")}</pre>`;
+    rulesHtml = `<pre>${escapeHtml(m.raw || "未检测到防火墙规则")}</pre>`;
   }
 
-  const disabled = ufwActive ? "" : " disabled";
+  const disabled = canClose ? "" : " disabled";
+  const closeNote = canClose ? "" : `<div class="hint" style="margin-bottom:8px">当前后端为 ${escapeHtml(backend)}，暂不支持一键关闭</div>`;
   const riskRows = risky.map((p) => {
     const tag = p.dangerous ? `<span class="risk-badge risk-high">危险</span>` : `<span class="risk-badge risk-low">一般</span>`;
     const opts = Object.entries(FIREWALL_MODES).map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
@@ -634,7 +700,7 @@ function renderFirewall(m) {
       <select class="fw-mode"${disabled}>${opts}</select>
       <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>关闭端口</button></div>`;
   }).join("");
-  const riskHtml = risky.length ? `<div class="fw-risk">${riskRows}</div>` : `<pre>未发现对全网开放的端口 ✅</pre>`;
+  const riskHtml = risky.length ? `${closeNote}<div class="fw-risk">${riskRows}</div>` : `<pre>未发现对全网开放的端口 ✅</pre>`;
 
   return `${summary}<h3 class="fw-sub">放行规则</h3>${rulesHtml}<h3 class="fw-sub">对全网开放的端口</h3>${riskHtml}`;
 }
@@ -1089,13 +1155,17 @@ function initPanel() {
 }
 
 const modelStatus = document.getElementById("model-status");
+let modelCheckTimer = null;
 async function loadModelStatus() {
+  clearTimeout(modelCheckTimer);
   let cfg = {};
   try {
     const res = await fetch("api/config");
     cfg = await res.json();
   } catch {}
   const model = cfg.model || "未设置模型";
+  modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(model)} · 连接中…`;
+  modelStatus.classList.remove("on");
   try {
     const res = await fetch("api/models");
     if (!res.ok) throw new Error(res.status);
@@ -1104,6 +1174,7 @@ async function loadModelStatus() {
   } catch {
     modelStatus.innerHTML = `<span class="dot" style="background:var(--bad)"></span>${escapeHtml(model)} · 无法连接`;
     modelStatus.classList.remove("on");
+    modelCheckTimer = setTimeout(loadModelStatus, 5000);
   }
 }
 modelStatus.addEventListener("click", openSettings);
@@ -1381,6 +1452,66 @@ document.addEventListener("click", (e) => {
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
+const nginxConfMask = document.getElementById("nginx-conf-mask");
+let nginxConfPath = null;
+function enterNginxEdit() {
+  const ta = document.getElementById("nginx-conf-content");
+  ta.readOnly = false;
+  ta.focus();
+  document.getElementById("nginx-conf-edit").style.display = "none";
+  document.getElementById("nginx-conf-save").style.display = "";
+}
+document.addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-nginx-conf]");
+  if (!a) return;
+  const wantEdit = a.dataset.nginxEdit === "1";
+  nginxConfPath = a.dataset.nginxConf;
+  const ta = document.getElementById("nginx-conf-content");
+  ta.value = "加载中…";
+  ta.readOnly = true;
+  document.getElementById("nginx-conf-title").textContent = `📄 ${nginxConfPath}`;
+  document.getElementById("nginx-conf-err").textContent = "";
+  document.getElementById("nginx-conf-edit").style.display = "";
+  document.getElementById("nginx-conf-save").style.display = "none";
+  nginxConfMask.classList.add("show");
+  try {
+    const res = await fetch(`api/nginx/conf?path=${encodeURIComponent(nginxConfPath)}`);
+    const data = await res.json();
+    ta.value = data.content ?? "";
+    if (data.error) document.getElementById("nginx-conf-err").textContent = data.error;
+    if (wantEdit && !data.error) enterNginxEdit();
+  } catch (err) { ta.value = ""; document.getElementById("nginx-conf-err").textContent = String(err); }
+});
+document.getElementById("nginx-conf-edit").onclick = enterNginxEdit;
+document.getElementById("nginx-conf-cancel").onclick = () => nginxConfMask.classList.remove("show");
+document.getElementById("nginx-conf-close").onclick = () => nginxConfMask.classList.remove("show");
+nginxConfMask.addEventListener("click", (e) => { if (e.target === nginxConfMask) nginxConfMask.classList.remove("show"); });
+document.getElementById("nginx-conf-save").onclick = () => {
+  procTarget = { kind: "nginx-save", path: nginxConfPath, content: document.getElementById("nginx-conf-content").value };
+  document.getElementById("proc-title").textContent = "💾 保存 Nginx 配置";
+  document.getElementById("proc-text").textContent = `确认保存 ${nginxConfPath} 并重载 nginx 吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+};
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-nginx-op]");
+  if (!btn) return;
+  const action = btn.dataset.nginxOp;
+  procTarget = { kind: "nginx-op", action };
+  const labels = { reload: "重载", restart: "重启", start: "启动", stop: "停止" };
+  const icons = { reload: "♻️", restart: "🔄", start: "▶️", stop: "⏹️" };
+  const label = labels[action] || action;
+  document.getElementById("proc-title").textContent = `${icons[action] || "🛠️"} ${label} Nginx`;
+  document.getElementById("proc-text").textContent = `确认${label} nginx 服务吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
 document.getElementById("proc-cancel").onclick = () => procMask.classList.remove("show");
 procMask.addEventListener("click", (e) => { if (e.target === procMask) procMask.classList.remove("show"); });
 document.getElementById("proc-confirm").onclick = async () => {
@@ -1390,16 +1521,28 @@ document.getElementById("proc-confirm").onclick = async () => {
   errEl.textContent = "";
   const confirmBtn = document.getElementById("proc-confirm");
   confirmBtn.disabled = true;
-  const isFw = procTarget?.kind === "firewall";
+  const kind = procTarget?.kind;
+  const isFw = kind === "firewall";
+  const isNginxSave = kind === "nginx-save";
+  const isNginxOp = kind === "nginx-op";
   try {
-    const endpoint = isFw ? "api/firewall/close" : "api/process";
+    const endpoint = isFw ? "api/firewall/close" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : "api/process";
     const payload = isFw
       ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
-      : { ...procTarget, password };
+      : isNginxSave
+        ? { path: procTarget.path, content: procTarget.content, password }
+        : isNginxOp
+          ? { action: procTarget.action, password }
+          : { ...procTarget, password };
     const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
-    if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || "操作失败"; return; }
+    if (res.status === 403 || res.status === 400) {
+      errEl.textContent = data.error || "操作失败";
+      if (isNginxSave) document.getElementById("nginx-conf-err").textContent = data.error || "";
+      return;
+    }
     if (!data.ok) { errEl.textContent = data.stderr || data.error || "操作失败"; return; }
+    if (isNginxSave) nginxConfMask.classList.remove("show");
     procMask.classList.remove("show");
     refreshMetrics();
   } catch (e2) {

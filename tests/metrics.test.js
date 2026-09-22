@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, parseUfwStatus } from "../src/metrics.js";
+import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, parseUfwStatus, parseFirewalld, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -150,6 +153,34 @@ test("parseUfwStatus 空/异常输出返回空", () => {
   assert.deepEqual(parseUfwStatus("Status: inactive"), { rules: [], riskyPorts: [] });
 });
 
+test("parseFirewalld 解析 ports + services，含范围与去重", () => {
+  const { rules, riskyPorts } = parseFirewalld(
+    "20/tcp 22/tcp 39000-40000/tcp",
+    { ssh: ["22/tcp"], http: ["80/tcp"] },
+  );
+  const keys = riskyPorts.map((p) => `${p.port}/${p.proto}`);
+  assert.ok(keys.includes("20/tcp"));
+  assert.ok(keys.includes("80/tcp"));
+  assert.ok(keys.includes("39000-40000/tcp"));
+  assert.equal(keys.filter((k) => k === "22/tcp").length, 1);
+  assert.equal(rules.find((r) => r.port === "80").comment, "http");
+  assert.equal(riskyPorts.find((p) => p.port === 80).dangerous, false);
+});
+
+test("parseFirewalld 危险端口与范围标记", () => {
+  const single = parseFirewalld("2375/tcp", {});
+  assert.equal(single.riskyPorts.find((p) => p.port === 2375).dangerous, true);
+  const range = parseFirewalld("2000-3000/tcp", {});
+  assert.equal(range.riskyPorts[0].dangerous, true);
+  const udp = parseFirewalld("53/udp", {});
+  assert.equal(udp.riskyPorts[0].proto, "udp");
+});
+
+test("parseFirewalld 空输入返回空", () => {
+  assert.deepEqual(parseFirewalld("", {}), { rules: [], riskyPorts: [] });
+  assert.deepEqual(parseFirewalld(undefined, undefined), { rules: [], riskyPorts: [] });
+});
+
 test("新增诊断采集函数不抛错", async () => {
   const n = await collectNginxLogs();
   assert.ok("errorLog" in n || "error" in n);
@@ -163,4 +194,79 @@ test("新增诊断采集函数不抛错", async () => {
 test("collectSslAll 无配置时返回 results 数组", async () => {
   const r = await collectSslAll({});
   assert.ok(Array.isArray(r.results));
+});
+
+test("parseNginxListens 解析 listen 与 server_name", () => {
+  const dump = [
+    "# configuration file /etc/nginx/sites-enabled/a.conf:",
+    "server {",
+    "    listen 80;",
+    "    server_name example.com www.example.com;",
+    "}",
+    "# configuration file /etc/nginx/sites-enabled/b.conf:",
+    "server {",
+    "    listen 443 ssl;",
+    "    server_name api.example.com;",
+    "}",
+  ].join("\n");
+  const l = parseNginxListens(dump);
+  assert.equal(l.length, 2);
+  assert.equal(l[0].port, "80");
+  assert.equal(l[0].serverName, "example.com www.example.com");
+  assert.equal(l[1].port, "443");
+  assert.equal(l[1].serverName, "api.example.com");
+});
+
+test("listNginxConfs 用 nginx -T 解析全部配置路径", async () => {
+  const run = async () => ({ exitCode: 0, stdout: "# configuration file /etc/nginx/nginx.conf:\n# configuration file /usr/local/nginx/conf.d/a.conf:\n", stderr: "" });
+  const r = await listNginxConfs({ run });
+  assert.equal(r.confs.length, 2);
+  assert.equal(r.confs[0].name, "nginx.conf");
+  assert.equal(r.confs[1].path, "/usr/local/nginx/conf.d/a.conf");
+});
+
+test("readNginxConf 支持 nginx -T 列出的非 /etc/nginx 路径", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-nginx-"));
+  const f = join(dir, "site.conf");
+  writeFileSync(f, "server{}");
+  const run = async () => ({ exitCode: 0, stdout: `# configuration file ${f}:\n`, stderr: "" });
+  const r = await readNginxConf(f, { run });
+  assert.equal(r.content, "server{}");
+});
+
+test("readNginxConf 拒绝不在 nginx -T 列表中的路径", async () => {
+  const run = async () => ({ exitCode: 0, stdout: "# configuration file /etc/nginx/nginx.conf:\n", stderr: "" });
+  const r = await readNginxConf("/etc/nginx/conf.d/nope.conf", { run });
+  assert.equal(r.error, "路径不合法");
+});
+
+test("writeNginxConf 拒绝路径穿越", async () => {
+  const r = await writeNginxConf("/etc/nginx/../etc/passwd", "x", { baseDir: "/etc/nginx/" });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /路径不合法/);
+});
+
+test("writeNginxConf 校验通过后写入并 reload", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-nginx-"));
+  const f = join(dir, "nginx.conf");
+  writeFileSync(f, "OLD");
+  const calls = [];
+  const run = async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; };
+  const r = await writeNginxConf(f, "NEW", { run, baseDir: dir + "/" });
+  assert.equal(r.ok, true);
+  assert.equal(readFileSync(f, "utf8"), "NEW");
+  assert.ok(calls.some((c) => c.includes("systemctl reload nginx")));
+});
+
+test("writeNginxConf 校验失败时回滚原文件", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-nginx-"));
+  const f = join(dir, "nginx.conf");
+  writeFileSync(f, "OLD");
+  const run = async (cmd) => cmd.includes("nginx -t")
+    ? { exitCode: 1, stdout: "", stderr: "syntax error" }
+    : { exitCode: 0, stdout: "", stderr: "" };
+  const r = await writeNginxConf(f, "BROKEN", { run, baseDir: dir + "/" });
+  assert.equal(r.ok, false);
+  assert.match(r.error, /syntax error/);
+  assert.equal(readFileSync(f, "utf8"), "OLD");
 });

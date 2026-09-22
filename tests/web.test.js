@@ -567,3 +567,65 @@ test("config 接口保存 serviceKeywords 白名单", async () => {
   assert.deepEqual(file.serviceKeywords, ["nginx", "pm2", "docker"]);
   w.close();
 });
+
+test("/api/nginx 接口鉴权与重载", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const noauth = await fetch(`${base}/api/nginx/confs`);
+  assert.equal(noauth.status, 401);
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const badSave = await fetch(`${base}/api/nginx/conf`, {
+    method: "POST", headers,
+    body: JSON.stringify({ path: "/etc/nginx/nginx.conf", content: "x", password: "wrong" }),
+  });
+  assert.equal(badSave.status, 403);
+  const badReload = await fetch(`${base}/api/nginx/reload`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "reload", password: "wrong" }),
+  });
+  assert.equal(badReload.status, 403);
+  assert.equal(calls.length, 0);
+  const okReload = await fetch(`${base}/api/nginx/reload`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "restart", password: "secret123" }),
+  });
+  assert.equal(okReload.status, 200);
+  assert.ok(calls.some((c) => c.includes("systemctl restart nginx")));
+  w.close();
+});
+
+test("/api/nginx/reload 支持 start/stop/restart/reload", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  for (const action of ["start", "stop", "restart", "reload"]) {
+    const res = await fetch(`${base}/api/nginx/reload`, { method: "POST", headers, body: JSON.stringify({ action, password: "secret123" }) });
+    assert.equal(res.status, 200);
+    assert.equal((await res.json()).ok, true);
+  }
+  assert.deepEqual(calls, ["systemctl start nginx", "systemctl stop nginx", "systemctl restart nginx", "systemctl reload nginx"]);
+  w.close();
+});
+
+test("静态文件缺失时服务不崩溃（返回 500 且仍可服务）", async () => {
+  const { renameSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const appPath = fileURLToPath(new URL("../src/web/static/app.js", import.meta.url));
+  const bak = appPath + ".bak-test";
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  renameSync(appPath, bak);
+  try {
+    const res = await fetch(`${base}/app.js`);
+    assert.equal(res.status, 500);
+    const alive = await fetch(`${base}/`);
+    assert.equal(alive.status, 200);
+  } finally {
+    renameSync(bak, appPath);
+    w.close();
+  }
+});

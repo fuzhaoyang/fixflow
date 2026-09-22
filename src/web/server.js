@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNginxConfs, readNginxConf, writeNginxConf } from "../metrics.js";
 import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { restart as restartService } from "../service.js";
@@ -472,6 +472,40 @@ function formatUptime(sec) {
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr }));
         }
+      } else if (url.pathname === "/api/nginx/confs" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(await listNginxConfs()));
+      } else if (url.pathname === "/api/nginx/conf" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(await readNginxConf(url.searchParams.get("path"))));
+      } else if (url.pathname === "/api/nginx/conf" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { path, content, password } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(password || "", auth)) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+        } else {
+          const r = await writeNginxConf(path, content ?? "");
+          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify(r));
+        }
+      } else if (url.pathname === "/api/nginx/reload" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { action, password } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(password || "", auth)) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+        } else {
+          const cmds = { start: "systemctl start nginx", stop: "systemctl stop nginx", restart: "systemctl restart nginx", reload: "systemctl reload nginx" };
+          const cmd = cmds[action] || cmds.reload;
+          const r = await execCmd(cmd, { timeout: 15000 });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: r.exitCode === 0, output: (r.stdout || r.stderr || "").trim() }));
+        }
       } else if (url.pathname === "/api/restart" && req.method === "POST") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
@@ -486,33 +520,48 @@ function formatUptime(sec) {
         clients.add(res);
         req.on("close", () => clients.delete(res));
       } else if (url.pathname === "/") {
+        const html = await readFile(join(STATIC, "index.html"));
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        res.end(await readFile(join(STATIC, "index.html")));
+        res.end(html);
       } else if (url.pathname === "/app.js") {
+        const js = await readFile(join(STATIC, "app.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-        res.end(await readFile(join(STATIC, "app.js")));
+        res.end(js);
       } else if (url.pathname === "/echarts.min.js") {
+        const js = await readFile(join(STATIC, "echarts.min.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-        res.end(await readFile(join(STATIC, "echarts.min.js")));
+        res.end(js);
       } else {
         res.writeHead(404); res.end("Not Found");
       }
     } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: String(e) }));
+      console.error("请求处理失败:", e);
+      try {
+        if (!res.headersSent) res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: String(e) }));
+      } catch {}
     }
   });
 
+  const listenPort = config.port ?? 8080;
   await new Promise((resolve, reject) => {
-    const srv = server.listen(config.port ?? 8080, "127.0.0.1", resolve);
-    srv.on("error", (e) => {
-      if (e.code === "EADDRINUSE") {
-        console.error(`\n⚠ 端口 ${config.port ?? 8080} 已被占用（面板可能已在运行）。`);
-        console.error(`  直接访问 http://127.0.0.1:${config.port ?? 8080}，或先停止旧进程再启动。`);
-        process.exit(1);
-      }
-      reject(e);
-    });
+    let attempts = 0;
+    const tryListen = () => {
+      const srv = server.listen(listenPort, "127.0.0.1", resolve);
+      srv.once("error", (e) => {
+        if (e.code === "EADDRINUSE" && attempts < 5) {
+          attempts++;
+          setTimeout(tryListen, 400);
+        } else if (e.code === "EADDRINUSE") {
+          console.error(`\n⚠ 端口 ${listenPort} 已被占用（面板可能已在运行）。`);
+          console.error(`  直接访问 http://127.0.0.1:${listenPort}，或先停止旧进程再启动。`);
+          process.exit(1);
+        } else {
+          reject(e);
+        }
+      });
+    };
+    tryListen();
   });
   const address = server.address();
   console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);

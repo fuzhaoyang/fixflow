@@ -1,6 +1,8 @@
 import { runCommand } from "./tools.js";
 import { assessHealth, parseDf, parseFree, parseLoad } from "./health.js";
 import { collectSslAll } from "./ssl.js";
+import { readFile, writeFile, readdir, unlink } from "node:fs/promises";
+import { resolve, dirname, basename, join } from "node:path";
 
 const safe = async (fn) => {
   try { return await fn(); } catch { return { error: "N/A" }; }
@@ -50,14 +52,124 @@ export async function collectNetwork() {
 }
 
 export async function collectNginx() {
-  const [status, config] = await Promise.all([
+  const [status, version, config, workers, etimes, dump] = await Promise.all([
     runCommand("systemctl is-active nginx"),
+    runCommand("nginx -v 2>&1"),
     runCommand("nginx -t 2>&1"),
+    runCommand("pgrep -c nginx"),
+    runCommand("ps -o etimes= -C nginx --no-headers | sort -rn | head -1"),
+    runCommand("nginx -T 2>/dev/null"),
   ]);
+  const verText = `${version.stdout || ""}${version.stderr || ""}`;
+  if (!/nginx\//.test(verText) && status.exitCode !== 0) return { error: "nginx 未安装或未运行" };
+  const vm = verText.match(/nginx\/([\d.]+)/);
+  const et = parseInt((etimes.stdout || "").trim(), 10);
   return {
-    status: { ok: status.exitCode === 0, detail: status.stdout.trim() || "未安装/未运行" },
-    config: { ok: config.exitCode === 0, detail: config.stdout || config.stderr },
+    status: { ok: status.exitCode === 0, detail: (status.stdout || "").trim() || "未运行" },
+    version: vm ? vm[1] : "—",
+    config: { ok: config.exitCode === 0, detail: (config.stdout || config.stderr || "").trim() },
+    workers: parseInt((workers.stdout || "").trim(), 10) || 0,
+    uptime: Number.isFinite(et) ? formatUptimeShort(et) : "—",
+    listens: parseNginxListens(dump.stdout || ""),
   };
+}
+
+function formatUptimeShort(sec) {
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d} 天 ${h} 小时`;
+  if (h > 0) return `${h} 小时 ${m} 分`;
+  return `${m} 分`;
+}
+
+export function parseNginxListens(dump) {
+  const listens = [];
+  let file = "";
+  let cur = null;
+  for (const raw of String(dump || "").split("\n")) {
+    const fm = raw.match(/^# configuration file (\S+):/);
+    if (fm) { file = fm[1]; cur = null; continue; }
+    const l = raw.trim();
+    if (/^server\s*\{/.test(l)) { cur = { port: "", serverName: "", file }; continue; }
+    if (!cur) continue;
+    const lm = l.match(/^listen\s+([^;\s]+)/);
+    if (lm && !cur.port) cur.port = lm[1].replace(/[^\d]/g, "") || lm[1];
+    const sm = l.match(/^server_name\s+([^;]+);/);
+    if (sm) cur.serverName = sm[1].trim();
+    if (/^\}/.test(l)) {
+      if (cur.port || cur.serverName) listens.push(cur);
+      cur = null;
+    }
+  }
+  return listens;
+}
+
+async function collectNginxConfs({ run = runCommand } = {}) {
+  const r = await run("nginx -T 2>&1");
+  if (r.exitCode !== 0) return { confs: null, error: ((r.stdout || r.stderr) || "无法读取 nginx 配置").trim() };
+  const paths = [...new Set([...String(r.stdout || "").matchAll(/# configuration file (\S+):/g)].map((m) => m[1]))];
+  return { confs: paths.map((p) => ({ path: p, name: p.split("/").pop() })), error: null };
+}
+
+export async function listNginxConfs({ run = runCommand } = {}) {
+  const r = await collectNginxConfs({ run });
+  return r.error ? { confs: [], error: r.error } : { confs: r.confs };
+}
+
+export async function readNginxConf(path, { run = runCommand, baseDir } = {}) {
+  const abs = resolve(String(path || ""));
+  if (baseDir) {
+    if (!abs.startsWith(baseDir)) return { error: "路径不合法" };
+  } else {
+    const r = await collectNginxConfs({ run });
+    if (r.error) return { error: r.error };
+    if (!r.confs.some((c) => c.path === abs)) return { error: "路径不合法" };
+  }
+  try {
+    return { path: abs, content: await readFile(abs, "utf8") };
+  } catch (e) {
+    return { error: `无法读取：${e.message}` };
+  }
+}
+
+async function pruneBackups(abs) {
+  try {
+    const dir = dirname(abs);
+    const base = basename(abs);
+    const files = (await readdir(dir)).filter((f) => f.startsWith(base + ".bak.")).sort();
+    for (const f of files.slice(0, Math.max(0, files.length - 5))) await unlink(join(dir, f)).catch(() => {});
+  } catch {}
+}
+
+export async function writeNginxConf(path, content, { run = runCommand, baseDir } = {}) {
+  const abs = resolve(String(path || ""));
+  if (baseDir) {
+    if (!abs.startsWith(baseDir)) return { ok: false, error: "路径不合法" };
+  } else {
+    const r = await collectNginxConfs({ run });
+    if (r.error) return { ok: false, error: r.error };
+    if (!r.confs.some((c) => c.path === abs)) return { ok: false, error: "路径不合法" };
+  }
+  let orig;
+  try { orig = await readFile(abs, "utf8"); }
+  catch (e) { return { ok: false, error: `无法读取原文件：${e.message}` }; }
+  const ts = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+  const bak = `${abs}.bak.${ts}`;
+  try {
+    await writeFile(bak, orig);
+    await writeFile(abs, content);
+  } catch (e) {
+    return { ok: false, error: `无写入权限：${e.message}` };
+  }
+  const t = await run("nginx -t 2>&1");
+  if (t.exitCode !== 0) {
+    await writeFile(abs, orig).catch(() => {});
+    return { ok: false, error: (t.stdout || t.stderr || "配置校验失败").trim(), rolledBack: true };
+  }
+  const r = await run("systemctl reload nginx");
+  await pruneBackups(abs);
+  return { ok: r.exitCode === 0, output: (r.stdout || r.stderr || "").trim() };
 }
 
 const DANGEROUS_PORTS = new Set([3306, 5432, 6379, 27017, 9200, 8888, 888, 9090, 9000, 2375, 2376]);
@@ -94,7 +206,77 @@ export function parseUfwStatus(stdout) {
   return { rules, riskyPorts };
 }
 
+export function parseFirewalld(portsOut, servicePorts = {}) {
+  const rules = [];
+  const riskyPorts = [];
+  const seen = new Set();
+  let num = 0;
+  const addToken = (token, source) => {
+    const [portPart, protoPart] = String(token).split("/");
+    const proto = (protoPart || "tcp").trim().toLowerCase() || "tcp";
+    const portStr = (portPart || "").trim();
+    if (!portStr) return;
+    const isRange = /^\d+-\d+$/.test(portStr);
+    let portValue;
+    if (isRange) {
+      portValue = portStr;
+    } else {
+      const n = Number(portStr);
+      if (!Number.isInteger(n) || n < 1 || n > 65535) return;
+      portValue = n;
+    }
+    const key = `${proto}:${portValue}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    num += 1;
+    rules.push({ num, action: "ALLOW", proto, port: String(portValue), from: "Anywhere", comment: source });
+    const dangerous = isRange ? rangeHasDangerous(portStr) : DANGEROUS_PORTS.has(Number(portValue));
+    riskyPorts.push({ proto, port: portValue, dangerous });
+  };
+  for (const tok of String(portsOut || "").split(/\s+/).filter(Boolean)) addToken(tok, "");
+  for (const [svc, tokens] of Object.entries(servicePorts || {})) {
+    for (const tok of tokens || []) addToken(tok, svc);
+  }
+  return { rules, riskyPorts };
+}
+
+function rangeHasDangerous(range) {
+  const [a, b] = String(range).split("-").map(Number);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  for (const p of DANGEROUS_PORTS) if (p >= a && p <= b) return true;
+  return false;
+}
+
+async function collectFirewalld() {
+  const zoneRes = await runCommand("firewall-cmd --get-default-zone");
+  const zone = (zoneRes.stdout || "").trim() || "public";
+  const [portsRes, svcRes] = await Promise.all([
+    runCommand(`firewall-cmd --zone=${zone} --list-ports`),
+    runCommand(`firewall-cmd --zone=${zone} --list-services`),
+  ]);
+  const services = (svcRes.stdout || "").trim().split(/\s+/).filter(Boolean);
+  const infos = await Promise.all(services.map((s) => runCommand(`firewall-cmd --info-service=${s}`)));
+  const servicePorts = {};
+  services.forEach((s, i) => {
+    const m = (infos[i].stdout || "").match(/ports:\s*(.+)/);
+    servicePorts[s] = m ? m[1].trim().split(/\s+/) : [];
+  });
+  const { rules, riskyPorts } = parseFirewalld(portsRes.stdout || "", servicePorts);
+  return {
+    ok: riskyPorts.every((p) => !p.dangerous),
+    backend: "firewalld",
+    status: { ok: true, detail: `firewalld (${zone})` },
+    rules,
+    riskyPorts,
+    raw: "",
+  };
+}
+
 export async function collectFirewall() {
+  const fwState = await runCommand("firewall-cmd --state");
+  if (fwState.exitCode === 0 && /running/i.test(fwState.stdout || "")) {
+    return collectFirewalld();
+  }
   const [ufw, iptables] = await Promise.all([
     runCommand("ufw status numbered"),
     runCommand("iptables -L -n --line-numbers"),
@@ -102,7 +284,7 @@ export async function collectFirewall() {
   const isActive = ufw.exitCode === 0 && /Status:\s*active/i.test(ufw.stdout || "");
   if (isActive) {
     const { rules, riskyPorts } = parseUfwStatus(ufw.stdout || "");
-    return { ok: riskyPorts.every((p) => !p.dangerous), status: { ok: true, detail: "ufw active" }, rules, riskyPorts, raw: "" };
+    return { ok: riskyPorts.every((p) => !p.dangerous), backend: "ufw", status: { ok: true, detail: "ufw active" }, rules, riskyPorts, raw: "" };
   }
   const raw = iptables.stdout || iptables.stderr || "";
   const riskyPorts = [];
@@ -118,6 +300,7 @@ export async function collectFirewall() {
   }
   return {
     ok: riskyPorts.every((p) => !p.dangerous),
+    backend: "iptables",
     status: { ok: true, detail: (ufw.stdout || "").trim() || "ufw 不可用" },
     rules: [],
     riskyPorts,
