@@ -468,9 +468,16 @@ function renderProcesses(m) {
   const rows = list.map((p) => {
     const bad = p.cpu > 100;
     const style = bad ? " style='background:rgba(248,113,113,0.15);color:var(--bad)'" : "";
-    return `<tr${style}><td>${p.pid}</td><td>${escapeHtml(p.user || "")}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td>${p.memKb ? Math.round(p.memKb / 1024) + "MB" : "—"}</td><td>${escapeHtml(p.service || "—")}</td><td>${escapeHtml(p.cmd || "")}</td></tr>`;
+    const svc = escapeHtml(p.service || "");
+    const name = String(p.cmd || "").trim().split(/\s+/)[0]?.split("/").pop() || "";
+    const protectedProc = p.pid === 1 || /^[DZ]/.test(p.state || "") || (p.user === "root" && /(daemon|systemd|dbus)/.test(name)) || /(^dde-|kwin|Xorg|lightdm)/.test(name) || /^k/.test(name);
+    const btns = protectedProc ? "—"
+      : p.service
+        ? `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="restart" data-proc-pid="${p.pid}" data-proc-service="${svc}">重启</a><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="${svc}" class="danger">关闭</a></span>`
+        : `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="" class="danger">关闭</a></span>`;
+    return `<tr${style}><td>${p.pid}</td><td>${escapeHtml(p.user || "")}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td>${p.memKb ? Math.round(p.memKb / 1024) + "MB" : "—"}</td><td>${svc || "—"}</td><td>${escapeHtml(p.cmd || "")}</td><td>${btns}</td></tr>`;
   }).join("");
-  return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function renderSsl(m) {
@@ -1171,9 +1178,48 @@ restartConfirmBtn.onclick = () => {
     });
 };
 
+const procMask = document.getElementById("proc-mask");
+let procTarget = null;
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-proc-action]");
+  if (!btn) return;
+  procTarget = { action: btn.dataset.procAction, pid: Number(btn.dataset.procPid), service: btn.dataset.procService };
+  const isRestart = procTarget.action === "restart";
+  document.getElementById("proc-title").textContent = isRestart ? "🔄 重启进程" : "⏹️ 关闭进程";
+  document.getElementById("proc-text").textContent = isRestart
+    ? `确认重启进程 ${procTarget.pid}（服务 ${procTarget.service}）吗？此操作需输入登录密码验证。`
+    : `确认关闭进程 PID ${procTarget.pid} 吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
+document.getElementById("proc-cancel").onclick = () => procMask.classList.remove("show");
+procMask.addEventListener("click", (e) => { if (e.target === procMask) procMask.classList.remove("show"); });
+document.getElementById("proc-confirm").onclick = async () => {
+  const errEl = document.getElementById("proc-err");
+  const password = document.getElementById("proc-password").value.trim();
+  if (!password) { errEl.textContent = "请输入登录密码"; return; }
+  errEl.textContent = "";
+  const confirmBtn = document.getElementById("proc-confirm");
+  confirmBtn.disabled = true;
+  try {
+    const res = await fetch("api/process", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...procTarget, password }) });
+    const data = await res.json();
+    if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || "操作失败"; return; }
+    if (!data.ok) { errEl.textContent = data.stderr || data.error || "操作失败"; return; }
+    procMask.classList.remove("show");
+    refreshMetrics();
+  } catch (e2) {
+    errEl.textContent = String(e2);
+  } finally {
+    confirmBtn.disabled = false;
+  }
+};
+
 document.getElementById("cfg-save").onclick = async () => {
   const body = {
-    baseUrl: cfgBaseUrl.value.trim(),
     model: cfgModel.value,
   };
   const newKey = cfgApiKey.value.trim();

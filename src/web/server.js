@@ -63,6 +63,26 @@ export async function startWeb(config = {}, deps = {}) {
     await writeFile(configPath, JSON.stringify({ ...existing, auth }, null, 2));
   };
   const readAuth = async () => (await readConfigFile()).auth || null;
+  const execCmd = deps.runCommand || runCommand;
+
+  const procGuard = async (pid) => {
+    if (!Number.isInteger(pid) || pid <= 1) return "系统级进程，禁止操作";
+    try {
+      const [stat, status] = await Promise.all([
+        readFile(`/proc/${pid}/stat`, "utf8"),
+        readFile(`/proc/${pid}/status`, "utf8"),
+      ]);
+      const m = stat.match(/\(([^)]*)\)\s*(\w)/);
+      const name = m ? m[1] : "";
+      const state = m ? m[2] : "";
+      const uid = (status.match(/^Uid:\s+(\d+)/m) || [])[1];
+      if (state === "D" || state === "Z") return "该进程状态不可操作（D/Z）";
+      if (uid === "0" && /(daemon|systemd|dbus)/.test(name)) return "系统服务进程，禁止操作";
+      if (/(^dde-|kwin|Xorg|lightdm)/.test(name)) return "系统组件进程，禁止操作";
+      if (/^k/.test(name)) return "内核线程，禁止操作";
+      return null;
+    } catch { return "进程不存在或不可访问"; }
+  };
 
   const authHeader = (req) => {
     const cookie = parseCookie(req.headers.cookie || "");
@@ -302,6 +322,38 @@ function formatUptime(sec) {
         broadcast({ type: "aborted" });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end("{}");
+      } else if (url.pathname === "/api/process" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { action, pid, service, password } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(password || "", auth)) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+        } else if (!Number.isInteger(pid) || pid <= 0) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "无效的 PID" }));
+        } else {
+          const cmd = action === "restart" && service
+            ? `systemctl restart ${service}`
+            : action === "kill"
+              ? `kill ${pid}`
+              : "";
+          if (!cmd) {
+            res.writeHead(400, { "Content-Type": "application/json" });
+            res.end(JSON.stringify({ error: "不支持的操作或缺少服务名" }));
+          } else {
+            const guardErr = action === "kill" ? await procGuard(pid) : null;
+            if (guardErr) {
+              res.writeHead(403, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: guardErr }));
+            } else {
+              const r = await execCmd(cmd, { timeout: 15000 });
+              res.writeHead(200, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr }));
+            }
+          }
+        }
       } else if (url.pathname === "/api/restart" && req.method === "POST") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));

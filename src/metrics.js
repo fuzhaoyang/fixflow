@@ -166,6 +166,7 @@ const parsePsLine = (line) => {
     cpu: parseFloat(parts[2]),
     mem: parseFloat(parts[3]),
     memKb: parseInt(parts[5], 10),
+    state: parts[8],
     cmd: parts.slice(10).join(" "),
   };
 };

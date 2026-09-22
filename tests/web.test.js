@@ -11,11 +11,11 @@ const testCaptchas = {
 };
 const deps = { captchas: testCaptchas };
 
-function makeServer(extra = {}) {
+function makeServer(extra = {}, extraDeps = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ff-web-"));
   const cfg = join(dir, "config.json");
   writeFileSync(cfg, "{}");
-  return startWeb({ port: 0, services: [], databases: [], configPath: cfg, ...extra }, deps);
+  return startWeb({ port: 0, services: [], databases: [], configPath: cfg, ...extra }, { captchas: testCaptchas, ...extraDeps });
 }
 
 async function registerAndLogin(base) {
@@ -272,10 +272,10 @@ test("overview 接口返回状态与流量/IO 采样结构", async () => {
   assert.equal(typeof data.status.cpu.pct, "number");
   assert.equal(typeof data.status.mem.pct, "number");
   assert.equal(typeof data.status.disk.pct, "number");
-  assert.ok(data.sys, "overview 应包含 sys 字段");
-  assert.ok(typeof data.sys.os === "string" && data.sys.os.length > 0);
-  assert.ok(typeof data.sys.arch === "string");
-  assert.ok(typeof data.sys.uptime === "string");
+  assert.ok(data.status.sys, "overview 应包含 status.sys 字段");
+  assert.ok(typeof data.status.sys.os === "string" && data.status.sys.os.length > 0);
+  assert.ok(typeof data.status.sys.arch === "string");
+  assert.ok(typeof data.status.sys.uptime === "string");
   assert.ok(Array.isArray(data.net));
   assert.ok(Array.isArray(data.io));
   w.close();
@@ -296,5 +296,95 @@ test("echarts.min.js 静态资源可访问", async () => {
   assert.equal(res.status, 200);
   const body = await res.text();
   assert.match(body, /echarts/i);
+  w.close();
+});
+
+test("/api/process 未登录返回 401", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/process`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "x" }),
+  });
+  assert.equal(res.status, 401);
+  w.close();
+});
+
+test("/api/process 密码错误返回 403 且不执行命令", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/process`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "wrong" }),
+  });
+  assert.equal(res.status, 403);
+  const data = await res.json();
+  assert.match(data.error, /密码错误/);
+  assert.equal(calls.length, 0);
+  w.close();
+});
+
+test("/api/process 正确密码执行 kill 与 restart", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const kill = await fetch(`${base}/api/process`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "kill", pid: process.pid, service: "", password: "secret123" }),
+  });
+  assert.equal(kill.status, 200);
+  assert.equal((await kill.json()).ok, true);
+  assert.equal(calls[0], `kill ${process.pid}`);
+  const restart = await fetch(`${base}/api/process`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "restart", pid: 42, service: "nginx.service", password: "secret123" }),
+  });
+  assert.equal(restart.status, 200);
+  assert.equal(calls[1], "systemctl restart nginx.service");
+  w.close();
+});
+
+test("/api/process 禁止操作系统级与受保护进程", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const pid1 = await fetch(`${base}/api/process`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "secret123" }),
+  });
+  assert.equal(pid1.status, 403);
+  const missing = await fetch(`${base}/api/process`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "kill", pid: 999999999, service: "", password: "secret123" }),
+  });
+  assert.equal(missing.status, 403);
+  assert.match((await missing.json()).error, /不存在|不可访问/);
+  assert.equal(calls.length, 0);
+  w.close();
+});
+
+test("/api/process 无效参数返回 400", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const badPid = await fetch(`${base}/api/process`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "kill", pid: -5, service: "", password: "secret123" }),
+  });
+  assert.equal(badPid.status, 400);
+  const noSvc = await fetch(`${base}/api/process`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "restart", pid: 1, service: "", password: "secret123" }),
+  });
+  assert.equal(noSvc.status, 400);
+  assert.equal(calls.length, 0);
   w.close();
 });
