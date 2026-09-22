@@ -1,5 +1,6 @@
 import { runCommand } from "./tools.js";
 import { assessHealth, parseDf, parseFree, parseLoad } from "./health.js";
+import { collectSslAll } from "./ssl.js";
 
 const safe = async (fn) => {
   try { return await fn(); } catch { return { error: "N/A" }; }
@@ -192,20 +193,6 @@ export async function collectProcesses() {
   return { top: list, zombies, zombieDetail: zombie.stdout.trim(), anomalies };
 }
 
-export async function collectSsl(sites = []) {
-  const results = await Promise.all(sites.map(async (site) => {
-    const host = site.split(":")[0];
-    const port = site.includes(":") ? site.split(":")[1] : "443";
-    const r = await runCommand(`timeout 10 bash -c 'echo | openssl s_client -connect ${host}:${port} -servername ${host} 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null'`);
-    const m = (r.stdout || "").match(/notAfter=(.*)/);
-    if (!m) return { host, port, error: r.stderr || "无法读取证书" };
-    const date = new Date(m[1]);
-    const daysLeft = Math.floor((date - Date.now()) / 86400000);
-    return { host, port, notAfter: formatDateTime(date), daysLeft };
-  }));
-  return { results };
-}
-
 export async function collectConnectivity(targets = []) {
   const results = await Promise.all(targets.map(async (target) => {
     const [ping, dns] = await Promise.all([
@@ -297,7 +284,7 @@ export async function collectAll(config) {
     docker: await safe(collectDocker),
     systemd: await safe(collectSystemd),
     processes: await safe(collectProcesses),
-    ssl: await safe(() => collectSsl(config.sslSites || [])),
+    ssl: await safe(() => collectSslAll(config)),
     connectivity: await safe(() => collectConnectivity(config.pingTargets || [])),
     nginxLogs: await safe(collectNginxLogs),
     pyProcesses: await safe(collectPyProcesses),
@@ -305,3 +292,4 @@ export async function collectAll(config) {
     dockerDetail: await safe(collectDockerDetail),
   };
 }
+export { collectSslAll };

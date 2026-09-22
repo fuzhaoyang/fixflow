@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSsl, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -62,8 +62,8 @@ test("collectProcesses 返回结构化进程与异常列表", async () => {
   }
 });
 
-test("collectSsl 对空列表返回空 results，不抛错", async () => {
-  const r = await collectSsl([]);
+test("collectSslAll 对空列表返回空 results，不抛错", async () => {
+  const r = await collectSslAll({ sslSites: [] });
   assert.ok("results" in r || "error" in r);
 });
 
@@ -112,4 +112,8 @@ test("新增诊断采集函数不抛错", async () => {
   assert.ok("stats" in d || "error" in d);
   const db = await collectDbSlow({ databases: [] });
   assert.ok(Array.isArray(db) || "error" in db);
+});
+test("collectSslAll 无配置时返回 results 数组", async () => {
+  const r = await collectSslAll({});
+  assert.ok(Array.isArray(r.results));
 });
