@@ -99,6 +99,14 @@ function ringColor(pct) {
   return "#22c55e";
 }
 
+function renderSysInfo(sys) {
+  if (!sys) return;
+  const osEl = document.querySelector("#sys-info .sys-os");
+  const upEl = document.querySelector("#sys-info .sys-uptime");
+  if (osEl) osEl.textContent = `${sys.os} · ${sys.arch}`;
+  if (upEl) upEl.textContent = `持续运行：${sys.uptime}`;
+}
+
 function ringLabel(pct) {
   if (pct >= 90) return "危险";
   if (pct >= 80) return "警戒";
@@ -288,6 +296,7 @@ async function refreshOverview() {
   try {
     const res = await fetch("api/overview");
     overviewData = await res.json();
+    renderSysInfo(overviewData.sys);
     renderRings(overviewData.status);
     const sel = document.getElementById("nic-select");
     const prev = sel.value;

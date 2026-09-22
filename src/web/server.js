@@ -94,24 +94,43 @@ export async function startWeb(config = {}, deps = {}) {
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
 
   async function collectStatus() {
-    const [uptime, mem, df, nproc] = await Promise.all([
+    const [uptime, mem, df, nproc, osRelease, uname, procUptime] = await Promise.all([
       runCommand("uptime"),
       runCommand("free -m"),
       runCommand("df -h /"),
       runCommand("nproc"),
+      runCommand("cat /etc/os-release"),
+      runCommand("uname -m"),
+      runCommand("cat /proc/uptime"),
     ]);
     const ncpu = parseInt(nproc.stdout.trim() || "1", 10) || 1;
     const p = parseLoad(uptime.stdout || "");
     const load = p.load;
     const memPct = parseFree(mem.stdout || "").usedPct;
     const disk = parseDf(df.stdout || "").find((d) => d.mount === "/")?.usedPct ?? 0;
+    const osMatch = (osRelease.stdout || "").match(/PRETTY_NAME="?([^"\n]+)/);
+    const uptimeSec = parseFloat(procUptime.stdout?.trim()?.split(/\s+/)[0] || "");
     return {
+      sys: {
+        os: osMatch?.[1] || "未知系统",
+        arch: uname.stdout?.trim() || "unknown",
+        uptime: Number.isFinite(uptimeSec) ? formatUptime(uptimeSec) : "—",
+      },
       load: { pct: Math.min(100, Math.round((load / Math.max(1, ncpu)) * 100)), load, ncpu, load1: p.load1, load5: p.load5, load15: p.load15 },
       cpu: { pct: monitor.cpu() },
       mem: { pct: memPct },
       disk: { pct: disk },
     };
   }
+
+function formatUptime(sec) {
+  const d = Math.floor(sec / 86400);
+  const h = Math.floor((sec % 86400) / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  if (d > 0) return `${d}天${h}小时`;
+  if (h > 0) return `${h}小时${m}分钟`;
+  return `${m}分钟`;
+}
 
   const captchaIdFromCookie = (req) => parseCookie(req.headers.cookie || "").fixflow_captcha || "";
 
