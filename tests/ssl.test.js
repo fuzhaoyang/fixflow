@@ -152,3 +152,16 @@ test("sendWebhook 失败不抛错", async () => {
   const ok = await sendWebhook("http://127.0.0.1:1/x", { a: 1 }, async () => { throw new Error("x"); });
   assert.equal(ok, false);
 });
+
+test("collectSslAll 停用条目保留但不探测", async () => {
+  let probed = false;
+  const fake = async (cmd) => {
+    if (/grep -rhoE/.test(cmd) || /find /.test(cmd)) return { stdout: "", stderr: "", exitCode: 0 };
+    probed = true;
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+  const r = await collectSslAll({ sslSites: [{ id: "c1", type: "remote", host: "a.com", port: "443", enabled: false }] }, fake);
+  assert.equal(r.results.length, 1);
+  assert.equal(r.results[0].enabled, false);
+  assert.equal(probed, false);
+});

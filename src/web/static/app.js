@@ -483,16 +483,114 @@ function renderProcesses(m) {
   return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
-function renderSsl(m) {
-  if (!m?.results) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
-  if (!m.results.length) return `<pre>（未配置监控域名，可在设置中配置）</pre>`;
-  const rows = m.results.map((s) => {
-    const cls = s.daysLeft > 30 ? "ok" : s.daysLeft > 0 ? "na" : "bad";
-    const expire = typeof s.daysLeft === "number" ? (s.daysLeft > 0 ? `${s.daysLeft} 天` : "已过期") : "—";
-    return `<tr><td>${escapeHtml(s.host)}:${escapeHtml(s.port)}</td><td>${escapeHtml(s.notAfter || "—")}</td><td class="${cls}">${expire}</td><td>${escapeHtml(s.error || "")}</td></tr>`;
-  }).join("");
-  return `<table class="svc-table"><thead><tr><th>域名</th><th>到期时间</th><th>剩余</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table>`;
+function sslLevel(daysLeft) {
+  if (typeof daysLeft !== "number") return "na";
+  if (daysLeft <= 7) return "bad";
+  if (daysLeft <= 30) return "na";
+  return "ok";
 }
+
+function sslBar(daysLeft) {
+  const pct = typeof daysLeft !== "number" ? 0 : Math.max(0, Math.min(100, Math.round((daysLeft / 90) * 100)));
+  const cls = sslLevel(daysLeft);
+  return `<div class="ssl-bar"><div class="ssl-bar-fill ${cls}" style="width:${pct}%"></div></div>`;
+}
+
+function renderSsl(m) {
+  const list = m?.results;
+  if (!list) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  const total = list.length;
+  const warn = list.filter((s) => typeof s.daysLeft === "number" && s.daysLeft > 7 && s.daysLeft <= 30).length;
+  const expired = list.filter((s) => typeof s.daysLeft === "number" && s.daysLeft <= 7).length;
+  const tool = m.renewTool ? `可用（${m.renewTool}）` : "未检测到";
+  const summary = `<div class="ssl-summary">
+    <span>共 <b>${total}</b> 张</span>
+    <span class="na">临期 ≤30 天 <b>${warn}</b></span>
+    <span class="bad">严重 ≤7 天 <b>${expired}</b></span>
+    <span>续签工具：${escapeHtml(tool)}</span>
+    <button class="btn small" id="ssl-add-btn">➕ 添加监控</button>
+  </div>`;
+  if (!total) return summary + `<pre>（未发现证书，可点击「添加监控」手动添加）</pre>`;
+  const rows = list.map((s) => {
+    const cls = sslLevel(s.daysLeft);
+    const expire = typeof s.daysLeft === "number" ? (s.daysLeft > 0 ? `${s.daysLeft} 天` : "已过期") : "—";
+    const name = s.type === "local" ? escapeHtml(s.path) : `${escapeHtml(s.host)}:${escapeHtml(s.port)}`;
+    const srcLabel = s.source === "discovered" ? `<span class="tag">自动</span>` : `<span class="tag">手动</span>`;
+    const ops = [];
+    if (s.type === "local" && s.enabled !== false && m.renewTool) ops.push(`<a href="javascript:void(0)" data-ssl-action="renew" data-ssl-id="${escapeHtml(s.id)}" data-ssl-name="${escapeHtml(s.cn || s.path)}">续签</a>`);
+    if (s.source === "manual") {
+      ops.push(`<a href="javascript:void(0)" data-ssl-action="toggle" data-ssl-id="${escapeHtml(s.id)}" data-ssl-enabled="${s.enabled !== false}">${s.enabled === false ? "启用" : "停用"}</a>`);
+      ops.push(`<a href="javascript:void(0)" data-ssl-action="del" data-ssl-id="${escapeHtml(s.id)}" class="danger">删除</a>`);
+    }
+    return `<tr><td>${name} ${srcLabel}</td><td>${escapeHtml(s.cn || "—")}</td><td>${escapeHtml(s.issuer || "—")}</td><td>${escapeHtml(s.notAfter || "—")}</td><td class="${cls}">${expire}${sslBar(s.daysLeft)}</td><td>${escapeHtml((s.san || []).join(", "))}</td><td>${escapeHtml(s.label || "—")}</td><td>${ops.join(" ") || "—"}</td></tr>`;
+  }).join("");
+  return summary + `<div class="card-body"><table class="svc-table"><thead><tr><th>域名/路径</th><th>CN</th><th>签发者</th><th>到期时间</th><th>剩余</th><th>SAN</th><th>备注</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+const sslAddMask = document.getElementById("ssl-add-mask");
+const sslRenewMask = document.getElementById("ssl-renew-mask");
+let sslRenewTarget = null;
+
+cards.addEventListener("click", async (e) => {
+  if (e.target.id === "ssl-add-btn") {
+    document.getElementById("ssl-add-err").textContent = "";
+    sslAddMask.classList.add("show");
+    return;
+  }
+  const a = e.target.closest("[data-ssl-action]");
+  if (!a) return;
+  const action = a.dataset.sslAction;
+  const id = a.dataset.sslId;
+  if (action === "renew") {
+    sslRenewTarget = { id, name: a.dataset.sslName };
+    document.getElementById("ssl-renew-text").textContent = `即将续签：${a.dataset.sslName}，成功后自动重载 nginx。`;
+    document.getElementById("ssl-renew-password").value = "";
+    document.getElementById("ssl-renew-err").textContent = "";
+    sslRenewMask.classList.add("show");
+  } else if (action === "del") {
+    if (!confirm("确认删除该监控条目？")) return;
+    await fetch("api/ssl", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    refreshMetrics();
+  } else if (action === "toggle") {
+    await fetch("api/ssl", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled: a.dataset.sslEnabled !== "true" }) });
+    refreshMetrics();
+  }
+});
+
+document.getElementById("ssl-add-cancel").onclick = () => sslAddMask.classList.remove("show");
+document.getElementById("ssl-add-type").onchange = (e) => {
+  const local = e.target.value === "local";
+  document.getElementById("ssl-add-remote-fields").style.display = local ? "none" : "";
+  document.getElementById("ssl-add-local-fields").style.display = local ? "" : "none";
+};
+document.getElementById("ssl-add-save").onclick = async () => {
+  const type = document.getElementById("ssl-add-type").value;
+  const body = { type, label: document.getElementById("ssl-add-label").value.trim() };
+  if (type === "local") body.path = document.getElementById("ssl-add-path").value.trim();
+  else { body.host = document.getElementById("ssl-add-host").value.trim(); body.port = document.getElementById("ssl-add-port").value.trim() || "443"; }
+  const res = await fetch("api/ssl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById("ssl-add-err").textContent = data.error || "添加失败"; return; }
+  sslAddMask.classList.remove("show");
+  refreshMetrics();
+};
+
+document.getElementById("ssl-renew-cancel").onclick = () => sslRenewMask.classList.remove("show");
+document.getElementById("ssl-renew-confirm").onclick = async () => {
+  const errEl = document.getElementById("ssl-renew-err");
+  const password = document.getElementById("ssl-renew-password").value.trim();
+  if (!password) { errEl.textContent = "请输入登录密码"; return; }
+  errEl.textContent = "";
+  const btn = document.getElementById("ssl-renew-confirm");
+  btn.disabled = true;
+  try {
+    const res = await fetch("api/ssl/renew", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: sslRenewTarget.id, password }) });
+    const data = await res.json();
+    if (!res.ok || !data.ok) { errEl.textContent = data.error || data.stderr || "续签失败"; return; }
+    sslRenewMask.classList.remove("show");
+    refreshMetrics();
+  } finally { btn.disabled = false; }
+};
 
 function fmtVal(v) {
   if (v === null || v === undefined) return "";
@@ -1104,6 +1202,15 @@ async function openSettings() {
   cfgBaseUrl.value = cfg.baseUrl || "";
   cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
   currentKey = cfg.apiKey || "";
+  const al = cfg.sslAlerts || {};
+  const smtp = al.smtp || {};
+  document.getElementById("cfg-ssl-webhook").value = al.webhook || "";
+  document.getElementById("cfg-smtp-host").value = smtp.host || "";
+  document.getElementById("cfg-smtp-port").value = smtp.port || "";
+  document.getElementById("cfg-smtp-user").value = smtp.user || "";
+  document.getElementById("cfg-smtp-pass").value = smtp.pass || "";
+  document.getElementById("cfg-smtp-from").value = smtp.from || "";
+  document.getElementById("cfg-smtp-to").value = smtp.to || "";
   settingsMask.classList.add("show");
   await loadModels();
   if (cfg.model) cfgModel.value = cfg.model;
@@ -1227,10 +1334,17 @@ document.getElementById("cfg-save").onclick = async () => {
   };
   const newKey = cfgApiKey.value.trim();
   if (newKey) body.apiKey = newKey;
-  const sslSites = cfgSslSites.value.trim().split("\n").map((s) => s.trim()).filter(Boolean);
-  const pingTargets = cfgPingTargets.value.trim().split("\n").map((s) => s.trim()).filter(Boolean);
-  if (sslSites.length) body.sslSites = sslSites;
-  if (pingTargets.length) body.pingTargets = pingTargets;
+  body.sslAlerts = {
+    webhook: document.getElementById("cfg-ssl-webhook").value.trim(),
+    smtp: {
+      host: document.getElementById("cfg-smtp-host").value.trim(),
+      port: document.getElementById("cfg-smtp-port").value.trim(),
+      user: document.getElementById("cfg-smtp-user").value.trim(),
+      pass: document.getElementById("cfg-smtp-pass").value,
+      from: document.getElementById("cfg-smtp-from").value.trim(),
+      to: document.getElementById("cfg-smtp-to").value.trim(),
+    },
+  };
   const res = await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { alert("保存失败：" + (data.error || res.status)); return; }

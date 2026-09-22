@@ -229,6 +229,7 @@ function formatUptime(sec) {
       } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;
         const data = await collectAll(config);
+        if (data.ssl) data.ssl.renewTool = (await detectRenewTool()).tool;
         if (data.ssl?.results) {
           try {
             const { alerts, lastNotified } = checkSslAlerts(data.ssl.results, config.sslAlerts);
@@ -358,7 +359,7 @@ function formatUptime(sec) {
         res.end(JSON.stringify(result));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets }));
+        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts }));
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;

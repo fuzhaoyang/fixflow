@@ -83,10 +83,11 @@ export function mergeSslEntries({ manual = [], discovered = [] }) {
 export async function collectSslAll(config = {}, exec = runCommand) {
   const [nginxPaths, dirPaths] = await Promise.all([discoverNginxCerts(exec), discoverCertDirs(exec)]);
   const discovered = [...new Set([...nginxPaths, ...dirPaths])];
-  const manual = (config.sslSites || []).filter((e) => e.enabled !== false);
+  const manual = config.sslSites || [];
   const merged = mergeSslEntries({ manual, discovered });
   const results = await Promise.all(merged.map(async (e) => {
-    const base = { id: e.id, source: e.source, type: e.type, host: e.host, port: e.port, path: e.path, label: e.label };
+    const base = { id: e.id, source: e.source, type: e.type, host: e.host, port: e.port, path: e.path, label: e.label, enabled: e.enabled !== false };
+    if (e.enabled === false) return base;
     if (e.type === "local") return { ...base, ...(await readCertFile(e.path, exec)) };
     return { ...base, ...(await probeRemote(e.host, e.port, exec)) };
   }));
