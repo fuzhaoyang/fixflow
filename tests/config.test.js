@@ -34,6 +34,39 @@ test("配置新增 sslSites 与 pingTargets", () => {
   assert.deepEqual(cfg.pingTargets, []);
   writeFileSync(file, JSON.stringify({ sslSites: ["example.com"], pingTargets: ["1.1.1.1"] }));
   const cfg2 = loadConfig({ filePath: file });
-  assert.deepEqual(cfg2.sslSites, ["example.com"]);
+  assert.equal(cfg2.sslSites[0].host, "example.com");
   assert.deepEqual(cfg2.pingTargets, ["1.1.1.1"]);
+});
+
+test("sslSites 旧字符串数组自动迁移为对象数组", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ sslSites: ["example.com", "a.com:8443"] }));
+  const cfg = loadConfig({ filePath: file });
+  assert.equal(cfg.sslSites.length, 2);
+  assert.equal(cfg.sslSites[0].type, "remote");
+  assert.equal(cfg.sslSites[0].host, "example.com");
+  assert.equal(cfg.sslSites[0].port, "443");
+  assert.equal(cfg.sslSites[0].enabled, true);
+  assert.equal(cfg.sslSites[1].host, "a.com");
+  assert.equal(cfg.sslSites[1].port, "8443");
+  assert.ok(cfg.sslSites[0].id);
+});
+
+test("sslSites 对象数组原样保留并补默认字段", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ sslSites: [{ type: "local", path: "/etc/nginx/ssl/a.pem", enabled: false }] }));
+  const cfg = loadConfig({ filePath: file });
+  assert.equal(cfg.sslSites[0].type, "local");
+  assert.equal(cfg.sslSites[0].path, "/etc/nginx/ssl/a.pem");
+  assert.equal(cfg.sslSites[0].enabled, false);
+  assert.equal(cfg.sslSites[0].source, "manual");
+});
+
+test("sslAlerts 默认值", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  const cfg = loadConfig({ filePath: file });
+  assert.deepEqual(cfg.sslAlerts, { webhook: "", smtp: {} });
 });
