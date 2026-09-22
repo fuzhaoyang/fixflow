@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
 import { loadConfig, normalizeSslSites } from "../config.js";
-import { collectSslAll, detectRenewTool, renewCert } from "../ssl.js";
+import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -229,6 +229,19 @@ function formatUptime(sec) {
       } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;
         const data = await collectAll(config);
+        if (data.ssl?.results) {
+          try {
+            const { alerts, lastNotified } = checkSslAlerts(data.ssl.results, config.sslAlerts);
+            if (alerts.length) {
+              config.sslAlerts.lastNotified = lastNotified;
+              await persistConfig();
+              for (const a of alerts) {
+                await sendWebhook(config.sslAlerts.webhook, a);
+                await sendEmail(config.sslAlerts.smtp, `[Fixflow] 证书即将到期：${a.label}`, `${a.label} 剩余 ${a.daysLeft} 天（${a.notAfter}）`);
+              }
+            }
+          } catch {}
+        }
         if (q.get("port")) data.portScan = await collectPorts(q.get("port"));
         if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -349,19 +362,16 @@ function formatUptime(sec) {
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
-        const { baseUrl, apiKey, model, sslSites, pingTargets } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, sslAlerts } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
-        if (Array.isArray(sslSites)) config.sslSites = sslSites;
+        if (Array.isArray(sslSites)) config.sslSites = normalizeSslSites(sslSites);
         if (Array.isArray(pingTargets)) config.pingTargets = pingTargets;
-        let existing = {};
-        try { existing = JSON.parse(await readFile(configPath, "utf8")); } catch {}
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets };
-        await mkdir(dirname(configPath), { recursive: true });
-        await writeFile(configPath, JSON.stringify(saved, null, 2));
+        if (sslAlerts && typeof sslAlerts === "object") config.sslAlerts = { ...config.sslAlerts, ...sslAlerts };
+        await persistConfig();
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets }));
+        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts }));
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ messages: await readHistoryFile(historyPath) }));

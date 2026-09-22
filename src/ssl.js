@@ -1,4 +1,7 @@
 import { runCommand } from "./tools.js";
+import { writeFile as fsWrite } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 export function shellQuote(s) {
   return `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -109,4 +112,38 @@ export async function renewCert(entry, exec = runCommand) {
   const r = await exec(cmd, { timeout: 120000 });
   const reload = await exec("systemctl reload nginx");
   return { ok: r.exitCode === 0, tool, stdout: r.stdout, stderr: r.stderr, reloaded: reload.exitCode === 0 };
+}
+
+export function checkSslAlerts(results = [], alerts = {}) {
+  const last = { ...(alerts.lastNotified || {}) };
+  const out = [];
+  for (const r of results) {
+    if (typeof r.daysLeft !== "number") continue;
+    const key = r.id || (r.type === "local" ? `l:${r.path}` : `r:${r.host}:${r.port}`);
+    const level = r.daysLeft <= 7 ? "critical" : r.daysLeft <= 30 ? "warn" : null;
+    if (!level) continue;
+    if (last[key] === r.notAfter) continue;
+    out.push({ key, label: r.label || r.cn || r.host || r.path, daysLeft: r.daysLeft, level, notAfter: r.notAfter });
+    last[key] = r.notAfter;
+  }
+  return { alerts: out, lastNotified: last };
+}
+
+export async function sendWebhook(url, payload, fetchImpl = fetch) {
+  if (!url) return false;
+  try {
+    await fetchImpl(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload), signal: AbortSignal.timeout(8000) });
+    return true;
+  } catch { return false; }
+}
+
+export async function sendEmail(smtp = {}, subject, body, exec = runCommand) {
+  if (!smtp.to) return false;
+  const has = await exec("command -v sendmail 2>/dev/null");
+  if (has.exitCode !== 0 || !has.stdout.trim()) return false;
+  const msg = `To: ${smtp.to}\nFrom: ${smtp.from || smtp.user || "fixflow"}\nSubject: ${subject}\n\n${body}\n`;
+  const file = join(tmpdir(), `ff-mail-${Date.now()}.txt`);
+  await fsWrite(file, msg);
+  const r = await exec(`sendmail -t < ${shellQuote(file)}`);
+  return r.exitCode === 0;
 }

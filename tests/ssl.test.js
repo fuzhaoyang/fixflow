@@ -131,3 +131,24 @@ test("renewCert 用 certbot 续签并重载 nginx", async () => {
   assert.equal(r.reloaded, true);
   assert.ok(cmds.some((c) => c.includes("certbot renew --cert-name 'a.com'")));
 });
+
+import { checkSslAlerts, sendWebhook } from "../src/ssl.js";
+
+test("checkSslAlerts 分级与去重", () => {
+  const results = [
+    { id: "c1", cn: "a.com", host: "a.com", notAfter: "X", daysLeft: 20 },
+    { id: "c2", cn: "b.com", host: "b.com", notAfter: "Y", daysLeft: 3 },
+    { id: "c3", cn: "c.com", host: "c.com", notAfter: "Z", daysLeft: 200 },
+  ];
+  const first = checkSslAlerts(results, { lastNotified: {} });
+  assert.equal(first.alerts.length, 2);
+  assert.equal(first.alerts.find((a) => a.key === "c1").level, "warn");
+  assert.equal(first.alerts.find((a) => a.key === "c2").level, "critical");
+  const second = checkSslAlerts(results, { lastNotified: first.lastNotified });
+  assert.equal(second.alerts.length, 0);
+});
+
+test("sendWebhook 失败不抛错", async () => {
+  const ok = await sendWebhook("http://127.0.0.1:1/x", { a: 1 }, async () => { throw new Error("x"); });
+  assert.equal(ok, false);
+});
