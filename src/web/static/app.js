@@ -603,8 +603,8 @@ const FIREWALL_MODES = { delete: "删除放行规则", deny: "添加拒绝规则
 
 function renderFirewall(m) {
   if (!m || m.error) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
-  const rules = m.rules || [];
-  const risky = m.riskyPorts || [];
+  const rules = Array.isArray(m.rules) ? m.rules : [];
+  const risky = Array.isArray(m.riskyPorts) ? m.riskyPorts : [];
   const dangerCount = risky.filter((p) => p.dangerous).length;
   const ufwActive = /ufw active/.test(m.status?.detail || "");
   const summary = `<div class="fw-summary">
