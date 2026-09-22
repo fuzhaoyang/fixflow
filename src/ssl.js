@@ -45,3 +45,47 @@ export async function probeRemote(host, port = "443", exec = runCommand) {
   const chain = parseInt((r.stdout.split("---CHAIN---")[1] || "").trim(), 10) || 1;
   return { ...parsed, chain };
 }
+
+export async function discoverNginxCerts(exec = runCommand) {
+  const r = await exec("grep -rhoE 'ssl_certificate[[:space:]]+[^;]*' /etc/nginx 2>/dev/null");
+  return [...new Set((r.stdout || "").split("\n")
+    .map((l) => l.replace(/^ssl_certificate\s+/, "").replace(/["';]/g, "").trim())
+    .filter((p) => p.endsWith(".pem") || p.endsWith(".crt")))];
+}
+
+export async function discoverCertDirs(exec = runCommand) {
+  const dirs = ["/etc/nginx/ssl", "/etc/letsencrypt/live", "/etc/ssl/private", "/etc/pki/tls/certs"];
+  const r = await exec(`find ${dirs.map(shellQuote).join(" ")} -maxdepth 3 -type f \\( -name '*.pem' -o -name '*.crt' \\) 2>/dev/null`);
+  return [...new Set((r.stdout || "").split("\n").map((s) => s.trim()).filter(Boolean))];
+}
+
+export function mergeSslEntries({ manual = [], discovered = [] }) {
+  const seen = new Set();
+  const out = [];
+  for (const e of manual) {
+    const key = e.type === "local" ? `l:${e.path}` : `r:${e.host}:${e.port}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ ...e, source: e.source || "manual" });
+  }
+  for (const p of discovered) {
+    const key = `l:${p}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ id: `d:${p}`, type: "local", host: "", port: "", path: p, label: "", enabled: true, source: "discovered" });
+  }
+  return out;
+}
+
+export async function collectSslAll(config = {}, exec = runCommand) {
+  const [nginxPaths, dirPaths] = await Promise.all([discoverNginxCerts(exec), discoverCertDirs(exec)]);
+  const discovered = [...new Set([...nginxPaths, ...dirPaths])];
+  const manual = (config.sslSites || []).filter((e) => e.enabled !== false);
+  const merged = mergeSslEntries({ manual, discovered });
+  const results = await Promise.all(merged.map(async (e) => {
+    const base = { id: e.id, source: e.source, type: e.type, host: e.host, port: e.port, path: e.path, label: e.label };
+    if (e.type === "local") return { ...base, ...(await readCertFile(e.path, exec)) };
+    return { ...base, ...(await probeRemote(e.host, e.port, exec)) };
+  }));
+  return { results };
+}

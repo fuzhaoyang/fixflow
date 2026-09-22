@@ -56,3 +56,41 @@ test("readCertFile 文件不存在返回 error", async () => {
   const c = await readCertFile("/no/such/cert.pem");
   assert.ok(c.error);
 });
+
+import { discoverNginxCerts, discoverCertDirs, mergeSslEntries, collectSslAll } from "../src/ssl.js";
+
+test("discoverNginxCerts 解析证书路径并去重", async () => {
+  const fake = async () => ({ stdout: "ssl_certificate /etc/nginx/ssl/a.pem;\nssl_certificate /etc/nginx/ssl/a.pem;\nssl_certificate /etc/nginx/ssl/b.pem;\n", stderr: "", exitCode: 0 });
+  const paths = await discoverNginxCerts(fake);
+  assert.deepEqual(paths.sort(), ["/etc/nginx/ssl/a.pem", "/etc/nginx/ssl/b.pem"]);
+});
+
+test("discoverCertDirs 返回扫描到的文件", async () => {
+  const fake = async () => ({ stdout: "/etc/nginx/ssl/a.pem\n/etc/letsencrypt/live/x/fullchain.pem\n", stderr: "", exitCode: 0 });
+  const paths = await discoverCertDirs(fake);
+  assert.equal(paths.length, 2);
+});
+
+test("mergeSslEntries 按路径/域名去重", () => {
+  const manual = [
+    { id: "c1", type: "local", path: "/a.pem", enabled: true },
+    { id: "c2", type: "remote", host: "a.com", port: "443", enabled: true },
+  ];
+  const merged = mergeSslEntries({ manual, discovered: ["/a.pem", "/b.pem"] });
+  assert.equal(merged.length, 3);
+  assert.ok(merged.some((e) => e.path === "/b.pem" && e.source === "discovered"));
+});
+
+test("collectSslAll 合并发现与手动并采集", async () => {
+  const calls = [];
+  const fake = async (cmd) => {
+    calls.push(cmd);
+    if (/grep -rhoE/.test(cmd)) return { stdout: "", stderr: "", exitCode: 1 };
+    if (/find /.test(cmd)) return { stdout: "", stderr: "", exitCode: 0 };
+    if (/openssl x509/.test(cmd)) return { stdout: "subject=CN = a.com\nnotAfter=Dec 21 00:00:00 2026 GMT\n", stderr: "", exitCode: 0 };
+    return { stdout: "", stderr: "", exitCode: 0 };
+  };
+  const r = await collectSslAll({ sslSites: [{ id: "c1", type: "remote", host: "a.com", port: "443", enabled: true }] }, fake);
+  assert.equal(r.results.length, 1);
+  assert.equal(r.results[0].cn, "a.com");
+});
