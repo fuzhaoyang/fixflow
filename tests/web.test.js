@@ -169,6 +169,32 @@ test("/api/restart 触发重启流程", async () => {
   w.close();
 });
 
+test("/api/restart 未登录返回 401", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/restart`, { method: "POST" });
+  assert.equal(res.status, 401);
+  w.close();
+});
+
+test("/api/restart 注入 restart 时不调用 process.exit", async () => {
+  let exited = false;
+  const orig = process.exit;
+  process.exit = () => { exited = true; throw new Error("不应退出"); };
+  try {
+    const w = await makeServer({ restart: () => ({ method: "respawn" }) });
+    const base = `http://127.0.0.1:${w.server.address().port}`;
+    const cookie = await registerAndLogin(base);
+    const res = await fetch(`${base}/api/restart`, { method: "POST", headers: { Cookie: cookie } });
+    assert.equal(res.status, 200);
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(exited, false);
+    w.close();
+  } finally {
+    process.exit = orig;
+  }
+});
+
 test("/api/report 返回 Markdown 报告", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
