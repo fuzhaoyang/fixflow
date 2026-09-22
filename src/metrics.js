@@ -60,21 +60,68 @@ export async function collectNginx() {
   };
 }
 
+const DANGEROUS_PORTS = new Set([3306, 5432, 6379, 27017, 9200, 8888, 888, 9090, 9000, 2375, 2376]);
+
+export function parseUfwStatus(stdout) {
+  const rules = [];
+  const riskyPorts = [];
+  const seen = new Set();
+  for (const rawLine of (stdout || "").split("\n")) {
+    const line = rawLine.trim();
+    if (!line || /^-+$/.test(line) || /^To\s+Action\s+From/i.test(line)) continue;
+    const m = line.match(/^\[?\s*(\d+)\]?\s+(.+?)\s+(ALLOW|DENY|REJECT|LIMIT)(?:\s+(IN|OUT|FWD))?\s+(.*)$/);
+    if (!m) continue;
+    const [, num, target, action, dir, fromRaw] = m;
+    const cleanTarget = target.replace(/\(v6\)/gi, "").trim();
+    const [portPart, protoPart] = cleanTarget.includes("/") ? cleanTarget.split("/") : [cleanTarget, ""];
+    const proto = (protoPart || "").trim().toLowerCase() || "tcp";
+    let from = fromRaw.trim();
+    let comment = "";
+    const hash = from.indexOf("#");
+    if (hash >= 0) { comment = from.slice(hash + 1).trim(); from = from.slice(0, hash).trim(); }
+    rules.push({ num: Number(num), action, proto, port: portPart.trim(), from, comment });
+    if (action === "ALLOW" && (!dir || dir === "IN") && /^Anywhere/.test(from)) {
+      for (const p of portPart.split(",")) {
+        const n = Number(p.trim());
+        if (!Number.isInteger(n) || n < 1 || n > 65535) continue;
+        const key = `${proto}:${n}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        riskyPorts.push({ proto, port: n, dangerous: DANGEROUS_PORTS.has(n) });
+      }
+    }
+  }
+  return { rules, riskyPorts };
+}
+
 export async function collectFirewall() {
   const [ufw, iptables] = await Promise.all([
-    runCommand("ufw status"),
+    runCommand("ufw status numbered"),
     runCommand("iptables -L -n --line-numbers"),
   ]);
-  const isActive = ufw.stdout.includes("Status: active") || (ufw.exitCode === 0 && ufw.stdout.includes("active"));
+  const isActive = ufw.exitCode === 0 && /Status:\s*active/i.test(ufw.stdout || "");
+  if (isActive) {
+    const { rules, riskyPorts } = parseUfwStatus(ufw.stdout || "");
+    return { ok: riskyPorts.every((p) => !p.dangerous), status: { ok: true, detail: "ufw active" }, rules, riskyPorts, raw: "" };
+  }
+  const raw = iptables.stdout || iptables.stderr || "";
   const riskyPorts = [];
-  for (const line of (iptables.stdout || "").split("\n")) {
+  const seen = new Set();
+  for (const line of raw.split("\n")) {
     const m = line.match(/ACCEPT\s+tcp\s+.*\s0\.0\.0\.0\/0\s+0\.0\.0\.0\/0\s+tcp\s+dpt:(\d+)/);
-    if (m) riskyPorts.push({ proto: "tcp", port: Number(m[1]) });
+    if (m) {
+      const port = Number(m[1]);
+      if (seen.has(port)) continue;
+      seen.add(port);
+      riskyPorts.push({ proto: "tcp", port, dangerous: DANGEROUS_PORTS.has(port) });
+    }
   }
   return {
-    status: { ok: true, detail: isActive ? "ufw active" : (ufw.stdout.trim() || "ufw 不可用") },
-    rules: { ok: iptables.exitCode === 0, detail: iptables.stdout || iptables.stderr },
+    ok: riskyPorts.every((p) => !p.dangerous),
+    status: { ok: true, detail: (ufw.stdout || "").trim() || "ufw 不可用" },
+    rules: [],
     riskyPorts,
+    raw,
   };
 }
 

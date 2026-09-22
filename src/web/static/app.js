@@ -405,9 +405,8 @@ function renderCards() {
       card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
     } else if (key === "ssl") {
       card.innerHTML = `<h2>${label}</h2>${renderSsl(m)}`;
-    } else if (key === "firewall" && m?.riskyPorts?.length) {
-      const risk = `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">⚠️ 对全网开放端口：${m.riskyPorts.map((p) => `${p.proto}/${p.port}`).join("、")}</div>`;
-      card.innerHTML = `<h2>${label}</h2>${risk}<pre>${escapeHtml(detail(m))}</pre>`;
+    } else if (key === "firewall") {
+      card.innerHTML = `<h2>${label}</h2>${renderFirewall(m)}`;
     } else {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
     }
@@ -599,6 +598,46 @@ document.getElementById("ssl-renew-confirm").onclick = async () => {
     refreshMetrics();
   } finally { btn.disabled = false; }
 };
+
+const FIREWALL_MODES = { delete: "删除放行规则", deny: "添加拒绝规则" };
+
+function renderFirewall(m) {
+  if (!m || m.error) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  const rules = m.rules || [];
+  const risky = m.riskyPorts || [];
+  const dangerCount = risky.filter((p) => p.dangerous).length;
+  const ufwActive = /ufw active/.test(m.status?.detail || "");
+  const summary = `<div class="fw-summary">
+    <div class="fw-stat"><span class="k">UFW 状态</span><span class="v">${ufwActive ? "已启用" : "未启用 / 降级"}</span></div>
+    <div class="fw-stat"><span class="k">放行规则</span><span class="v">${rules.length}</span></div>
+    <div class="fw-stat"><span class="k">对全网开放</span><span class="v ${dangerCount ? "bad" : ""}">${risky.length}${dangerCount ? `（危险 ${dangerCount}）` : ""}</span></div>
+  </div>`;
+
+  let rulesHtml;
+  if (rules.length) {
+    const riskySet = new Set(risky.map((p) => `${p.proto}:${p.port}`));
+    const rows = rules.map((r) => {
+      const hit = String(r.port || "").split(",").some((p) => riskySet.has(`${r.proto}:${p.trim()}`));
+      const style = hit ? " style='background:rgba(248,113,113,0.12)'" : "";
+      return `<tr${style}><td>${r.num ?? "—"}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml((r.proto || "").toUpperCase())}</td><td>${escapeHtml(r.port)}</td><td>${escapeHtml(r.from)}</td><td>${escapeHtml(r.comment || "—")}</td></tr>`;
+    }).join("");
+    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>#</th><th>动作</th><th>协议</th><th>端口</th><th>来源</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  } else {
+    rulesHtml = `<pre>${escapeHtml(m.raw || "未检测到 ufw 规则，或 ufw 未启用")}</pre>`;
+  }
+
+  const disabled = ufwActive ? "" : " disabled";
+  const riskRows = risky.map((p) => {
+    const tag = p.dangerous ? `<span class="risk-badge risk-high">危险</span>` : `<span class="risk-badge risk-low">一般</span>`;
+    const opts = Object.entries(FIREWALL_MODES).map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+    return `<div class="fw-risk-row">${tag}<span class="fw-port">${p.port}/${p.proto}</span>
+      <select class="fw-mode"${disabled}>${opts}</select>
+      <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>关闭端口</button></div>`;
+  }).join("");
+  const riskHtml = risky.length ? `<div class="fw-risk">${riskRows}</div>` : `<pre>未发现对全网开放的端口 ✅</pre>`;
+
+  return `${summary}<h3 class="fw-sub">放行规则</h3>${rulesHtml}<h3 class="fw-sub">对全网开放的端口</h3>${riskHtml}`;
+}
 
 function fmtVal(v) {
   if (v === null || v === undefined) return "";
@@ -1180,6 +1219,8 @@ const cfgModel = document.getElementById("cfg-model");
 const cfgModelStatus = document.getElementById("cfg-model-status");
 
 let currentKey = "";
+let apiKeyTouched = false;
+cfgApiKey.addEventListener("input", () => { apiKeyTouched = true; });
 
 async function loadModels() {
   cfgModelStatus.textContent = "拉取模型中…";
@@ -1189,7 +1230,7 @@ async function loadModels() {
     const baseUrl = cfgBaseUrl.value.trim();
     if (baseUrl) params.set("baseUrl", baseUrl);
     const typedKey = cfgApiKey.value.trim();
-    if (typedKey) params.set("apiKey", typedKey);
+    if (apiKeyTouched && typedKey) params.set("apiKey", typedKey);
     const res = await fetch("api/models?" + params.toString());
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
@@ -1217,6 +1258,8 @@ async function openSettings() {
   const res = await fetch("api/config");
   const cfg = await res.json();
   cfgBaseUrl.value = cfg.baseUrl || "";
+  cfgApiKey.value = "";
+  apiKeyTouched = false;
   cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
   currentKey = cfg.apiKey || "";
   const al = cfg.sslAlerts || {};
@@ -1325,6 +1368,19 @@ document.addEventListener("click", (e) => {
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-fw-close]");
+  if (!btn) return;
+  const row = btn.closest(".fw-risk-row");
+  procTarget = { kind: "firewall", port: Number(btn.dataset.fwPort), proto: btn.dataset.fwProto, mode: row.querySelector(".fw-mode").value };
+  document.getElementById("proc-title").textContent = "🛡️ 关闭端口";
+  document.getElementById("proc-text").textContent = `确认关闭端口 ${procTarget.port}/${procTarget.proto}（${FIREWALL_MODES[procTarget.mode]}）吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
 document.getElementById("proc-cancel").onclick = () => procMask.classList.remove("show");
 procMask.addEventListener("click", (e) => { if (e.target === procMask) procMask.classList.remove("show"); });
 document.getElementById("proc-confirm").onclick = async () => {
@@ -1334,8 +1390,13 @@ document.getElementById("proc-confirm").onclick = async () => {
   errEl.textContent = "";
   const confirmBtn = document.getElementById("proc-confirm");
   confirmBtn.disabled = true;
+  const isFw = procTarget?.kind === "firewall";
   try {
-    const res = await fetch("api/process", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...procTarget, password }) });
+    const endpoint = isFw ? "api/firewall/close" : "api/process";
+    const payload = isFw
+      ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
+      : { ...procTarget, password };
+    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
     const data = await res.json();
     if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || "操作失败"; return; }
     if (!data.ok) { errEl.textContent = data.stderr || data.error || "操作失败"; return; }

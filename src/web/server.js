@@ -449,6 +449,29 @@ function formatUptime(sec) {
             }
           }
         }
+      } else if (url.pathname === "/api/firewall/close" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { port, proto = "tcp", mode, password } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(password || "", auth)) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+        } else if (!Number.isInteger(port) || port < 1 || port > 65535) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "无效的端口" }));
+        } else if (!["tcp", "udp"].includes(proto)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "不支持的协议" }));
+        } else if (!["deny", "delete"].includes(mode)) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "不支持的关闭模式" }));
+        } else {
+          const cmd = mode === "deny" ? `ufw deny ${port}/${proto}` : `ufw delete allow ${port}/${proto}`;
+          const r = await execCmd(cmd, { timeout: 15000 });
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr }));
+        }
       } else if (url.pathname === "/api/restart" && req.method === "POST") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));

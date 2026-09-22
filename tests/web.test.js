@@ -389,6 +389,74 @@ test("/api/process 无效参数返回 400", async () => {
   w.close();
 });
 
+test("/api/firewall/close 未登录返回 401", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/firewall/close`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ port: 3306, proto: "tcp", mode: "deny", password: "x" }),
+  });
+  assert.equal(res.status, 401);
+  w.close();
+});
+
+test("/api/firewall/close 密码错误返回 403 且不执行命令", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/firewall/close`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ port: 3306, proto: "tcp", mode: "deny", password: "wrong" }),
+  });
+  assert.equal(res.status, 403);
+  assert.match((await res.json()).error, /密码错误/);
+  assert.equal(calls.length, 0);
+  w.close();
+});
+
+test("/api/firewall/close 正确密码执行 deny 与 delete", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const deny = await fetch(`${base}/api/firewall/close`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: 3306, proto: "tcp", mode: "deny", password: "secret123" }),
+  });
+  assert.equal(deny.status, 200);
+  assert.equal((await deny.json()).ok, true);
+  assert.equal(calls[0], "ufw deny 3306/tcp");
+  const del = await fetch(`${base}/api/firewall/close`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: 80, proto: "tcp", mode: "delete", password: "secret123" }),
+  });
+  assert.equal(del.status, 200);
+  assert.equal(calls[1], "ufw delete allow 80/tcp");
+  w.close();
+});
+
+test("/api/firewall/close 无效参数返回 400", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const badPort = await fetch(`${base}/api/firewall/close`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: 70000, proto: "tcp", mode: "deny", password: "secret123" }),
+  });
+  assert.equal(badPort.status, 400);
+  const badMode = await fetch(`${base}/api/firewall/close`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: 22, proto: "tcp", mode: "open", password: "secret123" }),
+  });
+  assert.equal(badMode.status, 400);
+  assert.equal(calls.length, 0);
+  w.close();
+});
+
 test("SSL 接口：增删改查与手动条目保护", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;

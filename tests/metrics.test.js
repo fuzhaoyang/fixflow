@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, parseUfwStatus } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -118,6 +118,36 @@ test("collectFirewall 返回 riskyPorts 字段", async () => {
   const r = await collectFirewall();
   assert.ok("riskyPorts" in r, "缺少 riskyPorts 字段");
   assert.ok(Array.isArray(r.riskyPorts));
+  assert.ok("rules" in r && Array.isArray(r.rules));
+});
+
+test("parseUfwStatus 解析 ufw status numbered", () => {
+  const out = `Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere
+[ 2] 80,443/tcp                 ALLOW IN    Anywhere                   # web
+[ 3] 3306/tcp                   ALLOW IN    Anywhere
+[ 4] 22/tcp (v6)                ALLOW IN    Anywhere (v6)
+[ 5] 9090/tcp                   DENY IN     Anywhere
+[ 6] 6379/tcp                   ALLOW IN    10.0.0.0/8
+`;
+  const { rules, riskyPorts } = parseUfwStatus(out);
+  assert.equal(rules.length, 6);
+  assert.deepEqual(rules[0], { num: 1, action: "ALLOW", proto: "tcp", port: "22", from: "Anywhere", comment: "" });
+  assert.equal(rules[1].comment, "web");
+  assert.equal(rules[1].port, "80,443");
+  assert.equal(rules[3].from, "Anywhere (v6)");
+  const keys = riskyPorts.map((p) => `${p.port}/${p.proto}`);
+  assert.deepEqual(keys, ["22/tcp", "80/tcp", "443/tcp", "3306/tcp"]);
+  assert.equal(riskyPorts.find((p) => p.port === 3306).dangerous, true);
+  assert.equal(riskyPorts.find((p) => p.port === 22).dangerous, false);
+});
+
+test("parseUfwStatus 空/异常输出返回空", () => {
+  assert.deepEqual(parseUfwStatus(""), { rules: [], riskyPorts: [] });
+  assert.deepEqual(parseUfwStatus("Status: inactive"), { rules: [], riskyPorts: [] });
 });
 
 test("新增诊断采集函数不抛错", async () => {
