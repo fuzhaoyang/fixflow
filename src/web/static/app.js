@@ -103,7 +103,7 @@ function renderSysInfo(sys) {
   if (!sys) return;
   const osEl = document.querySelector("#sys-info .sys-os");
   const upEl = document.querySelector("#sys-info .sys-uptime");
-  if (osEl) osEl.textContent = `${sys.os} · ${sys.arch}`;
+  if (osEl) osEl.textContent = `当前系统：${sys.os} · ${sys.arch}`;
   if (upEl) upEl.textContent = `持续运行：${sys.uptime}`;
 }
 
