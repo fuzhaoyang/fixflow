@@ -272,6 +272,10 @@ test("overview 接口返回状态与流量/IO 采样结构", async () => {
   assert.equal(typeof data.status.cpu.pct, "number");
   assert.equal(typeof data.status.mem.pct, "number");
   assert.equal(typeof data.status.disk.pct, "number");
+  assert.ok(data.sys, "overview 应包含 sys 字段");
+  assert.ok(typeof data.sys.os === "string" && data.sys.os.length > 0);
+  assert.ok(typeof data.sys.arch === "string");
+  assert.ok(typeof data.sys.uptime === "string");
   assert.ok(Array.isArray(data.net));
   assert.ok(Array.isArray(data.io));
   w.close();

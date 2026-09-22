@@ -296,7 +296,7 @@ async function refreshOverview() {
   try {
     const res = await fetch("api/overview");
     overviewData = await res.json();
-    renderSysInfo(overviewData.sys);
+    renderSysInfo(overviewData.status?.sys);
     renderRings(overviewData.status);
     const sel = document.getElementById("nic-select");
     const prev = sel.value;
