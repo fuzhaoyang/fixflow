@@ -60,7 +60,10 @@ function applyRoute() {
     netTools.style.display = currentFilter === "network" ? "flex" : "none";
     overviewEl.style.display = currentFilter === "all" ? "flex" : "none";
     cards.style.display = currentFilter === "all" ? "none" : "";
-    if (currentFilter === "all") refreshOverview();
+    if (currentFilter === "all") {
+      refreshOverview();
+      [trafficChart, ioChart].filter(Boolean).forEach((c) => setTimeout(() => c.resize(), 0));
+    }
     else renderCards();
   }
 }
