@@ -21,6 +21,8 @@ export function normalizeSslSites(list) {
   });
 }
 
+export const DEFAULT_SERVICE_KEYWORDS = ["nginx", "docker", "pm2", "python", "java", "node"];
+
 export function loadConfig({ filePath = join(process.env.HOME || ".", ".config", "fixflow", "config.json") } = {}) {
   let file = {};
   try { file = JSON.parse(readFileSync(filePath, "utf8")); } catch {}
@@ -35,6 +37,7 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     databases: file.databases || [],
     sslSites: normalizeSslSites(file.sslSites),
     pingTargets: file.pingTargets || [],
+    serviceKeywords: Array.isArray(file.serviceKeywords) ? file.serviceKeywords : DEFAULT_SERVICE_KEYWORDS,
     sslAlerts: file.sslAlerts || { webhook: "", smtp: {} },
   };
 }

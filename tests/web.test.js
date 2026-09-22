@@ -480,3 +480,22 @@ test("/api/models 透传前端传入的 baseUrl/apiKey", async () => {
     w.close();
   }
 });
+
+test("config 接口保存 serviceKeywords 白名单", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-web-"));
+  const cfg = join(dir, "config.json");
+  writeFileSync(cfg, "{}");
+  const w = await makeServer({ configPath: cfg });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const post = await fetch(`${base}/api/config`, {
+    method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ serviceKeywords: ["nginx", " pm2 ", "", "docker"] }),
+  });
+  assert.equal(post.status, 200);
+  const saved = await post.json();
+  assert.deepEqual(saved.serviceKeywords, ["nginx", "pm2", "docker"]);
+  const file = JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8"));
+  assert.deepEqual(file.serviceKeywords, ["nginx", "pm2", "docker"]);
+  w.close();
+});

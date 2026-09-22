@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -18,6 +18,23 @@ test("collectSystemd 不抛错（无 systemd 时返回 error）", async () => {
       assert.ok("state" in s && "path" in s && "cpu" in s && "mem" in s && "memMb" in s && "started" in s);
     }
   }
+});
+
+test("collectSystemd 按白名单关键词过滤服务", async () => {
+  const r = await collectSystemd(["__no_such_service_keyword__"]);
+  if (r.services) assert.equal(r.services.length, 0);
+});
+
+test("collectUserProcs 只返回名称匹配关键词的进程", async () => {
+  const r = await collectUserProcs(["node"]);
+  if (r.procs) {
+    for (const p of r.procs) {
+      assert.ok(p.name.toLowerCase().startsWith("node"));
+      assert.equal(typeof p.pid, "number");
+    }
+  }
+  const none = await collectUserProcs(["__no_such_proc_keyword__"]);
+  if (none.procs) assert.equal(none.procs.length, 0);
 });
 
 test("collectServices 用 HTTP 健康检查", async () => {

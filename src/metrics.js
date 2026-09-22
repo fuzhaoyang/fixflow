@@ -111,7 +111,8 @@ export async function collectDocker() {
   };
 }
 
-export async function collectSystemd() {
+export async function collectSystemd(keywords = []) {
+  const kws = (keywords || []).map((k) => String(k).toLowerCase()).filter(Boolean);
   const [r, ps] = await Promise.all([
     runCommand("systemctl show --type=service -p Id,ActiveState,SubState,MemoryCurrent,ActiveEnterTimestamp,FragmentPath,MainPID --no-pager"),
     runCommand("ps -eo pid,%cpu,%mem --no-headers"),
@@ -130,21 +131,40 @@ export async function collectSystemd() {
       if (i > -1) kv[line.slice(0, i)] = line.slice(i + 1);
     }
     if (!kv.Id || !kv.ActiveState) continue;
+    const name = kv.Id.replace(/\.service$/, "");
+    if (kws.length && !kws.some((k) => name.toLowerCase().startsWith(k))) continue;
     const proc = psMap.get(kv.MainPID);
     const t = (kv.ActiveEnterTimestamp || "").match(/^\S+\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})/);
     services.push({
-      name: kv.Id.replace(/\.service$/, ""),
+      name,
       state: kv.ActiveState,
       sub: kv.SubState,
       path: kv.FragmentPath || "—",
       cpu: proc ? proc.cpu : "—",
       mem: proc ? proc.mem : "—",
       memMb: formatMemMb(kv.MemoryCurrent),
+      mainPid: kv.MainPID,
       started: t ? t[1] : (kv.ActiveEnterTimestamp || "—"),
     });
   }
   services.sort((a, b) => a.name.localeCompare(b.name));
   return { services };
+}
+
+export async function collectUserProcs(keywords = []) {
+  const kws = (keywords || []).map((k) => String(k).toLowerCase()).filter(Boolean);
+  if (!kws.length) return { procs: [] };
+  const r = await runCommand("ps -eo pid,comm,%cpu,%mem --no-headers");
+  if (r.exitCode !== 0) return { error: r.stderr || "ps 不可用" };
+  const procs = [];
+  for (const line of (r.stdout || "").split("\n")) {
+    const p = line.trim().split(/\s+/);
+    if (p.length < 4) continue;
+    const name = p[1];
+    if (!kws.some((k) => name.toLowerCase().startsWith(k))) continue;
+    procs.push({ pid: parseInt(p[0], 10), name, cpu: p[2], mem: p[3] });
+  }
+  return { procs };
 }
 
 function formatMemMb(v) {
@@ -282,7 +302,8 @@ export async function collectAll(config) {
     services: await safe(() => collectServices(config)),
     databases: await safe(() => collectDatabases(config)),
     docker: await safe(collectDocker),
-    systemd: await safe(collectSystemd),
+    systemd: await safe(() => collectSystemd(config.serviceKeywords)),
+    userProcs: await safe(() => collectUserProcs(config.serviceKeywords)),
     processes: await safe(collectProcesses),
     ssl: await safe(() => collectSslAll(config)),
     connectivity: await safe(() => collectConnectivity(config.pingTargets || [])),

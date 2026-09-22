@@ -372,7 +372,7 @@ function renderCards() {
     const card = document.createElement("div");
     card.className = "card";
     if (key === "systemd") {
-      card.innerHTML = `<h2>${label}</h2>${renderSystemd(m)}`;
+      card.innerHTML = `<h2>${label}</h2>${renderSystemd({ ...m, userProcs: metrics.userProcs })}`;
     } else if (key === "system") {
       const health = m?.health?.items;
       let healthHtml = "";
@@ -445,15 +445,22 @@ function renderCards() {
 }
 
 function renderSystemd(m) {
-  if (!m?.services) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  if (!m?.services && !m?.userProcs) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
   const q = searchBox.value.trim().toLowerCase();
-  const list = q ? m.services.filter((s) => s.name.toLowerCase().includes(q)) : m.services;
-  if (!list.length) return `<pre>${escapeHtml(q ? `未找到匹配「${q}」的服务` : "（无服务）")}</pre>`;
-  const rows = list.map((s) => {
+  const services = m.services || [];
+  const svcPids = new Set(services.map((s) => String(s.mainPid)));
+  const procs = ((m.userProcs && m.userProcs.procs) || []).filter((p) => !svcPids.has(String(p.pid)));
+  const rows = [];
+  for (const s of services) {
     const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
-    return `<tr><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.path || "—")}</td><td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td><td>${escapeHtml(s.started)}</td></tr>`;
-  }).join("");
-  return `<div class="card-body"><table class="svc-table"><thead><tr><th>服务</th><th>状态</th><th>服务路径</th><th>占用cpu</th><th>占用内存%</th><th>内容大小</th><th>启动时间</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    rows.push(`<tr><td>服务</td><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td><td>${escapeHtml(s.mainPid || "—")}</td><td>${escapeHtml(s.started)}</td></tr>`);
+  }
+  for (const p of procs) {
+    rows.push(`<tr><td>进程</td><td>${escapeHtml(p.name)}</td><td class="ok">运行中</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td></tr>`);
+  }
+  if (!rows.length) return `<pre>${escapeHtml(q ? `未找到匹配「${q}」的服务` : "（无匹配服务，可在设置中配置服务白名单）")}</pre>`;
+  const filtered = q ? rows.filter((r) => r.toLowerCase().includes(q)) : rows;
+  return `<div class="card-body"><table class="svc-table"><thead><tr><th>类型</th><th>名称</th><th>状态</th><th>占用cpu</th><th>占用内存%</th><th>内容大小</th><th>PID</th><th>启动时间</th></tr></thead><tbody>${filtered.join("")}</tbody></table></div>`;
 }
 
 let procSort = "cpu";
@@ -522,7 +529,8 @@ function renderSsl(m) {
       ops.push(`<a href="javascript:void(0)" data-ssl-action="toggle" data-ssl-id="${escapeHtml(s.id)}" data-ssl-enabled="${s.enabled !== false}">${s.enabled === false ? "启用" : "停用"}</a>`);
       ops.push(`<a href="javascript:void(0)" data-ssl-action="del" data-ssl-id="${escapeHtml(s.id)}" class="danger">删除</a>`);
     }
-    return `<tr><td>${name} ${srcLabel}</td><td>${escapeHtml(s.cn || "—")}</td><td>${escapeHtml(s.issuer || "—")}</td><td>${escapeHtml(s.notAfter || "—")}</td><td class="${cls}">${expire}${sslBar(s.daysLeft)}</td><td>${escapeHtml((s.san || []).join(", "))}</td><td>${escapeHtml(s.label || "—")}</td><td>${ops.join(" ") || "—"}</td></tr>`;
+    const opsHtml = ops.length ? `<span class="proc-ops ssl-ops">${ops.join("")}</span>` : "—";
+    return `<tr><td>${name} ${srcLabel}</td><td>${escapeHtml(s.cn || "—")}</td><td>${escapeHtml(s.issuer || "—")}</td><td>${escapeHtml(s.notAfter || "—")}</td><td class="${cls}">${expire}${sslBar(s.daysLeft)}</td><td>${escapeHtml((s.san || []).join(", "))}</td><td>${escapeHtml(s.label || "—")}</td><td>${opsHtml}</td></tr>`;
   }).join("");
   return summary + `<div class="card-body"><table class="svc-table"><thead><tr><th>域名/路径</th><th>CN</th><th>签发者</th><th>到期时间</th><th>剩余</th><th>SAN</th><th>备注</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -1220,6 +1228,7 @@ async function openSettings() {
   document.getElementById("cfg-smtp-pass").value = smtp.pass || "";
   document.getElementById("cfg-smtp-from").value = smtp.from || "";
   document.getElementById("cfg-smtp-to").value = smtp.to || "";
+  document.getElementById("cfg-service-keywords").value = (cfg.serviceKeywords || []).join(",");
   settingsMask.classList.add("show");
   await loadModels();
   if (cfg.model) cfgModel.value = cfg.model;
@@ -1235,6 +1244,8 @@ function showSaveMsg(text) {
   saveMsgEl.className = "save-msg";
   saveMsgEl.textContent = text;
   document.body.appendChild(saveMsgEl);
+  const el = saveMsgEl;
+  setTimeout(() => { if (saveMsgEl === el) { el.remove(); saveMsgEl = null; } }, 2500);
 }
 
 const settingsMenu = document.getElementById("settings-menu");
@@ -1356,12 +1367,14 @@ document.getElementById("cfg-save").onclick = async () => {
       to: document.getElementById("cfg-smtp-to").value.trim(),
     },
   };
+  body.serviceKeywords = document.getElementById("cfg-service-keywords").value.split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean);
   const res = await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { alert("保存失败：" + (data.error || res.status)); return; }
   cfgApiKey.value = "";
   cfgKeyHint.textContent = `已配置：${data.apiKey}`;
   showSaveMsg("✅ 配置成功！");
+  loadModelStatus();
   setTimeout(() => settingsMask.classList.remove("show"), 2000);
 };
 
