@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
 import { loadConfig, normalizeSslSites } from "../config.js";
-import { collectSslAll, detectRenewTool } from "../ssl.js";
+import { collectSslAll, detectRenewTool, renewCert } from "../ssl.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -322,6 +322,27 @@ function formatUptime(sec) {
         await persistConfig();
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/ssl/renew" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id, password } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(password || "", auth)) {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+          return;
+        }
+        const entry = config.sslSites.find((e) => e.id === id);
+        if (!entry || entry.type !== "local") {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "仅本机证书文件支持续签" }));
+          return;
+        }
+        const data = await collectSslAll(config);
+        const live = data.results.find((r) => r.id === id) || entry;
+        const result = await renewCert({ ...entry, cn: live.cn });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(result));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets }));

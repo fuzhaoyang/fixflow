@@ -417,3 +417,23 @@ test("SSL 接口：增删改查与手动条目保护", async () => {
 
   w.close();
 });
+
+test("SSL 续签：密码错误 403，非 local 400", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const add = await fetch(`${base}/api/ssl`, { method: "POST", headers: H, body: JSON.stringify({ type: "local", path: "/etc/nginx/ssl/a.pem" }) });
+  const { entry } = await add.json();
+
+  const bad = await fetch(`${base}/api/ssl/renew`, { method: "POST", headers: H, body: JSON.stringify({ id: entry.id, password: "wrong" }) });
+  assert.equal(bad.status, 403);
+
+  const remote = await fetch(`${base}/api/ssl`, { method: "POST", headers: H, body: JSON.stringify({ type: "remote", host: "a.com" }) });
+  const remoteEntry = (await remote.json()).entry;
+  const notLocal = await fetch(`${base}/api/ssl/renew`, { method: "POST", headers: H, body: JSON.stringify({ id: remoteEntry.id, password: "secret123" }) });
+  assert.equal(notLocal.status, 400);
+
+  w.close();
+});
