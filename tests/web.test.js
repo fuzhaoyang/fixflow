@@ -457,3 +457,26 @@ test("设置弹窗有 X 关闭按钮且不响应遮罩点击", async () => {
   assert.doesNotMatch(js, /settingsMask\.addEventListener\("click"/);
   w.close();
 });
+
+test("/api/models 透传前端传入的 baseUrl/apiKey", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const orig = globalThis.fetch;
+  let seen = null;
+  globalThis.fetch = async (url, opts) => {
+    if (String(url).startsWith("http://127.0.0.1:")) return orig(url, opts);
+    seen = { url: String(url), auth: opts?.headers?.Authorization };
+    return { ok: true, json: async () => ({ data: [{ id: "m1" }] }) };
+  };
+  try {
+    const res = await orig(`${base}/api/models?baseUrl=${encodeURIComponent("https://x/v1")}&apiKey=secret`, { headers: { Cookie: cookie } });
+    const data = await res.json();
+    assert.deepEqual(data.models, ["m1"]);
+    assert.match(seen.url, /https:\/\/x\/v1\/models/);
+    assert.equal(seen.auth, "Bearer secret");
+  } finally {
+    globalThis.fetch = orig;
+    w.close();
+  }
+});

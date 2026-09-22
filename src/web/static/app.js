@@ -1177,9 +1177,15 @@ async function loadModels() {
   cfgModelStatus.textContent = "拉取模型中…";
   cfgModelStatus.className = "model-loading";
   try {
-    const res = await fetch("api/models");
+    const params = new URLSearchParams();
+    const baseUrl = cfgBaseUrl.value.trim();
+    if (baseUrl) params.set("baseUrl", baseUrl);
+    const typedKey = cfgApiKey.value.trim();
+    if (typedKey) params.set("apiKey", typedKey);
+    const res = await fetch("api/models?" + params.toString());
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || res.status);
+    const prev = cfgModel.value;
     cfgModel.innerHTML = "";
     for (const m of data.models) {
       const opt = document.createElement("option");
@@ -1187,12 +1193,15 @@ async function loadModels() {
       opt.textContent = m;
       cfgModel.appendChild(opt);
     }
+    if (prev && data.models.includes(prev)) cfgModel.value = prev;
     cfgModelStatus.textContent = `共 ${data.models.length} 个模型`;
   } catch (e) {
     cfgModelStatus.textContent = "拉取失败：" + e.message + "（请检查 API 地址和 Key）";
     cfgModelStatus.className = "model-loading error";
   }
 }
+cfgBaseUrl.addEventListener("change", loadModels);
+cfgApiKey.addEventListener("change", loadModels);
 
 async function openSettings() {
   if (saveMsgEl) saveMsgEl.remove();
@@ -1332,6 +1341,8 @@ document.getElementById("cfg-save").onclick = async () => {
   const body = {
     model: cfgModel.value,
   };
+  const newBaseUrl = cfgBaseUrl.value.trim();
+  if (newBaseUrl) body.baseUrl = newBaseUrl;
   const newKey = cfgApiKey.value.trim();
   if (newKey) body.apiKey = newKey;
   body.sslAlerts = {

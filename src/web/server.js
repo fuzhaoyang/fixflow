@@ -280,7 +280,9 @@ function formatUptime(sec) {
         res.end(md);
       } else if (url.pathname === "/api/models") {
         try {
-          const models = await fetchModels(config.baseUrl, config.apiKey);
+          const baseUrl = url.searchParams.get("baseUrl") || config.baseUrl;
+          const apiKey = url.searchParams.get("apiKey") || config.apiKey;
+          const models = await fetchModels(baseUrl, apiKey);
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ models }));
         } catch (e) {
@@ -359,20 +361,24 @@ function formatUptime(sec) {
         res.end(JSON.stringify(result));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts }));
+        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords }));
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
-        const { baseUrl, apiKey, model, sslSites, pingTargets, sslAlerts } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
-        if (Array.isArray(sslSites)) config.sslSites = normalizeSslSites(sslSites);
+        if (Array.isArray(sslSites)) config.sslSites = sslSites;
         if (Array.isArray(pingTargets)) config.pingTargets = pingTargets;
-        if (sslAlerts && typeof sslAlerts === "object") config.sslAlerts = { ...config.sslAlerts, ...sslAlerts };
-        await persistConfig();
+        if (Array.isArray(serviceKeywords)) config.serviceKeywords = serviceKeywords.map((s) => String(s).trim()).filter(Boolean);
+        let existing = {};
+        try { existing = JSON.parse(await readFile(configPath, "utf8")); } catch {}
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords };
+        await mkdir(dirname(configPath), { recursive: true });
+        await writeFile(configPath, JSON.stringify(saved, null, 2));
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts }));
+        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords }));
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ messages: await readHistoryFile(historyPath) }));
