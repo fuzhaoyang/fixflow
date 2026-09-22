@@ -35,7 +35,10 @@ async function writeHistoryFile(path, messages) {
 }
 
 async function fetchModels(baseUrl, apiKey) {
-  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, { headers: { Authorization: `Bearer ${apiKey}` } });
+  const res = await fetch(`${baseUrl.replace(/\/$/, "")}/models`, {
+    headers: { Authorization: `Bearer ${apiKey}` },
+    signal: AbortSignal.timeout(10000),
+  });
   if (!res.ok) throw new Error(`拉取模型列表失败: ${res.status}`);
   const data = await res.json();
   return (data.data || []).map((m) => m.id);
@@ -98,11 +101,12 @@ export async function startWeb(config = {}, deps = {}) {
       runCommand("nproc"),
     ]);
     const ncpu = parseInt(nproc.stdout.trim() || "1", 10) || 1;
-    const load = parseLoad(uptime.stdout || "").load;
+    const p = parseLoad(uptime.stdout || "");
+    const load = p.load;
     const memPct = parseFree(mem.stdout || "").usedPct;
     const disk = parseDf(df.stdout || "").find((d) => d.mount === "/")?.usedPct ?? 0;
     return {
-      load: { pct: Math.min(100, Math.round((load / Math.max(1, ncpu)) * 100)), load, ncpu },
+      load: { pct: Math.min(100, Math.round((load / Math.max(1, ncpu)) * 100)), load, ncpu, load1: p.load1, load5: p.load5, load15: p.load15 },
       cpu: { pct: monitor.cpu() },
       mem: { pct: memPct },
       disk: { pct: disk },

@@ -123,7 +123,7 @@ function initRings() {
 
 function renderRings(status) {
   const map = {
-    load: { label: "负载状态", val: status?.load?.pct ?? 0, sub: status?.load ? `${status.load.load}/${status.load.ncpu} 核` : "" },
+    load: { label: "负载状态", val: status?.load?.pct ?? 0, sub: status?.load ? `1m ${status.load.load1 ?? status.load.load} / 5m ${status.load.load5 ?? "—"} / 15m ${status.load.load15 ?? "—"} · ${status.load.ncpu} 核` : "" },
     cpu: { label: "CPU 使用率", val: status?.cpu?.pct ?? 0, sub: "实时" },
     mem: { label: "内存使用率", val: status?.mem?.pct ?? 0, sub: "" },
     disk: { label: "磁盘使用率", val: status?.disk?.pct ?? 0, sub: "根分区" },
@@ -132,7 +132,7 @@ function renderRings(status) {
     const it = map[key];
     const pct = Math.min(100, Math.max(0, it.val));
     ringCharts[key].setOption({
-      series: [{ data: [{ value: pct, itemStyle: { color: ringColor(pct) } }, { value: 100, itemStyle: { color: "#334155" } }] }],
+      series: [{ data: [{ value: pct, itemStyle: { color: ringColor(pct) } }, { value: 100 - pct, itemStyle: { color: "#334155" } }] }],
     });
     document.getElementById("val-" + key).textContent = (Number.isInteger(pct) ? pct : pct.toFixed(1)) + "%";
     document.getElementById("val-" + key).style.color = ringColor(pct);
@@ -926,16 +926,23 @@ function initPanel() {
 
 const modelStatus = document.getElementById("model-status");
 async function loadModelStatus() {
+  let cfg = {};
   try {
     const res = await fetch("api/config");
-    const cfg = await res.json();
-    modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(cfg.model || "未设置模型")} · 已连接`;
+    cfg = await res.json();
+  } catch {}
+  const model = cfg.model || "未设置模型";
+  try {
+    const res = await fetch("api/models");
+    if (!res.ok) throw new Error(res.status);
+    modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(model)} · 已连接`;
     modelStatus.classList.add("on");
   } catch {
-    modelStatus.textContent = "模型连接失败";
+    modelStatus.innerHTML = `<span class="dot" style="background:var(--bad)"></span>${escapeHtml(model)} · 无法连接`;
     modelStatus.classList.remove("on");
   }
 }
+modelStatus.addEventListener("click", openSettings);
 
 // ---------- 登录 / 注册 ----------
 const authMask = document.getElementById("auth-mask");

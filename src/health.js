@@ -21,8 +21,9 @@ export function parseFree(stdout) {
 }
 
 export function parseLoad(stdout) {
-  const m = (stdout || "").match(/^([\d.]+)/);
-  return { load: m ? parseFloat(m[1]) : 0 };
+  const m = (stdout || "").match(/load average[s]?:\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/i) || (stdout || "").match(/^([\d.]+)/);
+  if (m && m[2]) return { load: parseFloat(m[1]), load1: parseFloat(m[1]), load5: parseFloat(m[2]), load15: parseFloat(m[3]) };
+  return { load: m ? parseFloat(m[1]) : 0, load1: m ? parseFloat(m[1]) : 0, load5: m ? parseFloat(m[1]) : 0, load15: m ? parseFloat(m[1]) : 0 };
 }
 
 function statusOf(pct) {
