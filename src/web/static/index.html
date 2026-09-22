@@ -551,6 +551,25 @@
       <select id="cfg-model"></select>
       <div class="model-loading" id="cfg-model-status"></div>
     </div>
+    <div class="field">
+      <label>证书到期告警 Webhook（钉钉/企业微信等，可留空）</label>
+      <input id="cfg-ssl-webhook" type="text" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+    </div>
+    <div class="field">
+      <label>邮件通知（SMTP，需系统已装 sendmail）</label>
+      <div style="display:flex;gap:6px">
+        <input id="cfg-smtp-host" type="text" placeholder="SMTP 主机">
+        <input id="cfg-smtp-port" type="text" placeholder="端口" style="width:80px">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input id="cfg-smtp-user" type="text" placeholder="用户名">
+        <input id="cfg-smtp-pass" type="password" placeholder="密码">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input id="cfg-smtp-from" type="text" placeholder="发件人">
+        <input id="cfg-smtp-to" type="text" placeholder="收件人（逗号分隔）">
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn" id="cfg-cancel">取消</button>
       <button class="btn" id="cfg-save">保存</button>
@@ -564,6 +583,53 @@
     <div class="modal-actions">
       <button class="btn" id="restart-cancel">取消</button>
       <button class="btn" id="restart-confirm">确认重启</button>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="ssl-add-mask">
+  <div class="modal">
+    <h2>➕ 添加监控</h2>
+    <div class="field">
+      <label>类型</label>
+      <select id="ssl-add-type">
+        <option value="remote">远程域名（外部站点/CDN）</option>
+        <option value="local">本机证书文件</option>
+      </select>
+    </div>
+    <div class="field" id="ssl-add-remote-fields">
+      <label>域名与端口</label>
+      <div style="display:flex;gap:6px">
+        <input id="ssl-add-host" type="text" placeholder="example.com">
+        <input id="ssl-add-port" type="text" placeholder="443" style="width:80px">
+      </div>
+    </div>
+    <div class="field" id="ssl-add-local-fields" style="display:none">
+      <label>证书文件路径</label>
+      <input id="ssl-add-path" type="text" placeholder="/etc/nginx/ssl/example.pem">
+    </div>
+    <div class="field">
+      <label>备注（可选）</label>
+      <input id="ssl-add-label" type="text" placeholder="如：官网">
+    </div>
+    <div class="hint" id="ssl-add-err" style="color:var(--bad)"></div>
+    <div class="modal-actions">
+      <button class="btn" id="ssl-add-cancel">取消</button>
+      <button class="btn" id="ssl-add-save">添加</button>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="ssl-renew-mask">
+  <div class="modal">
+    <h2>🔄 续签证书</h2>
+    <p class="modal-text" id="ssl-renew-text"></p>
+    <div class="field">
+      <label>登录密码</label>
+      <input id="ssl-renew-password" type="password" placeholder="请输入登录密码以验证身份">
+      <div class="hint" id="ssl-renew-err" style="color:var(--bad)"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="ssl-renew-cancel">取消</button>
+      <button class="btn" id="ssl-renew-confirm">确认续签</button>
     </div>
   </div>
 </div>

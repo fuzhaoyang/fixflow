@@ -437,3 +437,13 @@ test("SSL 续签：密码错误 403，非 local 400", async () => {
 
   w.close();
 });
+
+test("首页包含 SSL 管理所需元素", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  for (const id of ["ssl-add-mask", "ssl-renew-mask", "cfg-ssl-webhook", "cfg-smtp-host"]) {
+    assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
+  }
+  w.close();
+});
