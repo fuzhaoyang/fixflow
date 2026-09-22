@@ -89,3 +89,24 @@ export async function collectSslAll(config = {}, exec = runCommand) {
   }));
   return { results };
 }
+
+export async function detectRenewTool(exec = runCommand) {
+  const cb = await exec("command -v certbot 2>/dev/null");
+  if (cb.exitCode === 0 && cb.stdout.trim()) return { tool: "certbot", path: cb.stdout.trim().split("\n")[0] };
+  const ac = await exec("command -v acme.sh 2>/dev/null || ls ~/.acme.sh/acme.sh 2>/dev/null");
+  if (ac.exitCode === 0 && ac.stdout.trim()) return { tool: "acme.sh", path: ac.stdout.trim().split("\n")[0] };
+  return { tool: null };
+}
+
+export async function renewCert(entry, exec = runCommand) {
+  const { tool, path } = await detectRenewTool(exec);
+  if (!tool) return { ok: false, error: "未检测到 certbot 或 acme.sh" };
+  const cn = entry.cn || entry.host;
+  if (!cn) return { ok: false, error: "无法确定证书域名" };
+  const cmd = tool === "certbot"
+    ? `certbot renew --cert-name ${shellQuote(cn)}`
+    : `${shellQuote(path)} --renew -d ${shellQuote(cn)}`;
+  const r = await exec(cmd, { timeout: 120000 });
+  const reload = await exec("systemctl reload nginx");
+  return { ok: r.exitCode === 0, tool, stdout: r.stdout, stderr: r.stderr, reloaded: reload.exitCode === 0 };
+}

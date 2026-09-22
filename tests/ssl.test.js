@@ -94,3 +94,40 @@ test("collectSslAll 合并发现与手动并采集", async () => {
   assert.equal(r.results.length, 1);
   assert.equal(r.results[0].cn, "a.com");
 });
+
+import { detectRenewTool, renewCert } from "../src/ssl.js";
+
+test("detectRenewTool 优先 certbot", async () => {
+  const fake = async (cmd) => cmd.includes("certbot")
+    ? { stdout: "/usr/bin/certbot\n", stderr: "", exitCode: 0 }
+    : { stdout: "", stderr: "", exitCode: 1 };
+  assert.equal((await detectRenewTool(fake)).tool, "certbot");
+});
+
+test("detectRenewTool 无工具返回 null", async () => {
+  const fake = async () => ({ stdout: "", stderr: "", exitCode: 1 });
+  assert.equal((await detectRenewTool(fake)).tool, null);
+});
+
+test("renewCert 无工具返回错误", async () => {
+  const fake = async () => ({ stdout: "", stderr: "", exitCode: 1 });
+  const r = await renewCert({ cn: "a.com" }, fake);
+  assert.equal(r.ok, false);
+  assert.match(r.error, /certbot/);
+});
+
+test("renewCert 用 certbot 续签并重载 nginx", async () => {
+  const cmds = [];
+  const fake = async (cmd) => {
+    cmds.push(cmd);
+    if (cmd.includes("command -v certbot")) return { stdout: "/usr/bin/certbot\n", stderr: "", exitCode: 0 };
+    if (cmd.includes("certbot renew")) return { stdout: "renewed", stderr: "", exitCode: 0 };
+    if (cmd.includes("systemctl reload nginx")) return { stdout: "", stderr: "", exitCode: 0 };
+    return { stdout: "", stderr: "", exitCode: 1 };
+  };
+  const r = await renewCert({ cn: "a.com" }, fake);
+  assert.equal(r.ok, true);
+  assert.equal(r.tool, "certbot");
+  assert.equal(r.reloaded, true);
+  assert.ok(cmds.some((c) => c.includes("certbot renew --cert-name 'a.com'")));
+});
