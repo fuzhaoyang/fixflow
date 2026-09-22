@@ -388,3 +388,32 @@ test("/api/process 无效参数返回 400", async () => {
   assert.equal(calls.length, 0);
   w.close();
 });
+
+test("SSL 接口：增删改查与手动条目保护", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const add = await fetch(`${base}/api/ssl`, { method: "POST", headers: H, body: JSON.stringify({ type: "local", path: "/no/such/cert.pem" }) });
+  assert.equal(add.status, 200);
+  const { entry } = await add.json();
+  assert.ok(entry.id);
+
+  const list = await fetch(`${base}/api/ssl`, { headers: { Cookie: cookie } });
+  assert.equal(list.status, 200);
+  const data = await list.json();
+  assert.ok(data.results.some((r) => r.id === entry.id));
+  assert.ok("renewTool" in data);
+
+  const patch = await fetch(`${base}/api/ssl`, { method: "PATCH", headers: H, body: JSON.stringify({ id: entry.id, enabled: false, label: "测试" }) });
+  assert.equal(patch.status, 200);
+
+  const del = await fetch(`${base}/api/ssl`, { method: "DELETE", headers: H, body: JSON.stringify({ id: entry.id }) });
+  assert.equal(del.status, 200);
+
+  const delDiscovered = await fetch(`${base}/api/ssl`, { method: "DELETE", headers: H, body: JSON.stringify({ id: "d:/etc/nginx/ssl/x.pem" }) });
+  assert.equal(delDiscovered.status, 403);
+
+  w.close();
+});

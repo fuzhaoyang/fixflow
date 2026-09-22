@@ -5,7 +5,8 @@ import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime } from "../metrics.js";
-import { loadConfig } from "../config.js";
+import { loadConfig, normalizeSslSites } from "../config.js";
+import { collectSslAll, detectRenewTool } from "../ssl.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -45,7 +46,8 @@ async function fetchModels(baseUrl, apiKey) {
 }
 
 export async function startWeb(config = {}, deps = {}) {
-  config.sslSites = config.sslSites || [];
+  config.sslSites = normalizeSslSites(config.sslSites);
+  config.sslAlerts = config.sslAlerts || { webhook: "", smtp: {} };
   config.pingTargets = config.pingTargets || [];
   const clients = new Set();
   const waiters = new Map();
@@ -63,6 +65,12 @@ export async function startWeb(config = {}, deps = {}) {
     await writeFile(configPath, JSON.stringify({ ...existing, auth }, null, 2));
   };
   const readAuth = async () => (await readConfigFile()).auth || null;
+  const persistConfig = async () => {
+    const existing = await readConfigFile();
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts };
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, JSON.stringify(saved, null, 2));
+  };
   const execCmd = deps.runCommand || runCommand;
 
   const procGuard = async (pid) => {
@@ -265,6 +273,55 @@ function formatUptime(sec) {
           res.writeHead(400, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: e.message }));
         }
+      } else if (url.pathname === "/api/ssl" && req.method === "GET") {
+        const data = await collectSslAll(config);
+        const { tool } = await detectRenewTool();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ...data, renewTool: tool }));
+      } else if (url.pathname === "/api/ssl" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { type, host, port, path, label } = JSON.parse(body || "{}");
+        if (type === "local" ? !path : !host) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: type === "local" ? "缺少证书路径" : "缺少域名" }));
+          return;
+        }
+        const entry = {
+          id: `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          type: type === "local" ? "local" : "remote",
+          host: host || "", port: port || "443", path: path || "",
+          label: label || "", enabled: true, source: "manual",
+        };
+        config.sslSites.push(entry);
+        await persistConfig();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, entry }));
+      } else if (url.pathname === "/api/ssl" && req.method === "PATCH") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id, label, enabled } = JSON.parse(body || "{}");
+        const entry = config.sslSites.find((e) => e.id === id);
+        if (!entry) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+        if (label !== undefined) entry.label = String(label);
+        if (enabled !== undefined) entry.enabled = Boolean(enabled);
+        await persistConfig();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/ssl" && req.method === "DELETE") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id } = JSON.parse(body || "{}");
+        const entry = config.sslSites.find((e) => e.id === id);
+        if (!entry || entry.source !== "manual") {
+          res.writeHead(403, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "自动发现的证书不可删除" }));
+          return;
+        }
+        config.sslSites = config.sslSites.filter((e) => e.id !== id);
+        await persistConfig();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets }));
