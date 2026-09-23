@@ -51,3 +51,13 @@ test("sendEmail 通过 SMTP AUTH LOGIN 直连发送", async () => {
     server.close();
   }
 });
+test("sendEmail from 不是邮箱时回退 user", async () => {
+  const { port, commands, server } = await startFakeSmtp();
+  try {
+    const ok = await sendEmail({ host: "127.0.0.1", port, user: "u", pass: "p", from: "80主机", to: "b@x.com" }, "主题", "正文");
+    assert.equal(ok, true);
+    assert.ok(commands.some((c) => c === "MAIL FROM:<u>"));
+  } finally {
+    server.close();
+  }
+});

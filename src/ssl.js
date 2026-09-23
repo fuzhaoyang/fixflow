@@ -221,7 +221,7 @@ export function sendSmtp(smtp) {
         await expectCode(dlg.cmd(b64(smtp.user)), 334);
         await expectCode(dlg.cmd(b64(smtp.pass || "")), 235);
       }
-      const from = smtp.from || smtp.user;
+      const from = /^[^@\s<>]+@[^@\s<>]+$/.test(String(smtp.from || "")) ? smtp.from : smtp.user;
       if (!from) throw new Error("缺少发件人（from）");
       await expectCode(dlg.cmd(`MAIL FROM:<${from}>`), 250);
       const tos = String(smtp.to || "").split(/[,;\s]+/).filter(Boolean);
