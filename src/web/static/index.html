@@ -216,15 +216,30 @@
     /* 对话区 */
     #view-chat { display: flex; flex-direction: row; height: 100%; min-height: 0; padding: 0; position: relative; }
     .chat-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; }
-    .term-splitter { display: none; width: 5px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
+    .term-splitter { display: none; width: 5px; cursor: col-resize; flex-shrink: 0; }
     .term-splitter.show { display: block; }
-    .term-splitter:hover { background: var(--accent); }
     .term-pane { display: none; flex-direction: column; width: 40%; min-width: 220px; max-width: 80%; height: 100%; background: var(--bg); border-left: 1px solid var(--border); }
     .term-pane.show { display: flex; }
     .term-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
     .term-head .spacer { flex: 1; }
     .term-head .clear-btn { padding: 2px 8px; font-size: 12px; }
-    #term-terminal { flex: 1; min-height: 0; overflow: hidden; padding: 6px 0 0 6px; background: #0f172a; position: relative; }
+    #term-terminal { height: 40%; min-height: 80px; overflow: hidden; padding: 6px 0 0 6px; background: #0f172a; position: relative; }
+    .term-fs-splitter { height: 5px; cursor: ns-resize; background: var(--panel); flex-shrink: 0; }
+    .term-fs-splitter:hover { background: var(--accent); }
+    .fs-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+    .fs-toolbar { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+    .fs-body { flex: 1; min-height: 0; display: flex; }
+    .fs-tree { width: 30%; min-width: 140px; overflow: auto; border-right: 1px solid var(--border); padding: 4px; font-size: 12px; }
+    .fs-list-wrap { flex: 1; min-width: 0; overflow: auto; }
+    .fs-table { width: 100%; font-size: 12px; }
+    .fs-table th { cursor: pointer; user-select: none; white-space: nowrap; }
+    .fs-tree-item { display: flex; align-items: center; gap: 4px; padding: 2px 6px; cursor: pointer; white-space: nowrap; border-radius: 4px; }
+    .fs-tree-item:hover { background: var(--panel2); }
+    .fs-tree-item.sel { background: rgba(59,130,246,.15); }
+    .fs-tree-item .arrow { width: 12px; flex-shrink: 0; color: var(--muted); text-align: center; }
+    .fs-row.sel { background: rgba(59,130,246,.15); }
+    .fs-row:hover { background: var(--panel2); }
+    .fs-row td { cursor: pointer; }
     #term-terminal .xterm { height: 100%; }
     #term-terminal .xterm-viewport { height: 100% !important; }
     .term-loading { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 13px; background: #0f172a; z-index: 5; }
@@ -304,8 +319,7 @@
     .bubble.bot hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
     /* 输入区（参考 ChatPanel：输入框内嵌底部操作栏） */
     .input-bar { display: flex; justify-content: flex-start; padding: 8px 16px 0; background: var(--panel); }
-    .input-resize { height: 5px; cursor: ns-resize; background: var(--panel); flex-shrink: 0; }
-    .input-resize:hover, .input-resize.active { background: var(--accent); }
+    .input-resize { height: 10px; background: #1e293b; cursor: ns-resize; flex-shrink: 0; }
     .clear-btn {
       display: inline-flex; align-items: center; gap: 5px; border: none; background: none;
       color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all .2s;
@@ -597,6 +611,34 @@
         </div>
         <div id="term-terminal">
           <div class="term-loading" id="term-loading"><span class="spinner"></span><span id="term-loading-text">连接中…</span></div>
+        </div>
+        <div class="term-fs-splitter" id="term-fs-splitter" title="拖动调整终端/文件区高度"></div>
+        <div class="fs-pane" id="fs-pane">
+          <div class="fs-toolbar">
+            <button class="btn small" id="fs-newdir">新建文件夹</button>
+            <button class="btn small" id="fs-upload-btn">上传</button>
+            <button class="btn small" id="fs-download" disabled>下载</button>
+            <button class="btn small" id="fs-edit" disabled>编辑</button>
+            <button class="btn small" id="fs-rename" disabled>重命名</button>
+            <button class="btn small danger" id="fs-delete" disabled>删除</button>
+            <input type="file" id="fs-file" hidden>
+          </div>
+          <div class="fs-body">
+            <div class="fs-tree" id="fs-tree"></div>
+            <div class="fs-list-wrap">
+              <table class="svc-table fs-table" id="fs-table">
+                <thead><tr>
+                  <th data-sort="name">文件名</th>
+                  <th data-sort="size">大小</th>
+                  <th data-sort="type">类型</th>
+                  <th data-sort="mtime">修改时间</th>
+                  <th data-sort="mode">权限</th>
+                  <th data-sort="user">用户/用户组</th>
+                </tr></thead>
+                <tbody id="fs-tbody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>

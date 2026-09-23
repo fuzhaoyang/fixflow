@@ -1,8 +1,9 @@
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, lstat, rm, rename as fsRename } from "node:fs/promises";
+import { createReadStream, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { join, dirname } from "node:path";
+import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache } from "../metrics.js";
@@ -16,6 +17,105 @@ import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
+
+function safeFsPath(p) {
+  if (!p || typeof p !== "string") return null;
+  const abs = resolve(p);
+  return abs.startsWith("/") ? abs : null;
+}
+
+const userNames = new Map();
+const groupNames = new Map();
+let namesLoaded = false;
+function loadNames() {
+  if (namesLoaded) return;
+  namesLoaded = true;
+  try {
+    for (const line of readFileSync("/etc/passwd", "utf8").split("\n")) {
+      const [name, , uid] = line.split(":");
+      const n = Number(uid);
+      if (name && Number.isInteger(n)) userNames.set(n, name);
+    }
+  } catch {}
+  try {
+    for (const line of readFileSync("/etc/group", "utf8").split("\n")) {
+      const [name, , gid] = line.split(":");
+      const n = Number(gid);
+      if (name && Number.isInteger(n)) groupNames.set(n, name);
+    }
+  } catch {}
+}
+const uidName = (uid) => { loadNames(); return userNames.get(uid) ?? String(uid); };
+const gidName = (gid) => { loadNames(); return groupNames.get(gid) ?? String(gid); };
+
+function formatMode(mode) {
+  const t = (mode & 0o170000) === 0o040000 ? "d" : (mode & 0o170000) === 0o120000 ? "l" : "-";
+  const chars = "rwxrwxrwx";
+  let s = t;
+  for (let i = 0; i < 9; i++) s += mode & (0o400 >> i) ? chars[i] : "-";
+  return s;
+}
+
+async function listFs(p) {
+  const abs = safeFsPath(p);
+  if (!abs) return { error: "路径不合法" };
+  let entries;
+  try {
+    entries = await readdir(abs, { withFileTypes: true });
+  } catch (e) {
+    return { error: e.code === "EACCES" ? "无权限" : e.code === "ENOENT" ? "目录不存在" : e.message };
+  }
+  const children = [];
+  for (let i = 0; i < entries.length; i += 200) {
+    const chunk = entries.slice(i, i + 200);
+    const stats = await Promise.all(chunk.map((d) => lstat(join(abs, d.name)).catch(() => null)));
+    chunk.forEach((d, j) => {
+      const st = stats[j];
+      if (!st) return;
+      children.push({
+        name: d.name,
+        isDir: d.isDirectory(),
+        isSymlink: d.isSymbolicLink(),
+        size: st.size,
+        mtime: st.mtime.toISOString(),
+        mode: formatMode(st.mode),
+        uid: st.uid,
+        gid: st.gid,
+        user: uidName(st.uid),
+        group: gidName(st.gid),
+      });
+    });
+  }
+  return { path: abs, children };
+}
+
+function parseMultipart(buf, boundary) {
+  const delim = Buffer.from(`--${boundary}`);
+  const parts = [];
+  let pos = 0;
+  while (pos < buf.length) {
+    const start = buf.indexOf(delim, pos);
+    if (start === -1) break;
+    let p = start + delim.length;
+    if (buf[p] === 0x0d && buf[p + 1] === 0x0a) p += 2;
+    else if (buf[p] === 0x0a) p += 1;
+    const headerEnd = buf.indexOf(Buffer.from("\r\n\r\n"), p);
+    if (headerEnd === -1) break;
+    const headerStr = buf.slice(p, headerEnd).toString("utf8");
+    const dataStart = headerEnd + 4;
+    const dataEnd = buf.indexOf(delim, dataStart);
+    if (dataEnd === -1) break;
+    let data = buf.slice(dataStart, dataEnd);
+    if (data.endsWith("\r\n")) data = data.slice(0, -2);
+    const cd = headerStr.match(/Content-Disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]*)")?/);
+    if (cd) {
+      if (cd[2] !== undefined) parts.push({ type: "file", name: cd[1], filename: cd[2], data });
+      else parts.push({ type: "field", name: cd[1], value: data.toString("utf8") });
+    }
+    pos = dataEnd + delim.length;
+  }
+  return parts;
+}
 
 function defaultConfigPath() {
   return join(homedir(), ".config", "fixflow", "config.json");
@@ -142,6 +242,16 @@ export async function startWeb(config = {}, deps = {}) {
   const sseGuard = setInterval(() => {
     for (const res of clients) if (res.writableNeedDrain) res.destroy();
   }, 15000);
+  const readBody = async (req) => { let b = ""; for await (const c of req) b += c; return b; };
+  const fsWriteGuard = async (body, res) => {
+    const auth = await readAuth();
+    if (!auth || !verifyPassword(body.password || "", auth)) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+      return false;
+    }
+    return true;
+  };
 
   const usageStore = await createUsageStore({ filePath: join(dirname(configPath), "usage.json") });
 
@@ -494,6 +604,114 @@ function formatUptime(sec) {
         }
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end("{}");
+      } else if (url.pathname === "/api/fs/list" && req.method === "GET") {
+        const r = await listFs(url.searchParams.get("path") || "/");
+        res.writeHead(r.error ? 400 : 200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r));
+      } else if (url.pathname === "/api/fs/download" && req.method === "GET") {
+        const abs = safeFsPath(url.searchParams.get("path"));
+        if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+        else {
+          try {
+            const st = await lstat(abs);
+            if (!st.isFile()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "目标不是文件" })); }
+            else {
+              res.writeHead(200, {
+                "Content-Type": "application/octet-stream",
+                "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(basename(abs))}`,
+                "Content-Length": st.size,
+              });
+              createReadStream(abs).pipe(res);
+            }
+          } catch { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "文件不存在" })); }
+        }
+      } else if (url.pathname === "/api/fs/read" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const abs = safeFsPath(body.path);
+        if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+        else {
+          try {
+            const st = await lstat(abs);
+            if (!st.isFile()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "目标不是文件" })); }
+            else if (st.size > 2 * 1024 * 1024) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "文件过大（>2MB）" })); }
+            else { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ path: abs, content: await readFile(abs, "utf8") })); }
+          } catch { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "读取失败" })); }
+        }
+      } else if (url.pathname === "/api/fs/write" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (await fsWriteGuard(body, res)) {
+          const abs = safeFsPath(body.path);
+          if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+          else {
+            try { await writeFile(abs, String(body.content ?? ""), "utf8"); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
+            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `写入失败：${e.code === "EACCES" ? "无权限" : e.message}` })); }
+          }
+        }
+      } else if (url.pathname === "/api/fs/mkdir" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (await fsWriteGuard(body, res)) {
+          const base = safeFsPath(body.path);
+          const name = basename(String(body.name || "")).replace(/[\\/]/g, "");
+          if (!base || !name) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "参数不合法" })); }
+          else {
+            try { await mkdir(join(base, name)); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
+            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `创建失败：${e.code === "EEXIST" ? "已存在" : e.message}` })); }
+          }
+        }
+      } else if (url.pathname === "/api/fs/rename" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (await fsWriteGuard(body, res)) {
+          const abs = safeFsPath(body.path);
+          const newName = basename(String(body.newName || "")).replace(/[\\/]/g, "");
+          if (!abs || !newName) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "参数不合法" })); }
+          else {
+            try { await fsRename(abs, join(dirname(abs), newName)); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
+            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `重命名失败：${e.message}` })); }
+          }
+        }
+      } else if (url.pathname === "/api/fs/delete" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (await fsWriteGuard(body, res)) {
+          const abs = safeFsPath(body.path);
+          if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+          else {
+            try { await rm(abs, { recursive: true }); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
+            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `删除失败：${e.message}` })); }
+          }
+        }
+      } else if (url.pathname === "/api/fs/upload" && req.method === "POST") {
+        const ct = req.headers["content-type"] || "";
+        const m = ct.match(/boundary=([^;]+)/);
+        if (!m) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "上传格式错误" })); }
+        else {
+          const boundary = m[1].trim().replace(/^"|"$/g, "");
+          const chunks = [];
+          let total = 0, tooBig = false;
+          for await (const chunk of req) {
+            total += chunk.length;
+            if (total > 60 * 1024 * 1024) { tooBig = true; break; }
+            chunks.push(chunk);
+          }
+          if (tooBig) { res.writeHead(413, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "上传文件过大（>50MB）" })); }
+          else {
+            const parts = parseMultipart(Buffer.concat(chunks), boundary);
+            const pathField = parts.find((p) => p.type === "field" && p.name === "path");
+            const passField = parts.find((p) => p.type === "field" && p.name === "password");
+            const file = parts.find((p) => p.type === "file");
+            const auth = await readAuth();
+            if (!auth || !verifyPassword(passField?.value || "", auth)) { res.writeHead(403, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "密码错误，操作未执行" })); }
+            else {
+              const base = safeFsPath(pathField?.value);
+              const fname = file ? basename(file.filename || "").replace(/[\\/]/g, "") : "";
+              if (!base || !fname) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "缺少目录或文件" })); }
+              else if (file.data.length > 50 * 1024 * 1024) { res.writeHead(413, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "上传文件过大（>50MB）" })); }
+              else {
+                try { await writeFile(join(base, fname), file.data); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
+                catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `上传失败：${e.code === "EACCES" ? "无权限" : e.message}` })); }
+              }
+            }
+          }
+        }
       } else if (url.pathname === "/api/process" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
