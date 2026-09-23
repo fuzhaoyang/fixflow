@@ -37,7 +37,7 @@
     #menu-toggle { flex-shrink: 0; font-size: 15px; padding: 4px 8px; }
     .brand { font-size: 17px; font-weight: 700; padding: 4px 16px 16px; color: #fff; display: flex; align-items: center; gap: 10px; }
     .brand-logo { width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #1d4ed8); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(59,130,246,.4), inset 0 1px 0 rgba(255,255,255,.3); }
-    .brand-logo svg { width: 20px; height: 20px; }
+    .brand-logo .ai-logo { font-size: 15px; font-weight: 800; color: #fff; letter-spacing: 1px; line-height: 1; }
     .brand-name small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; }
     nav { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
     nav .group { font-size: 11px; color: var(--muted); padding: 12px 16px 4px; }
@@ -49,7 +49,7 @@
     .menu-label { display: inline-flex; align-items: center; line-height: 1.4; }
     .menu-item:hover { background: var(--panel2); }
     .menu-item.active { background: var(--accent); color: #fff; border-radius: 4px; margin: 0 8px; padding: 8px; }
-    .menu-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; }
+    .menu-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; animation: blink 1.6s ease-in-out infinite; }
     .menu-item .dot.ok { background: var(--ok); } .menu-item .dot.bad { background: var(--bad); }
     .menu-item .dot.na { background: var(--muted); }
     .settings-btn {
@@ -436,7 +436,7 @@
 <div id="auth-mask">
   <div class="auth-card">
     <div class="auth-logo">
-      <div class="brand-logo"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l2.1 5.7L20 8l-4.5 3.6L17 18l-5-3.3L7 18l1.5-6.4L4 8l5.9-.3L12 2z" fill="currentColor"/></svg></div>
+      <div class="brand-logo"><span class="ai-logo">AI</span></div>
       <div>
         <h2 id="auth-title">登录 Fixflow</h2>
         <p class="sub" id="auth-sub">登录后即可使用服务器运维面板</p>
@@ -467,18 +467,9 @@
 </div>
 <div class="layout">
   <aside>
-    <div class="brand">
+    <div class="brand" title="Fixflow 运维管家">
       <span class="brand-logo">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="3" y="4" width="18" height="6" rx="1.5" fill="#fff"/>
-          <circle cx="6" cy="7" r="1" fill="#3b82f6"/>
-          <circle cx="10" cy="7" r="1" fill="#3b82f6"/>
-          <rect x="3" y="14" width="18" height="6" rx="1.5" fill="#fff" opacity=".85"/>
-          <circle cx="6" cy="17" r="1" fill="#3b82f6"/>
-          <circle cx="10" cy="17" r="1" fill="#3b82f6"/>
-          <rect x="14" y="6" width="5" height="2" rx="1" fill="#93c5fd"/>
-          <rect x="14" y="16" width="5" height="2" rx="1" fill="#93c5fd"/>
-        </svg>
+        <span class="ai-logo">AI</span>
       </span>
       <span class="brand-name">Fixflow 运维管家<small>服务器运维 AI Agent</small></span>
     </div>
