@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { startWeb } from "../src/web/server.js";
 
@@ -727,5 +727,118 @@ test("/api/term 会话恢复与操作记录", async () => {
   assert.equal(data.records.length, 1);
   assert.equal(data.records[0].command, "ls -la");
   assert.equal(data.records[0].user, "admin");
+  w.close();
+});
+
+test("/api/fs 浏览与路径校验", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-fs-"));
+  writeFileSync(join(dir, "a.txt"), "hello");
+  mkdirSync(join(dir, "sub"));
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie };
+  const list = await fetch(`${base}/api/fs/list?path=${encodeURIComponent(dir)}`, { headers: H });
+  assert.equal(list.status, 200);
+  const data = await list.json();
+  const names = data.children.map((c) => c.name);
+  assert.ok(names.includes("a.txt") && names.includes("sub"));
+  const file = data.children.find((c) => c.name === "a.txt");
+  assert.equal(file.isDir, false);
+  assert.equal(file.size, 5);
+  assert.ok(file.mode.startsWith("-"));
+  assert.ok(file.user);
+  const bad = await fetch(`${base}/api/fs/list?path=${encodeURIComponent("/no/such/dir-xyz")}`, { headers: H });
+  assert.equal(bad.status, 400);
+  const noauth = await fetch(`${base}/api/fs/list?path=/`);
+  assert.equal(noauth.status, 401);
+  w.close();
+});
+
+test("/api/fs 写操作鉴权与执行", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-fs-"));
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const noauth = await fetch(`${base}/api/fs/mkdir`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path: dir, name: "x" }) });
+  assert.equal(noauth.status, 401);
+  const badPw = await fetch(`${base}/api/fs/mkdir`, { method: "POST", headers: H, body: JSON.stringify({ path: dir, name: "x", password: "wrong" }) });
+  assert.equal(badPw.status, 403);
+  assert.ok(!existsSync(join(dir, "x")));
+  const mk = await fetch(`${base}/api/fs/mkdir`, { method: "POST", headers: H, body: JSON.stringify({ path: dir, name: "sub", password: "secret123" }) });
+  assert.equal(mk.status, 200);
+  assert.ok(existsSync(join(dir, "sub")));
+  const wr = await fetch(`${base}/api/fs/write`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt"), content: "hi", password: "secret123" }) });
+  assert.equal(wr.status, 200);
+  assert.equal(readFileSync(join(dir, "a.txt"), "utf8"), "hi");
+  const rd = await fetch(`${base}/api/fs/read`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt") }) });
+  assert.equal((await rd.json()).content, "hi");
+  const rn = await fetch(`${base}/api/fs/rename`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt"), newName: "b.txt", password: "secret123" }) });
+  assert.equal(rn.status, 200);
+  assert.ok(existsSync(join(dir, "b.txt")));
+  const del = await fetch(`${base}/api/fs/delete`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "sub"), password: "secret123" }) });
+  assert.equal(del.status, 200);
+  assert.ok(!existsSync(join(dir, "sub")));
+  w.close();
+});
+
+test("/api/fs/upload multipart 上传", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-fs-"));
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const boundary = "----TestBoundary123";
+  const body = Buffer.from(
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="path"\r\n\r\n${dir}\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="password"\r\n\r\nsecret123\r\n` +
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="up.txt"\r\nContent-Type: text/plain\r\n\r\nhello-up\r\n` +
+    `--${boundary}--\r\n`,
+  );
+  const res = await fetch(`${base}/api/fs/upload`, { method: "POST", headers: { Cookie: cookie, "Content-Type": `multipart/form-data; boundary=${boundary}` }, body });
+  assert.equal(res.status, 200);
+  assert.equal(readFileSync(join(dir, "up.txt"), "utf8"), "hello-up");
+  w.close();
+});
+
+test("/api/alerts 增删改查与鉴权", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  assert.equal((await fetch(`${base}/api/alerts`)).status, 401);
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const add = await fetch(`${base}/api/alerts`, { method: "POST", headers: H, body: JSON.stringify({ name: "日报", instruction: "生成日报", time: "09:00", recipients: ["a@x.com"] }) });
+  assert.equal(add.status, 200);
+  const { alert } = await add.json();
+  const bad = await fetch(`${base}/api/alerts`, { method: "POST", headers: H, body: JSON.stringify({ name: "", instruction: "", time: "", recipients: [] }) });
+  assert.equal(bad.status, 400);
+  const patch = await fetch(`${base}/api/alerts`, { method: "PATCH", headers: H, body: JSON.stringify({ id: alert.id, enabled: false }) });
+  assert.equal(patch.status, 200);
+  const list = await (await fetch(`${base}/api/alerts`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.alerts[0].enabled, false);
+  assert.equal(list.smtp.hasPass, false);
+  const del = await fetch(`${base}/api/alerts`, { method: "DELETE", headers: H, body: JSON.stringify({ id: alert.id }) });
+  assert.equal(del.status, 200);
+  const run = await fetch(`${base}/api/alerts/run`, { method: "POST", headers: H, body: JSON.stringify({ id: "none" }) });
+  assert.equal(run.status, 400);
+  w.close();
+});
+
+test("/api/alerts/run 手动执行成功（mock 会话与 sendmail）", async () => {
+  const calls = [];
+  const w = await makeServer({}, {
+    sessionFactory: () => ({ send: async () => "模拟日报" }),
+    runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: cmd.includes("command -v sendmail") ? "/usr/sbin/sendmail\n" : "ok", stderr: "" }; },
+  });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const { alert } = await (await fetch(`${base}/api/alerts`, { method: "POST", headers: H, body: JSON.stringify({ name: "日报", instruction: "x", time: "09:00", recipients: ["a@x.com"] }) })).json();
+  const r = await (await fetch(`${base}/api/alerts/run`, { method: "POST", headers: H, body: JSON.stringify({ id: alert.id }) })).json();
+  assert.equal(r.ok, true);
+  assert.ok(calls.some((c) => c.includes("sendmail")));
   w.close();
 });

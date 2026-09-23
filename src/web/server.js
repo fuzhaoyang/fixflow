@@ -10,6 +10,7 @@ import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNgin
 import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
+import { createAlertsManager } from "../alerts.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -106,13 +107,13 @@ function parseMultipart(buf, boundary) {
     const dataEnd = buf.indexOf(delim, dataStart);
     if (dataEnd === -1) break;
     let data = buf.slice(dataStart, dataEnd);
-    if (data.endsWith("\r\n")) data = data.slice(0, -2);
+    if (data.length >= 2 && data[data.length - 2] === 0x0d && data[data.length - 1] === 0x0a) data = data.slice(0, -2);
     const cd = headerStr.match(/Content-Disposition:\s*form-data;\s*name="([^"]+)"(?:;\s*filename="([^"]*)")?/);
     if (cd) {
       if (cd[2] !== undefined) parts.push({ type: "file", name: cd[1], filename: cd[2], data });
       else parts.push({ type: "field", name: cd[1], value: data.toString("utf8") });
     }
-    pos = dataEnd + delim.length;
+    pos = dataEnd;
   }
   return parts;
 }
@@ -255,6 +256,8 @@ export async function startWeb(config = {}, deps = {}) {
 
   const usageStore = await createUsageStore({ filePath: join(dirname(configPath), "usage.json") });
 
+  const alertsManager = await createAlertsManager({ config, configPath, exec: execCmd, sessionFactory: deps.sessionFactory });
+
   const session = createSession({
     config,
     onEvent: broadcast,
@@ -268,6 +271,11 @@ export async function startWeb(config = {}, deps = {}) {
 
   const monitor = createMonitor();
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
+  let alertTimer = null;
+  if (!deps.noAlertsTimer && config.apiKey) {
+    setTimeout(() => alertsManager.tick(), 5000);
+    alertTimer = setInterval(() => alertsManager.tick(), 60000);
+  }
 
   async function collectStatus() {
     const [uptime, mem, df, nproc, osRelease, uname, procUptime] = await Promise.all([
@@ -411,6 +419,64 @@ function formatUptime(sec) {
         const days = parseInt(url.searchParams.get("days") || "30", 10);
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ days: usageStore.daily(Number.isFinite(days) ? days : 30) }));
+      } else if (url.pathname === "/api/alerts" && req.method === "GET") {
+        const alerts = await alertsManager.list();
+        const st = await alertsManager.smtp();
+        const history = {};
+        for (const a of alerts) history[a.id] = (await alertsManager.history(a.id)).slice(0, 3);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ alerts, smtp: { host: st.host, port: st.port, user: st.user, from: st.from, hasPass: Boolean(st.pass) }, history }));
+      } else if (url.pathname === "/api/alerts" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { name, instruction, time, recipients } = JSON.parse(body || "{}");
+        if (!name || !instruction || !time || !Array.isArray(recipients) || !recipients.length) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "名称/指令/时间/收件人必填" }));
+          return;
+        }
+        const alert = { id: `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: String(name), instruction: String(instruction), time: String(time), recipients, enabled: true };
+        const alerts = await alertsManager.list();
+        alerts.push(alert);
+        await alertsManager.save(alerts);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, alert }));
+      } else if (url.pathname === "/api/alerts" && req.method === "PATCH") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id, name, instruction, time, recipients, enabled } = JSON.parse(body || "{}");
+        const alerts = await alertsManager.list();
+        const a = alerts.find((x) => x.id === id);
+        if (!a) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "告警不存在" })); return; }
+        if (name !== undefined) a.name = String(name);
+        if (instruction !== undefined) a.instruction = String(instruction);
+        if (time !== undefined) a.time = String(time);
+        if (Array.isArray(recipients)) a.recipients = recipients;
+        if (enabled !== undefined) a.enabled = Boolean(enabled);
+        await alertsManager.save(alerts);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/alerts" && req.method === "DELETE") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id } = JSON.parse(body || "{}");
+        await alertsManager.save((await alertsManager.list()).filter((x) => x.id !== id));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/alerts/smtp" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { host, port, user, pass, from } = JSON.parse(body || "{}");
+        await alertsManager.saveSmtp({ host, port, user, pass, from });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/alerts/run" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id } = JSON.parse(body || "{}");
+        const r = await alertsManager.runNow(id);
+        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r));
       } else if (url.pathname === "/api/report") {
         const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
         const s = data.system;
@@ -870,6 +936,6 @@ function formatUptime(sec) {
   console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {
     server,
-    close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(sseGuard); server.close(resolve); }),
+    close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(sseGuard); server.close(resolve); }),
   };
 }
