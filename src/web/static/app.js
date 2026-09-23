@@ -1344,6 +1344,20 @@ fsFile.addEventListener("change", () => {
   if (f.size > 50 * 1024 * 1024) { alert("文件超过 50MB"); return; }
   fsAskPassword("⬆️ 上传文件", `上传「${f.name}」(${fsFmtSize(f.size)}) 到 ${fsPath}？此操作需输入登录密码验证。`, { path: fsPath, file: f }, "upload");
 });
+[fsTree, document.querySelector(".fs-list-wrap")].forEach((el) => {
+  el.addEventListener("dragover", (e) => e.preventDefault());
+  el.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const files = [...(e.dataTransfer?.files || [])];
+    if (!files.length) return;
+    const f = files[0];
+    if (files.length > 1) alert("一次仅支持拖放单个文件");
+    if (f.size > 50 * 1024 * 1024) { alert("文件超过 50MB"); return; }
+    const treeItem = e.target.closest(".fs-tree-item");
+    const target = treeItem ? treeItem.dataset.path : fsPath;
+    fsAskPassword("⬆️ 拖放上传", `上传「${f.name}」(${fsFmtSize(f.size)}) 到 ${target}？此操作需输入登录密码验证。`, { path: target, file: f }, "upload");
+  });
+});
 async function fsEditFile(path) {
   const res = await fetch("api/fs/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
   const data = await res.json();
