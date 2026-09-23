@@ -123,3 +123,33 @@ test("请求超时抛异常而不挂起", async () => {
   assert.ok(Date.now() - t < 3000);
   globalThis.fetch = orig;
 });
+test("chat 解析 usage", async () => {
+  const orig = globalThis.fetch;
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ choices: [{ message: { content: "ok" } }], usage: { prompt_tokens: 12, completion_tokens: 34 } }) });
+  const r = await chat({ apiKey: "k", baseUrl: "https://x/v1", model: "m", messages: [], tools: [] });
+  assert.deepEqual(r.usage, { promptTokens: 12, completionTokens: 34 });
+  globalThis.fetch = orig;
+});
+
+test("streamChat 流末 usage 帧被返回", async () => {
+  const orig = globalThis.fetch;
+  const enc = new TextEncoder();
+  const body = new ReadableStream({
+    start(c) {
+      c.enqueue(enc.encode("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n"));
+      c.enqueue(enc.encode("data: {\"choices\":[{\"delta\":{}}],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":9}}\n\n"));
+      c.enqueue(enc.encode("data: [DONE]\n\n"));
+      c.close();
+    },
+  });
+  globalThis.fetch = async () => ({ ok: true, body });
+  let text = "";
+  let usage = null;
+  for await (const chunk of streamChat({ apiKey: "k", baseUrl: "https://x/v1", model: "m", messages: [], tools: [] })) {
+    if (chunk.delta) text += chunk.delta;
+    if (chunk.usage) usage = chunk.usage;
+  }
+  assert.equal(text, "hi");
+  assert.deepEqual(usage, { promptTokens: 7, completionTokens: 9 });
+  globalThis.fetch = orig;
+});

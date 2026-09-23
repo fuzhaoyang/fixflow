@@ -48,7 +48,7 @@ export async function chat({ apiKey, baseUrl, model, messages, tools, signal, ti
     name: tc.function.name,
     args: JSON.parse(tc.function.arguments || "{}"),
   }));
-  return { text: msg.content || "", toolCalls };
+  return { text: msg.content || "", toolCalls, usage: data.usage ? { promptTokens: data.usage.prompt_tokens || 0, completionTokens: data.usage.completion_tokens || 0 } : undefined };
 }
 
 export async function* streamChat({ apiKey, baseUrl, model, messages, tools, signal, timeout = 120000 }) {
@@ -77,6 +77,7 @@ export async function* streamChat({ apiKey, baseUrl, model, messages, tools, sig
   const decoder = new TextDecoder();
   let buf = "";
   const toolCalls = [];
+  let usage;
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -90,6 +91,7 @@ export async function* streamChat({ apiKey, baseUrl, model, messages, tools, sig
       if (payload === "[DONE]") continue;
       let json;
       try { json = JSON.parse(payload); } catch { continue; }
+      if (json.usage) usage = json.usage;
       const delta = json.choices?.[0]?.delta || {};
       if (delta.content) yield { delta: delta.content };
       for (const tc of delta.tool_calls || []) {
@@ -100,5 +102,5 @@ export async function* streamChat({ apiKey, baseUrl, model, messages, tools, sig
       }
     }
   }
-  yield { toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, args: JSON.parse(tc.args || "{}") })) };
+  yield { toolCalls: toolCalls.map((tc) => ({ id: tc.id, name: tc.name, args: JSON.parse(tc.args || "{}") })), usage: usage ? { promptTokens: usage.prompt_tokens || 0, completionTokens: usage.completion_tokens || 0 } : undefined };
 }
