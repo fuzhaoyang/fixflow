@@ -377,8 +377,8 @@ function switchTrafficTab(mode) {
   }
   if (!unitTouched && !isToken) {
     const unitSel = document.getElementById("unit-select");
-    if (isTraffic) { unitSel.value = "KB/s"; unitDivider = 1; }
-    else { unitSel.value = "MB/s"; unitDivider = 1024 * 1024; }
+    unitSel.value = "MB/s";
+    unitDivider = 1024 * 1024;
   }
   const chart = isTraffic ? trafficChart : isToken ? tokenChart : ioChart;
   setTimeout(() => chart?.resize(), 0);
@@ -397,8 +397,8 @@ function initOverview() {
   ioChart = echarts.init(document.getElementById("io-chart"));
   tokenChart = echarts.init(document.getElementById("token-chart"));
   switchTrafficTab("traffic");
-  document.getElementById("unit-select").value = "KB/s";
-  unitDivider = 1;
+  document.getElementById("unit-select").value = "MB/s";
+  unitDivider = 1024 * 1024;
   refreshOverview();
 }
 
