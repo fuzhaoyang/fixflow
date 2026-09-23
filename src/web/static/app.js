@@ -78,6 +78,7 @@ window.addEventListener("hashchange", applyRoute);
 let ringCharts = {};
 let trafficChart = null;
 let ioChart = null;
+let tokenChart = null;
 let overviewData = null;
 let nicFilter = "all";
 let unitDivider = 1;
@@ -289,10 +290,39 @@ function hexToRgba(hex, a) {
 }
 
 function renderChart() {
+  if (trafficTab === "token") {
+    const days = overviewData?.usage || [];
+    if (tokenChart) tokenChart.setOption(tokenChartOption(days), true);
+    const last = days[days.length - 1];
+    document.getElementById("token-today").textContent = last ? fmtNum(last.total) : "--";
+    document.getElementById("token-total30").textContent = fmtNum(days.reduce((s, d) => s + d.total, 0));
+    return;
+  }
   const chart = trafficTab === "traffic" ? trafficChart : ioChart;
   const option = chartOption(trafficTab);
   if (option) chart.setOption(option, true);
   renderKpi();
+}
+
+function fmtNum(n) {
+  if (!Number.isFinite(n)) return "--";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+  return String(n);
+}
+
+function tokenChartOption(days) {
+  return {
+    tooltip: { trigger: "axis" },
+    legend: { data: ["输入 prompt", "输出 completion", "总 token"], textStyle: { color: "#94a3b8" }, top: 0 },
+    grid: { left: 56, right: 20, top: 36, bottom: 28 },
+    xAxis: { type: "category", data: days.map((d) => d.date.slice(5)), axisLabel: { color: "#94a3b8" } },
+    yAxis: { type: "value", axisLabel: { color: "#94a3b8" }, splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } } },
+    series: [
+      { name: "输入 prompt", type: "bar", stack: "t", barMaxWidth: 22, data: days.map((d) => d.prompt), itemStyle: { color: "#3b82f6" } },
+      { name: "输出 completion", type: "bar", stack: "t", barMaxWidth: 22, data: days.map((d) => d.completion), itemStyle: { color: "#ec4899" } },
+      { name: "总 token", type: "line", smooth: true, data: days.map((d) => d.total), itemStyle: { color: "#fbbf24" }, lineStyle: { color: "#fbbf24", width: 2 } },
+    ],
+  };
 }
 
 async function refreshOverview() {
@@ -312,17 +342,25 @@ async function refreshOverview() {
 
 document.getElementById("tab-traffic").onclick = () => switchTrafficTab("traffic");
 document.getElementById("tab-io").onclick = () => switchTrafficTab("io");
+document.getElementById("tab-token").onclick = () => switchTrafficTab("token");
 function switchTrafficTab(mode) {
   trafficTab = mode;
   document.getElementById("tab-traffic").classList.toggle("active", mode === "traffic");
   document.getElementById("tab-io").classList.toggle("active", mode === "io");
+  document.getElementById("tab-token").classList.toggle("active", mode === "token");
   const isTraffic = mode === "traffic";
+  const isToken = mode === "token";
   document.getElementById("traffic-chart").style.display = isTraffic ? "" : "none";
-  document.getElementById("io-chart").style.display = isTraffic ? "none" : "";
+  document.getElementById("io-chart").style.display = mode === "io" ? "" : "none";
+  document.getElementById("token-chart").style.display = isToken ? "" : "none";
   document.getElementById("nic-select").style.display = isTraffic ? "" : "none";
-  document.getElementById("kpi-row").style.display = "";
+  document.getElementById("kpi-row").style.display = mode === "io" ? "" : "none";
+  document.getElementById("token-kpi").style.display = isToken ? "" : "none";
   const dots = document.querySelectorAll("#kpi-row .dot");
-  if (isTraffic) {
+  if (isToken) {
+    document.getElementById("token-today").textContent = "--";
+    document.getElementById("token-total30").textContent = "--";
+  } else if (isTraffic) {
     document.getElementById("kpi-up-key").innerHTML = '<span class="dot up"></span>上行';
     document.getElementById("kpi-down-key").innerHTML = '<span class="dot down"></span>下行';
     document.getElementById("kpi-tx-key").textContent = "总发送";
@@ -337,13 +375,13 @@ function switchTrafficTab(mode) {
     dots[0].style.background = "#ec4899";
     dots[1].style.background = "#06b6d4";
   }
-  if (!unitTouched) {
+  if (!unitTouched && !isToken) {
     const unitSel = document.getElementById("unit-select");
     if (isTraffic) { unitSel.value = "KB/s"; unitDivider = 1; }
     else { unitSel.value = "MB/s"; unitDivider = 1024 * 1024; }
   }
-  const chart = isTraffic ? trafficChart : ioChart;
-  setTimeout(() => chart.resize(), 0);
+  const chart = isTraffic ? trafficChart : isToken ? tokenChart : ioChart;
+  setTimeout(() => chart?.resize(), 0);
   renderChart();
 }
 document.getElementById("nic-select").onchange = (e) => { nicFilter = e.target.value; renderChart(); };
@@ -357,6 +395,7 @@ function initOverview() {
   initRings();
   trafficChart = echarts.init(document.getElementById("traffic-chart"));
   ioChart = echarts.init(document.getElementById("io-chart"));
+  tokenChart = echarts.init(document.getElementById("token-chart"));
   switchTrafficTab("traffic");
   document.getElementById("unit-select").value = "KB/s";
   unitDivider = 1;
