@@ -45,7 +45,7 @@ test("sendEmail 通过 SMTP AUTH LOGIN 直连发送", async () => {
     assert.ok(commands.some((c) => c.startsWith("AUTH LOGIN")));
     assert.ok(commands.some((c) => c === "MAIL FROM:<a@x.com>"));
     assert.ok(commands.some((c) => c === "RCPT TO:<b@x.com>"));
-    assert.ok(commands.some((c) => c.includes("Subject: 日报")));
+    assert.ok(commands.some((c) => c.includes("Subject: =?UTF-8?B?5pel5oql?=")));
     assert.ok(commands.some((c) => c === "系统一切正常"));
   } finally {
     server.close();
@@ -57,6 +57,7 @@ test("sendEmail from 不是邮箱时回退 user", async () => {
     const ok = await sendEmail({ host: "127.0.0.1", port, user: "u", pass: "p", from: "80主机", to: "b@x.com" }, "主题", "正文");
     assert.equal(ok, true);
     assert.ok(commands.some((c) => c === "MAIL FROM:<u>"));
+    assert.ok(commands.some((c) => c === "From: u"));
   } finally {
     server.close();
   }

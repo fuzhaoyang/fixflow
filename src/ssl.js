@@ -236,9 +236,12 @@ export function sendSmtp(smtp) {
   });
 }
 
+const rfc2047 = (s) => (/^[\x00-\x7f]+$/.test(String(s)) ? String(s) : `=?UTF-8?B?${Buffer.from(String(s)).toString("base64")}?=`);
+
 export async function sendEmail(smtp = {}, subject, body, exec = runCommand) {
   if (!smtp.to) return false;
-  const msg = `To: ${smtp.to}\nFrom: ${smtp.from || smtp.user || "fixflow"}\nSubject: ${subject}\n\n${body}\n`;
+  const fromHeader = /^[^@\s<>]+@[^@\s<>]+$/.test(String(smtp.from || "")) ? smtp.from : (smtp.user || "fixflow");
+  const msg = `To: ${smtp.to}\nFrom: ${fromHeader}\nSubject: ${rfc2047(subject)}\n\n${body}\n`;
   if (smtp.host) {
     const r = await sendSmtp({ ...smtp, message: msg });
     if (!r.ok) console.error(`[fixflow] SMTP 发送失败: ${r.error}`);
