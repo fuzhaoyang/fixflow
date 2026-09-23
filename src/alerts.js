@@ -1,0 +1,83 @@
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { createSession } from "./core.js";
+import { sendEmail } from "./ssl.js";
+import { runCommand } from "./tools.js";
+import { formatDateTime } from "./metrics.js";
+import { dayKey } from "./usage.js";
+
+export async function createAlertsManager({ config, configPath, exec = runCommand, sessionFactory, now = () => new Date() } = {}) {
+  const historyPath = join(dirname(configPath), "alert-history.json");
+  const readCfg = async () => { try { return JSON.parse(await readFile(configPath, "utf8")); } catch { return {}; } };
+  const writeCfg = async (patch) => {
+    const existing = await readCfg();
+    await writeFile(configPath, JSON.stringify({ ...existing, ...patch }, null, 2));
+  };
+  let history = {};
+  try { history = JSON.parse(await readFile(historyPath, "utf8")); } catch {}
+  const persistHistory = async () => {
+    await mkdir(dirname(historyPath), { recursive: true });
+    await writeFile(historyPath, JSON.stringify(history, null, 2)).catch(() => {});
+  };
+  const ranToday = new Set();
+  const makeSession = sessionFactory || ((cfg) => createSession({ config: cfg, onConfirm: async () => false, onEvent: () => {}, onUsage: () => {} }));
+
+  const list = async () => (await readCfg()).alerts || [];
+  const save = async (alerts) => { await writeCfg({ alerts }); };
+  const smtp = async () => (await readCfg()).alertSmtp || {};
+  const saveSmtp = async (s) => {
+    const cur = await smtp();
+    await writeCfg({ alertSmtp: {
+      host: s.host ?? cur.host ?? "", port: s.port ?? cur.port ?? "", user: s.user ?? cur.user ?? "",
+      pass: s.pass ? s.pass : (cur.pass || ""), from: s.from ?? cur.from ?? "",
+    } });
+  };
+  const historyFor = async (id) => history[id] || [];
+  const addHistory = async (id, entry) => {
+    const arr = (history[id] = history[id] || []);
+    arr.unshift(entry);
+    if (arr.length > 20) arr.length = 20;
+    await persistHistory();
+  };
+
+  const run = async (alert) => {
+    const entry = { at: formatDateTime(now()), ok: false, subject: alert.name, summary: "", error: "" };
+    try {
+      if (!alert.recipients?.length) throw new Error("未配置收件人");
+      const session = makeSession(config);
+      const report = await session.send(alert.instruction, []);
+      entry.summary = String(report || "").slice(0, 500);
+      const st = await smtp();
+      const sent = await sendEmail({ ...st, to: alert.recipients.join(",") }, alert.name, String(report || ""), exec);
+      if (!sent) throw new Error("邮件发送失败（未检测到 sendmail 或发送异常）");
+      entry.ok = true;
+    } catch (e) {
+      entry.error = String(e?.message || e).slice(0, 500);
+    }
+    await addHistory(alert.id, entry);
+    return entry;
+  };
+
+  const runNow = async (id) => {
+    const alerts = await list();
+    const a = alerts.find((x) => x.id === id);
+    if (!a) return { ok: false, error: "告警不存在" };
+    return run(a);
+  };
+
+  const tick = async () => {
+    const alerts = await list();
+    const n = now();
+    const hm = `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+    const key = dayKey(n);
+    for (const a of alerts) {
+      if (!a.enabled || hm < (a.time || "")) continue;
+      const k = `${a.id}:${key}`;
+      if (ranToday.has(k)) continue;
+      ranToday.add(k);
+      await run(a).catch(() => {});
+    }
+  };
+
+  return { list, save, smtp, saveSmtp, history: historyFor, runNow, tick };
+}
