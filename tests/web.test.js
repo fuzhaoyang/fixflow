@@ -655,3 +655,13 @@ test("/api/overview 返回 usage 数组", async () => {
   assert.ok(Array.isArray(data.usage));
   w.close();
 });
+
+test("首页包含 Token 用量 tab 与容器", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  for (const id of ["tab-token", "token-chart", "token-kpi", "token-today", "token-total30"]) {
+    assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
+  }
+  w.close();
+});
