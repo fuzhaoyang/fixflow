@@ -2,6 +2,8 @@ import { runCommand } from "./tools.js";
 import { writeFile as fsWrite } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import net from "node:net";
+import tls from "node:tls";
 
 export function shellQuote(s) {
   return `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -138,11 +140,111 @@ export async function sendWebhook(url, payload, fetchImpl = fetch) {
   } catch { return false; }
 }
 
+const b64 = (s) => Buffer.from(String(s)).toString("base64");
+
+function smtpDialogue(sock) {
+  let buf = "";
+  let current = null;
+  const inbox = [];
+  const waiters = [];
+  const onData = (chunk) => {
+    buf += chunk.toString("utf8");
+    pump();
+    flush();
+  };
+  sock.on("data", onData);
+  function pump() {
+    let i;
+    while ((i = buf.indexOf("\r\n")) !== -1) {
+      const line = buf.slice(0, i);
+      buf = buf.slice(i + 2);
+      if (!current) current = { lines: [] };
+      current.lines.push(line);
+      if (/^\d{3} /.test(line)) { inbox.push(current); current = null; }
+    }
+  }
+  function flush() {
+    while (inbox.length && waiters.length) waiters.shift().resolve(inbox.shift().lines);
+  }
+  const wait = () => { flush(); return new Promise((resolve) => waiters.push({ resolve })); };
+  return {
+    wait,
+    cmd: (s) => { sock.write(s + "\r\n"); return wait(); },
+    detach: () => sock.removeListener("data", onData),
+    close: () => { try { sock.destroy(); } catch {} },
+  };
+}
+
+const codeOf = (lines) => parseInt((lines[0] || "").slice(0, 3), 10);
+const expectCode = async (p, code) => {
+  const lines = await p;
+  if (codeOf(lines) !== code) throw new Error(`SMTP ${lines[0] || "无响应"}`);
+  return lines;
+};
+
+export function sendSmtp(smtp) {
+  return new Promise((resolve) => {
+    const port = Number(smtp.port || 587) || 587;
+    const secure = port === 465;
+    let settled = false;
+    const raw = secure
+      ? tls.connect({ host: smtp.host, port, servername: smtp.host })
+      : net.connect({ host: smtp.host, port });
+    const d = smtpDialogue(raw);
+    const done = (ok, error) => {
+      if (settled) return;
+      settled = true;
+      try { d.detach(); } catch {}
+      try { raw.destroy(); } catch {}
+      resolve({ ok, error });
+    };
+    raw.setTimeout(30000, () => done(false, "SMTP 连接超时"));
+    raw.once("error", (e) => done(false, e.message));
+    raw.once(secure ? "secureConnect" : "connect", () => { run(d).catch((e) => done(false, e.message)); });
+
+    async function run(dlg) {
+      const g = await dlg.wait();
+      if (codeOf(g) !== 220) throw new Error(`SMTP 服务器拒绝连接（${g[0] || ""}）`);
+      let ehlo = await expectCode(dlg.cmd(`EHLO ${smtp.host || "localhost"}`), 250);
+      if (!secure && ehlo.some((l) => /^250[ -]STARTTLS/i.test(l))) {
+        await expectCode(dlg.cmd("STARTTLS"), 220);
+        dlg.detach();
+        const tlsSock = await new Promise((res, rej) => {
+          const s = tls.connect({ socket: raw, servername: smtp.host }, () => res(s));
+          s.once("error", rej);
+        });
+        dlg = smtpDialogue(tlsSock);
+        await expectCode(dlg.cmd(`EHLO ${smtp.host || "localhost"}`), 250);
+      }
+      if (smtp.user) {
+        await expectCode(dlg.cmd("AUTH LOGIN"), 334);
+        await expectCode(dlg.cmd(b64(smtp.user)), 334);
+        await expectCode(dlg.cmd(b64(smtp.pass || "")), 235);
+      }
+      const from = smtp.from || smtp.user;
+      if (!from) throw new Error("缺少发件人（from）");
+      await expectCode(dlg.cmd(`MAIL FROM:<${from}>`), 250);
+      const tos = String(smtp.to || "").split(/[,;\s]+/).filter(Boolean);
+      if (!tos.length) throw new Error("缺少收件人（to）");
+      for (const t of tos) await expectCode(dlg.cmd(`RCPT TO:<${t}>`), 250);
+      await expectCode(dlg.cmd("DATA"), 354);
+      const msg = String(smtp.message || "").replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..");
+      await expectCode(dlg.cmd(msg + "\r\n."), 250);
+      dlg.cmd("QUIT").catch(() => {});
+      done(true);
+    }
+  });
+}
+
 export async function sendEmail(smtp = {}, subject, body, exec = runCommand) {
   if (!smtp.to) return false;
+  const msg = `To: ${smtp.to}\nFrom: ${smtp.from || smtp.user || "fixflow"}\nSubject: ${subject}\n\n${body}\n`;
+  if (smtp.host) {
+    const r = await sendSmtp({ ...smtp, message: msg });
+    return r.ok;
+  }
   const has = await exec("command -v sendmail 2>/dev/null");
   if (has.exitCode !== 0 || !has.stdout.trim()) return false;
-  const msg = `To: ${smtp.to}\nFrom: ${smtp.from || smtp.user || "fixflow"}\nSubject: ${subject}\n\n${body}\n`;
   const file = join(tmpdir(), `ff-mail-${Date.now()}.txt`);
   await fsWrite(file, msg);
   const r = await exec(`sendmail -t < ${shellQuote(file)}`);
