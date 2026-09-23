@@ -7,6 +7,7 @@ import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNginxConfs, readNginxConf, writeNginxConf } from "../metrics.js";
 import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
+import { createUsageStore } from "../usage.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -108,6 +109,8 @@ export async function startWeb(config = {}, deps = {}) {
     for (const res of clients) res.write(data);
   };
 
+  const usageStore = await createUsageStore({ filePath: join(dirname(configPath), "usage.json") });
+
   const session = createSession({
     config,
     onEvent: broadcast,
@@ -116,6 +119,7 @@ export async function startWeb(config = {}, deps = {}) {
       waiters.set(id, resolve);
       broadcast({ type: "confirm", id, ...info });
     }),
+    onUsage: (u) => usageStore.record(u),
   });
 
   const monitor = createMonitor();
@@ -257,7 +261,12 @@ function formatUptime(sec) {
           nics,
           net: net.samples,
           io: io.samples,
+          usage: usageStore.daily(30),
         }));
+      } else if (url.pathname === "/api/usage" && req.method === "GET") {
+        const days = parseInt(url.searchParams.get("days") || "30", 10);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ days: usageStore.daily(Number.isFinite(days) ? days : 30) }));
       } else if (url.pathname === "/api/report") {
         const data = await collectAll(config);
         const s = data.system;

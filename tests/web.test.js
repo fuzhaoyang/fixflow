@@ -629,3 +629,29 @@ test("静态文件缺失时服务不崩溃（返回 500 且仍可服务）", asy
     w.close();
   }
 });
+
+test("/api/usage 未登录返回 401，登录后返回 days 数组", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const noauth = await fetch(`${base}/api/usage`);
+  assert.equal(noauth.status, 401);
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/usage?days=7`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.ok(Array.isArray(data.days));
+  assert.equal(data.days.length, 7);
+  assert.ok("total" in data.days[0]);
+  w.close();
+});
+
+test("/api/overview 返回 usage 数组", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/overview`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.ok(Array.isArray(data.usage));
+  w.close();
+});
