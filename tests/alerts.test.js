@@ -87,3 +87,11 @@ test("saveSmtp 保留已有 pass，空 pass 不覆盖", async () => {
   assert.equal(st.pass, "p1");
   assert.equal(st.host, "s2");
 });
+test("未配置 SMTP 且无 sendmail 时给出明确错误", async () => {
+  const cfgPath = join(dir(), "config.json");
+  writeFileSync(cfgPath, JSON.stringify({ alerts: [{ id: "a1", name: "日报", instruction: "x", time: "09:00", recipients: ["a@x.com"], enabled: true }] }));
+  const am = await mk(cfgPath, { exec: async () => ({ exitCode: 1, stdout: "", stderr: "" }) });
+  const r = await am.runNow("a1");
+  assert.equal(r.ok, false);
+  assert.match(r.error, /未配置 SMTP/);
+});

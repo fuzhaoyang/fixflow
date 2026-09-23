@@ -241,6 +241,7 @@ export async function sendEmail(smtp = {}, subject, body, exec = runCommand) {
   const msg = `To: ${smtp.to}\nFrom: ${smtp.from || smtp.user || "fixflow"}\nSubject: ${subject}\n\n${body}\n`;
   if (smtp.host) {
     const r = await sendSmtp({ ...smtp, message: msg });
+    if (!r.ok) console.error(`[fixflow] SMTP 发送失败: ${r.error}`);
     return r.ok;
   }
   const has = await exec("command -v sendmail 2>/dev/null");

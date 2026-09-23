@@ -48,8 +48,13 @@ export async function createAlertsManager({ config, configPath, exec = runComman
       const report = await session.send(alert.instruction, []);
       entry.summary = String(report || "").slice(0, 500);
       const st = await smtp();
+      const haveHost = Boolean(st.host);
       const sent = await sendEmail({ ...st, to: alert.recipients.join(",") }, alert.name, String(report || ""), exec);
-      if (!sent) throw new Error("邮件发送失败（未检测到 sendmail 或发送异常）");
+      if (!sent) {
+        throw new Error(haveHost
+          ? "邮件发送失败：SMTP 连接/认证异常，请检查 host/port/user/pass（pass 为授权码）"
+          : "邮件发送失败：未配置 SMTP（请到告警弹窗上方「邮箱配置」填写 host/port/user/pass/from）");
+      }
       entry.ok = true;
     } catch (e) {
       entry.error = String(e?.message || e).slice(0, 500);
