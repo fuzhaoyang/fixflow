@@ -124,6 +124,15 @@
     .user-wrap { position: relative; }
     .user-btn { display: flex; align-items: center; gap: 6px; padding: 5px 10px; background: var(--panel2); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; color: var(--text); font-size: 13px; }
     .user-btn:hover { border-color: var(--accent); }
+    .bell-btn { position: relative; display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; background: var(--panel2); border: 1px solid var(--border); cursor: pointer; font-size: 15px; }
+    .bell-btn:hover { border-color: var(--accent); }
+    .bell-dot { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: #ef4444; display: none; }
+    .bell-dot.on { display: block; }
+    .modal-wide { width: 760px !important; max-height: 86vh; overflow-y: auto; }
+    .alert-section { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
+    .alert-section h3 { font-size: 13px; color: var(--accent); margin: 0 0 8px; }
+    .alert-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; flex-wrap: wrap; }
+    .alert-row .proc-ops { margin-left: auto; }
     .user-icon { display: flex; align-items: center; }
     .user-icon svg { width: 16px; height: 16px; }
     .user-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -225,9 +234,13 @@
     .term-head .clear-btn { padding: 2px 8px; font-size: 12px; }
     #term-terminal { height: 40%; min-height: 80px; overflow: hidden; padding: 6px 0 0 6px; background: #0f172a; position: relative; }
     .term-fs-splitter { height: 5px; cursor: ns-resize; background: var(--panel); flex-shrink: 0; }
-    .term-fs-splitter:hover { background: var(--accent); }
     .fs-pane { flex: 1; min-height: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
-    .fs-toolbar { display: flex; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+    .fs-toolbar { display: flex; gap: 4px; padding: 6px 8px; border-bottom: 1px solid var(--border); flex-wrap: wrap; align-items: center; }
+    .fs-toolbar .btn { background: none; border: none; border-radius: 0; padding: 3px 10px; min-width: 0; font-size: 12px; color: var(--text); box-shadow: none; }
+    .fs-toolbar .btn:hover { background: none; filter: none; color: var(--accent); }
+    .fs-toolbar .btn.danger { background: none; color: var(--bad); }
+    .fs-toolbar .btn.danger:hover { background: none; color: var(--bad); opacity: .8; }
+    .fs-toolbar .btn:disabled { color: var(--muted); opacity: .5; cursor: default; }
     .fs-body { flex: 1; min-height: 0; display: flex; }
     .fs-tree { width: 30%; min-width: 140px; overflow: auto; border-right: 1px solid var(--border); padding: 4px; font-size: 12px; }
     .fs-list-wrap { flex: 1; min-width: 0; overflow: auto; }
@@ -237,8 +250,10 @@
     .fs-tree-item:hover { background: var(--panel2); }
     .fs-tree-item.sel { background: rgba(59,130,246,.15); }
     .fs-tree-item .arrow { width: 12px; flex-shrink: 0; color: var(--muted); text-align: center; }
-    .fs-row.sel { background: rgba(59,130,246,.15); }
     .fs-row:hover { background: var(--panel2); }
+    .fs-row.sel { background: rgba(59,130,246,.25); }
+    .fs-row.sel td { border-top: 1px solid var(--accent); border-bottom: 1px solid var(--accent); }
+    .fs-row.sel td:first-child { border-left: 3px solid var(--accent); font-weight: 600; }
     .fs-row td { cursor: pointer; }
     #term-terminal .xterm { height: 100%; }
     #term-terminal .xterm-viewport { height: 100% !important; }
@@ -288,6 +303,8 @@
       content: ''; position: absolute; top: 11px; right: -5px; width: 10px; height: 10px;
       background: var(--accent); border-bottom-right-radius: 2px; transform: rotate(45deg);
     }
+    .msg-img { display: block; max-width: 240px; max-height: 240px; border-radius: 8px; margin-bottom: 6px; object-fit: contain; background: rgba(0,0,0,.2); }
+    .msg-text { white-space: pre-wrap; }
     @keyframes message-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     /* loading：思考中三点弹跳 */
     .typing { display: flex; align-items: center; min-height: 20px; font-size: 13px; color: var(--muted); gap: 1px; }
@@ -361,12 +378,18 @@
     .stop-btn {
       background: linear-gradient(180deg, #ff6b6e, #ff4d4f); color: #fff;
       box-shadow: 0 2px 4px rgba(255,77,79,0.35), inset 0 1px 0 rgba(255,255,255,0.35);
-      animation: stop-pulse 1.2s ease-in-out infinite;
+      animation: stop-pulse 0.7s ease-out infinite;
     }
-    .stop-btn:hover { opacity: 0.92; transform: translateY(-1px); }
+    .stop-btn:hover { opacity: 0.92; }
+    .stop-btn svg { animation: stop-blink 0.7s ease-in-out infinite; }
     @keyframes stop-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(255,77,79,0.4); }
-      50% { box-shadow: 0 0 0 6px rgba(255,77,79,0); }
+      0% { box-shadow: 0 0 0 0 rgba(255,77,79,0.65), 0 2px 4px rgba(255,77,79,0.35); transform: scale(1); }
+      70% { box-shadow: 0 0 0 22px rgba(255,77,79,0), 0 2px 10px rgba(255,77,79,0.45); transform: scale(1.15); }
+      100% { box-shadow: 0 0 0 0 rgba(255,77,79,0), 0 2px 4px rgba(255,77,79,0.35); transform: scale(1); }
+    }
+    @keyframes stop-blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
     }
     .send-btn svg, .stop-btn svg { width: 18px; height: 18px; }
     #preview { position: absolute; top: 10px; left: 24px; right: 24px; display: flex; flex-wrap: wrap; gap: 8px; pointer-events: none; }
@@ -447,6 +470,7 @@
   </style>
 </head>
 <body>
+<script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
 <div id="auth-mask">
   <div class="auth-card">
     <div class="auth-logo">
@@ -514,7 +538,7 @@
     </div>
   </aside>
   <main>
-    <div class="toolbar"><button class="clear-btn" id="menu-toggle" title="折叠/展开菜单">☰</button><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="model-status" id="model-status"></span><span class="conn-wrap"><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout">🚪 退出登录</div></div></span></span></div>
+    <div class="toolbar"><button class="clear-btn" id="menu-toggle" title="折叠/展开菜单">☰</button><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="model-status" id="model-status"></span><span class="conn-wrap"><button class="bell-btn" id="bell-btn" title="告警">🔔<span class="bell-dot" id="bell-dot"></span></button><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout">🚪 退出登录</div></div></span></span></div>
     <div class="content" id="view-monitor">
       <div id="net-tools" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
         <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80">
@@ -649,9 +673,57 @@
     <div id="term-log-body" style="max-height:420px;overflow:auto"></div>
   </div>
 </div>
+<div class="modal-mask" id="fs-edit-mask">
+  <div class="modal" style="width:640px;max-width:94vw">
+    <h2 id="fs-edit-title">📝 编辑文件</h2>
+    <textarea id="fs-edit-content" class="field-textarea" style="height:320px;font-family:ui-monospace,monospace;font-size:12px"></textarea>
+    <div class="hint" id="fs-edit-err" style="color:var(--bad)"></div>
+    <div class="modal-actions">
+      <button class="btn" id="fs-edit-cancel">取消</button>
+      <button class="btn" id="fs-edit-save">保存</button>
+    </div>
+  </div>
+</div>
   </main>
 </div>
 <button class="help-btn chat-help" id="help-btn" title="使用文档">?</button>
+<div class="modal-mask" id="alert-mask">
+  <div class="modal modal-wide">
+    <button class="modal-close" id="alert-close" title="关闭">✕</button>
+    <h2>🔔 告警管理</h2>
+    <div class="alert-section">
+      <h3>邮箱配置（SMTP，发送走系统 sendmail）</h3>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input id="alert-host" class="field-textarea" style="width:160px" placeholder="SMTP 主机">
+        <input id="alert-port" class="field-textarea" style="width:70px" placeholder="端口">
+        <input id="alert-user" class="field-textarea" style="width:140px" placeholder="用户名">
+        <input id="alert-pass" class="field-textarea" style="width:140px" type="password" placeholder="密码(留空不改)">
+        <input id="alert-from" class="field-textarea" style="width:160px" placeholder="发件人">
+        <button class="btn small" id="alert-smtp-save">保存邮箱配置</button>
+      </div>
+    </div>
+    <div class="alert-section">
+      <h3>告警列表 <button class="btn small" id="alert-add">➕ 新增</button></h3>
+      <div id="alert-list"></div>
+    </div>
+    <div class="alert-section" id="alert-form" style="display:none">
+      <h3 id="alert-form-title">新增告警</h3>
+      <div class="field"><label>名称</label><input class="field-textarea" id="alert-name"></div>
+      <div class="field"><label>每日执行时间</label><input class="field-textarea" type="time" id="alert-time"></div>
+      <div class="field"><label>收件邮箱（逗号分隔）</label><input class="field-textarea" id="alert-recipients"></div>
+      <div class="field"><label>指令（模型每日执行，生成报表）</label><textarea class="field-textarea" id="alert-instruction" style="min-height:80px"></textarea></div>
+      <div class="hint" id="alert-form-err" style="color:var(--bad)"></div>
+      <div class="modal-actions">
+        <button class="btn" id="alert-form-cancel">取消</button>
+        <button class="btn" id="alert-form-save">保存</button>
+      </div>
+    </div>
+    <div class="alert-section">
+      <h3>执行历史</h3>
+      <div id="alert-hist"></div>
+    </div>
+  </div>
+</div>
 <div class="modal-mask" id="settings-mask">
   <div class="modal">
     <button class="modal-close" id="cfg-close" title="关闭">✕</button>

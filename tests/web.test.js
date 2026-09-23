@@ -842,3 +842,11 @@ test("/api/alerts/run 手动执行成功（mock 会话与 sendmail）", async ()
   assert.ok(calls.some((c) => c.includes("sendmail")));
   w.close();
 });
+
+test("首页包含告警铃铛与弹窗元素", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  for (const id of ["bell-btn", "alert-mask", "alert-list", "alert-form", "alert-hist"]) assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
+  w.close();
+});
