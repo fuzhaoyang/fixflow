@@ -4,6 +4,21 @@ import { collectSslAll } from "./ssl.js";
 import { readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { resolve, dirname, basename, join } from "node:path";
 
+export function createTtlCache(ttl) {
+  const store = new Map();
+  const cache = async (key, fn) => {
+    const now = Date.now();
+    const hit = store.get(key);
+    if (hit && now < hit.until) return hit.promise;
+    const p = fn().catch((e) => { store.delete(key); throw e; });
+    store.set(key, { promise: p, until: now + ttl });
+    return p;
+  };
+  cache.clear = (key) => store.delete(key);
+  cache.clearAll = () => store.clear();
+  return cache;
+}
+
 const safe = async (fn) => {
   try { return await fn(); } catch { return { error: "N/A" }; }
 };
@@ -51,14 +66,15 @@ export async function collectNetwork() {
   return { listeners: { ok: true, items: parseSs(ss.stdout) } };
 }
 
+const nginxMetaCache = createTtlCache(30000);
+
 export async function collectNginx() {
-  const [status, version, config, workers, etimes, dump] = await Promise.all([
+  const [status, version, dump, workers, etimes] = await Promise.all([
     runCommand("systemctl is-active nginx"),
-    runCommand("nginx -v 2>&1"),
-    runCommand("nginx -t 2>&1"),
+    nginxMetaCache("version", () => runCommand("nginx -v 2>&1")),
+    nginxMetaCache("dump", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[nginx] ${Date.now()}`); return runCommand("nginx -T 2>/dev/null"); }),
     runCommand("pgrep -c nginx"),
-    runCommand("ps -o etimes= -C nginx --no-headers | sort -rn | head -1"),
-    runCommand("nginx -T 2>/dev/null"),
+    runCommand("ps -eo etimes= -C nginx --no-headers | sort -rn | head -1"),
   ]);
   const verText = `${version.stdout || ""}${version.stderr || ""}`;
   if (!/nginx\//.test(verText) && status.exitCode !== 0) return { error: "nginx 未安装或未运行" };
@@ -67,7 +83,7 @@ export async function collectNginx() {
   return {
     status: { ok: status.exitCode === 0, detail: (status.stdout || "").trim() || "未运行" },
     version: vm ? vm[1] : "—",
-    config: { ok: config.exitCode === 0, detail: (config.stdout || config.stderr || "").trim() },
+    config: { ok: dump.exitCode === 0, detail: (dump.stderr || "").trim() || "配置正常" },
     workers: parseInt((workers.stdout || "").trim(), 10) || 0,
     uptime: Number.isFinite(et) ? formatUptimeShort(et) : "—",
     listens: parseNginxListens(dump.stdout || ""),
@@ -105,7 +121,14 @@ export function parseNginxListens(dump) {
   return listens;
 }
 
+const nginxConfCache = createTtlCache(30000);
+
 async function collectNginxConfs({ run = runCommand } = {}) {
+  if (run !== runCommand) return collectNginxConfsRaw({ run });
+  return nginxConfCache("confs", () => collectNginxConfsRaw({ run }));
+}
+
+async function collectNginxConfsRaw({ run }) {
   const r = await run("nginx -T 2>&1");
   if (r.exitCode !== 0) return { confs: null, error: ((r.stdout || r.stderr) || "无法读取 nginx 配置").trim() };
   const paths = [...new Set([...String(r.stdout || "").matchAll(/# configuration file (\S+):/g)].map((m) => m[1]))];
@@ -167,6 +190,7 @@ export async function writeNginxConf(path, content, { run = runCommand, baseDir 
     await writeFile(abs, orig).catch(() => {});
     return { ok: false, error: (t.stdout || t.stderr || "配置校验失败").trim(), rolledBack: true };
   }
+  nginxConfCache.clearAll();
   const r = await run("systemctl reload nginx");
   await pruneBackups(abs);
   return { ok: r.exitCode === 0, output: (r.stdout || r.stderr || "").trim() };
@@ -250,18 +274,17 @@ function rangeHasDangerous(range) {
 async function collectFirewalld() {
   const zoneRes = await runCommand("firewall-cmd --get-default-zone");
   const zone = (zoneRes.stdout || "").trim() || "public";
-  const [portsRes, svcRes] = await Promise.all([
-    runCommand(`firewall-cmd --zone=${zone} --list-ports`),
-    runCommand(`firewall-cmd --zone=${zone} --list-services`),
-  ]);
-  const services = (svcRes.stdout || "").trim().split(/\s+/).filter(Boolean);
+  const listRes = await runCommand(`firewall-cmd --zone=${zone} --list-all`);
+  const out = listRes.stdout || "";
+  const ports = (out.match(/^\s*ports:\s*(.*)$/m)?.[1] || "").trim();
+  const services = (out.match(/^\s*services:\s*(.*)$/m)?.[1] || "").trim().split(/\s+/).filter(Boolean);
   const infos = await Promise.all(services.map((s) => runCommand(`firewall-cmd --info-service=${s}`)));
   const servicePorts = {};
   services.forEach((s, i) => {
     const m = (infos[i].stdout || "").match(/ports:\s*(.+)/);
     servicePorts[s] = m ? m[1].trim().split(/\s+/) : [];
   });
-  const { rules, riskyPorts } = parseFirewalld(portsRes.stdout || "", servicePorts);
+  const { rules, riskyPorts } = parseFirewalld(ports, servicePorts);
   return {
     ok: riskyPorts.every((p) => !p.dangerous),
     backend: "firewalld",
@@ -272,7 +295,14 @@ async function collectFirewalld() {
   };
 }
 
+const firewallCache = createTtlCache(15000);
+
 export async function collectFirewall() {
+  return firewallCache("fw", doCollectFirewall);
+}
+
+async function doCollectFirewall() {
+  if (process.env.FF_DEBUG_METRICS) console.log(`[fw] ${Date.now()}`);
   const fwState = await runCommand("firewall-cmd --state");
   if (fwState.exitCode === 0 && /running/i.test(fwState.stdout || "")) {
     return collectFirewalld();

@@ -33,6 +33,7 @@ const MODULES = [
 ];
 
 let currentFilter = "all";
+let chatView = false;
 let metrics = {};
 let busy = false;
 
@@ -43,6 +44,7 @@ function applyRoute() {
     const hit = route === "chat" ? i.dataset.view === "chat" : i.dataset.view === "monitor" && i.dataset.filter === route;
     i.classList.toggle("active", hit);
   });
+  chatView = route === "chat";
   if (route === "chat") {
     viewMonitor.style.display = "none";
     viewChat.style.display = "flex";
@@ -65,6 +67,7 @@ function applyRoute() {
       [trafficChart, ioChart].filter(Boolean).forEach((c) => setTimeout(() => c.resize(), 0));
     }
     else renderCards();
+    refreshMetrics();
   }
 }
 document.querySelectorAll(".menu-item").forEach((item) => {
@@ -1060,11 +1063,135 @@ function toolSummary(ev) {
   return `🔧 ${ev.name}${cmd ? "  " + cmd : ""}` + out;
 }
 
+const termPane = document.getElementById("term-pane");
+const termSplitter = document.getElementById("term-splitter");
+let termOpen = false;
+let terminal = null;
+
+function termAppend(text) {
+  if (terminal) terminal.write(text);
+}
+
+function fitTerminal() {
+  if (!terminal) return;
+  const el = document.getElementById("term-terminal");
+  const lineH = (terminal.options.fontSize || 13) * 1.4;
+  const rows = Math.max(5, Math.floor((el.clientHeight - 6) / lineH));
+  terminal.resize(80, rows);
+}
+
+function termSetLoading(show, text = "连接中…", error = false) {
+  const el = document.getElementById("term-loading");
+  const tx = document.getElementById("term-loading-text");
+  if (el) { el.classList.toggle("show", show); el.classList.toggle("error", error); }
+  if (tx && text) tx.textContent = text;
+}
+
+async function termConnect() {
+  if (terminal) { termSetLoading(false); return; }
+  termSetLoading(true, "连接中…");
+  let r = {};
+  try {
+    r = await fetch("api/term/open", { method: "POST" }).then((res) => res.json());
+  } catch {
+    termSetLoading(true, "连接失败", true);
+    setTimeout(() => termSetLoading(false), 2500);
+    return;
+  }
+  if (r.error) {
+    termSetLoading(true, `连接失败：${r.error}`, true);
+    setTimeout(() => termSetLoading(false), 2500);
+    return;
+  }
+  termSetLoading(false);
+  terminal = new Terminal({
+    cols: 80,
+    rows: 24,
+    fontSize: 13,
+    theme: { background: "#0f172a", foreground: "#e2e8f0", cursor: "#e2e8f0", selectionBackground: "#334155" },
+  });
+  terminal.open(document.getElementById("term-terminal"));
+  if (r.history) terminal.write(r.history);
+  let termCmdBuf = "";
+  terminal.onData((data) => {
+    fetch("api/term/input", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
+    for (const ch of data) {
+      if (ch === "\r" || ch === "\n") {
+        const cmd = termCmdBuf.trim();
+        if (cmd) fetch("api/term/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: cmd }) });
+        termCmdBuf = "";
+      } else if (ch === "\x7f") {
+        termCmdBuf = termCmdBuf.slice(0, -1);
+      } else if (ch >= " ") {
+        termCmdBuf += ch;
+      }
+    }
+  });
+  terminal.focus();
+  fitTerminal();
+}
+
+async function termDisconnect() {
+  if (!terminal) return;
+  try { terminal.dispose(); } catch {}
+  terminal = null;
+  try { await fetch("api/term/close", { method: "POST" }); } catch {}
+}
+
+function setTermOpen(open) {
+  termOpen = open;
+  termPane.classList.toggle("show", open);
+  termSplitter.classList.toggle("show", open);
+  if (open) termConnect();
+  else termDisconnect();
+}
+
+document.getElementById("term-toggle").onclick = () => setTermOpen(!termOpen);
+document.getElementById("term-close").onclick = () => setTermOpen(false);
+document.getElementById("term-clear").onclick = () => { if (terminal) terminal.clear(); };
+window.addEventListener("resize", () => { if (termOpen) fitTerminal(); });
+const termLogMask = document.getElementById("term-log-mask");
+document.getElementById("term-log").onclick = async () => {
+  termLogMask.classList.add("show");
+  const box = document.getElementById("term-log-body");
+  box.innerHTML = "<pre>加载中…</pre>";
+  try {
+    const res = await fetch("api/term/history");
+    const data = await res.json();
+    const recs = data.records || [];
+    if (!recs.length) { box.innerHTML = "<pre>（暂无记录）</pre>"; return; }
+    box.innerHTML = `<table class="svc-table"><thead><tr><th>时间</th><th>用户</th><th>命令</th></tr></thead><tbody>${recs.map((r) => `<tr><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.user)}</td><td><code>${escapeHtml(r.command)}</code></td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { box.innerHTML = `<pre>加载失败：${escapeHtml(String(e))}</pre>`; }
+};
+document.getElementById("term-log-close").onclick = () => termLogMask.classList.remove("show");
+termLogMask.addEventListener("click", (e) => { if (e.target === termLogMask) termLogMask.classList.remove("show"); });
+
+let termDragging = false;
+termSplitter.addEventListener("mousedown", (e) => {
+  e.preventDefault();
+  termDragging = true;
+  document.body.style.cursor = "col-resize";
+  document.body.style.userSelect = "none";
+});
+document.addEventListener("mousemove", (e) => {
+  if (!termDragging) return;
+  const rect = viewChat.getBoundingClientRect();
+  const w = Math.max(220, Math.min(rect.width * 0.8, rect.right - e.clientX));
+  termPane.style.width = w + "px";
+});
+document.addEventListener("mouseup", () => {
+  if (!termDragging) return;
+  termDragging = false;
+  document.body.style.cursor = "";
+  document.body.style.userSelect = "";
+});
+
 function connectStream() {
   const es = new EventSource("api/stream");
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
-    if (ev.type === "text") addMsg(ev.text, "assistant");
+    if (ev.type === "term") termAppend(ev.data);
+    else if (ev.type === "text") addMsg(ev.text, "assistant");
     else if (ev.type === "delta") {
       hideTyping();
       streamingText += ev.text;
@@ -1182,15 +1309,53 @@ pingBtn.onclick = async () => {
   metrics.pingResult = (await res.json()).pingResult;
   renderCards();
 };
+let metricsTimer = null;
+let overviewTimer = null;
+function stopPolling() {
+  if (metricsTimer) clearInterval(metricsTimer);
+  if (overviewTimer) clearInterval(overviewTimer);
+}
+function startPolling() {
+  stopPolling();
+  metricsTimer = setInterval(() => { if (!chatView) refreshMetrics(); }, 10000);
+  overviewTimer = setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 3000);
+}
 function initPanel() {
   applyRoute();
   initOverview();
   refreshMetrics();
-  setInterval(refreshMetrics, 5000);
-  setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 2000);
+  startPolling();
   (async () => { await loadHistory(); restoreHistory(); })();
   connectStream();
   loadModelStatus();
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopPolling();
+  else { startPolling(); refreshMetrics(); }
+});
+
+document.getElementById("menu-toggle").onclick = () => document.body.classList.toggle("menu-collapsed");
+
+const inputResize = document.getElementById("input-resize");
+let resizing = false, resizeStartY = 0, resizeStartH = 0;
+if (inputResize) {
+  inputResize.addEventListener("mousedown", (e) => {
+    resizing = true;
+    resizeStartY = e.clientY;
+    resizeStartH = input.offsetHeight;
+    inputResize.classList.add("active");
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!resizing) return;
+    const h = resizeStartH - (e.clientY - resizeStartY);
+    input.style.height = Math.max(60, Math.min(h, window.innerHeight * 0.5)) + "px";
+  });
+  document.addEventListener("mouseup", () => {
+    if (!resizing) return;
+    resizing = false;
+    inputResize.classList.remove("active");
+  });
 }
 
 const modelStatus = document.getElementById("model-status");

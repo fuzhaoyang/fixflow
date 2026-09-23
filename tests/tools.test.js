@@ -74,6 +74,13 @@ test("runCommand 支持 AbortSignal 中止", async () => {
   assert.equal(r.aborted, true);
 });
 
+test("runCommand 并发受信号量限制且全部完成", async () => {
+  const jobs = Array.from({ length: 20 }, () => runCommand("sleep 0.15"));
+  const rs = await Promise.all(jobs);
+  assert.equal(rs.length, 20);
+  for (const r of rs) assert.equal(r.exitCode, 0);
+});
+
 test("applyFix：非 root 环境拒绝执行（沙箱限制）", async () => {
   let asked = false;
   const r = await applyFix({ command: "touch /tmp/x", reason: "测试" }, async () => { asked = true; return true; });

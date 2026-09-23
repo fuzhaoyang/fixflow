@@ -1,10 +1,11 @@
 import { createServer } from "node:http";
+import { spawn } from "node:child_process";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNginxConfs, readNginxConf, writeNginxConf } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache } from "../metrics.js";
 import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
@@ -22,6 +23,10 @@ function defaultConfigPath() {
 
 function defaultHistoryPath() {
   return join(homedir(), ".config", "fixflow", "history.json");
+}
+
+function defaultTermHistoryPath() {
+  return join(homedir(), ".config", "fixflow", "term-history.json");
 }
 
 async function readHistoryFile(path) {
@@ -51,10 +56,14 @@ export async function startWeb(config = {}, deps = {}) {
   config.sslAlerts = config.sslAlerts || { webhook: "", smtp: {} };
   config.pingTargets = config.pingTargets || [];
   const clients = new Set();
+  const metricsCache = createTtlCache(3000);
+  const statusCache = createTtlCache(2000);
+  const renewToolCache = createTtlCache(30000);
   const waiters = new Map();
   let seq = 0;
   const configPath = config.configPath || defaultConfigPath();
   const historyPath = config.historyPath || defaultHistoryPath();
+  const termHistoryPath = config.termHistoryPath || defaultTermHistoryPath();
   const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
   const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
   const readConfigFile = async () => {
@@ -106,8 +115,33 @@ export async function startWeb(config = {}, deps = {}) {
 
   const broadcast = (event) => {
     const data = `data: ${JSON.stringify(event)}\n\n`;
-    for (const res of clients) res.write(data);
+    for (const res of clients) {
+      if (res.destroyed || res.writableNeedDrain) { clients.delete(res); continue; }
+      try { res.write(data); } catch { clients.delete(res); }
+    }
   };
+  const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: process.env }));
+  let termShell = null;
+  let termBuffer = "";
+  const MAX_TERM_BUFFER = 1024 * 1024;
+  const ensureShell = () => {
+    if (termShell && termShell.exitCode === null && !termShell.killed) return termShell;
+    termShell = spawnShell();
+    const push = (d) => {
+      const s = String(d);
+      termBuffer += s;
+      if (termBuffer.length > MAX_TERM_BUFFER) termBuffer = termBuffer.slice(-MAX_TERM_BUFFER);
+      broadcast({ type: "term", data: s });
+    };
+    termShell.stdout?.on("data", push);
+    termShell.stderr?.on("data", push);
+    termShell.on("exit", () => { broadcast({ type: "term", data: "\n[会话已结束]\n" }); termShell = null; });
+    termShell.on("error", (e) => broadcast({ type: "term", data: `\n[shell 错误] ${e.message}\n` }));
+    return termShell;
+  };
+  const sseGuard = setInterval(() => {
+    for (const res of clients) if (res.writableNeedDrain) res.destroy();
+  }, 15000);
 
   const usageStore = await createUsageStore({ filePath: join(dirname(configPath), "usage.json") });
 
@@ -232,8 +266,8 @@ function formatUptime(sec) {
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;
-        const data = await collectAll(config);
-        if (data.ssl) data.ssl.renewTool = (await detectRenewTool()).tool;
+        const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
+        if (data.ssl) data.ssl.renewTool = (await renewToolCache("tool", () => detectRenewTool())).tool;
         if (data.ssl?.results) {
           try {
             const { alerts, lastNotified } = checkSslAlerts(data.ssl.results, config.sslAlerts);
@@ -257,7 +291,7 @@ function formatUptime(sec) {
         const nics = Object.keys(net.last || {}).filter((n) => n !== "lo");
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({
-          status: await collectStatus(),
+          status: await statusCache("status", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[status] ${Date.now()}`); return collectStatus(); }),
           nics,
           net: net.samples,
           io: io.samples,
@@ -268,7 +302,7 @@ function formatUptime(sec) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ days: usageStore.daily(Number.isFinite(days) ? days : 30) }));
       } else if (url.pathname === "/api/report") {
-        const data = await collectAll(config);
+        const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
         const s = data.system;
         const now = formatDateTime(new Date());
         let md = `# Fixflow 系统体检报告\n\n生成时间：${now}\n\n## 总览\n\n| 项目 | 状态 | 摘要 |\n|---|---|---|\n`;
@@ -426,6 +460,40 @@ function formatUptime(sec) {
         broadcast({ type: "aborted" });
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end("{}");
+      } else if (url.pathname === "/api/term/open" && req.method === "POST") {
+        ensureShell();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ history: termBuffer }));
+      } else if (url.pathname === "/api/term/input" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { data } = JSON.parse(body || "{}");
+        const sh = ensureShell();
+        try { sh.stdin.write(String(data ?? "")); } catch {}
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("{}");
+      } else if (url.pathname === "/api/term/close" && req.method === "POST") {
+        if (termShell) { try { termShell.kill(); } catch {} termShell = null; }
+        termBuffer = "";
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("{}");
+      } else if (url.pathname === "/api/term/history" && req.method === "GET") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ records: await readHistoryFile(termHistoryPath) }));
+      } else if (url.pathname === "/api/term/history" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { command } = JSON.parse(body || "{}");
+        const cmd = String(command || "").trim();
+        if (cmd) {
+          const auth = await readAuth();
+          const rec = { time: new Date().toISOString().replace("T", " ").slice(0, 19), user: auth?.username || "?", command: cmd };
+          const list = await readHistoryFile(termHistoryPath);
+          list.push(rec);
+          await writeHistoryFile(termHistoryPath, list);
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end("{}");
       } else if (url.pathname === "/api/process" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
@@ -540,6 +608,14 @@ function formatUptime(sec) {
         const js = await readFile(join(STATIC, "echarts.min.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
         res.end(js);
+      } else if (url.pathname === "/xterm.min.js") {
+        const js = await readFile(join(STATIC, "xterm.min.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        res.end(js);
+      } else if (url.pathname === "/xterm.css") {
+        const css = await readFile(join(STATIC, "xterm.css"));
+        res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
+        res.end(css);
       } else {
         res.writeHead(404); res.end("Not Found");
       }
@@ -576,6 +652,6 @@ function formatUptime(sec) {
   console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {
     server,
-    close: () => new Promise((resolve) => { clearInterval(monitorTimer); server.close(resolve); }),
+    close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(sseGuard); server.close(resolve); }),
   };
 }

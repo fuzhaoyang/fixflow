@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync } from "node:fs";
+import { EventEmitter } from "node:events";
 import { startWeb } from "../src/web/server.js";
 
 const testCaptchas = {
@@ -15,7 +16,7 @@ function makeServer(extra = {}, extraDeps = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ff-web-"));
   const cfg = join(dir, "config.json");
   writeFileSync(cfg, "{}");
-  return startWeb({ port: 0, services: [], databases: [], configPath: cfg, ...extra }, { captchas: testCaptchas, ...extraDeps });
+  return startWeb({ port: 0, services: [], databases: [], configPath: cfg, termHistoryPath: join(dir, "term-history.json"), ...extra }, { captchas: testCaptchas, ...extraDeps });
 }
 
 async function registerAndLogin(base) {
@@ -663,5 +664,68 @@ test("首页包含 Token 用量 tab 与容器", async () => {
   for (const id of ["tab-token", "token-chart", "token-kpi", "token-today", "token-total30"]) {
     assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
   }
+  w.close();
+});
+
+test("/api/term 鉴权与 TTY 会话生命周期", async () => {
+  const writes = [];
+  let spawned = 0;
+  const shell = new EventEmitter();
+  shell.stdin = { write: (d) => { writes.push(d); return true; } };
+  shell.stdout = new EventEmitter();
+  shell.stderr = new EventEmitter();
+  shell.exitCode = null;
+  shell.killed = false;
+  shell.kill = () => { shell.killed = true; shell.exitCode = 0; };
+  const w = await makeServer({}, { spawnShell: () => { spawned++; return shell; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const noauth = await fetch(`${base}/api/term/input`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ data: "x" }),
+  });
+  assert.equal(noauth.status, 401);
+  assert.equal(spawned, 0);
+  const cookie = await registerAndLogin(base);
+  await fetch(`${base}/api/term/open`, { method: "POST", headers: { Cookie: cookie } });
+  assert.equal(spawned, 1);
+  const input = await fetch(`${base}/api/term/input`, {
+    method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ data: "ls\r" }),
+  });
+  assert.equal(input.status, 200);
+  assert.deepEqual(writes, ["ls\r"]);
+  const close = await fetch(`${base}/api/term/close`, { method: "POST", headers: { Cookie: cookie } });
+  assert.equal(close.status, 200);
+  assert.equal(shell.killed, true);
+  w.close();
+});
+
+test("/api/term 会话恢复与操作记录", async () => {
+  const shell = new EventEmitter();
+  shell.stdin = { write: () => true };
+  shell.stdout = new EventEmitter();
+  shell.stderr = new EventEmitter();
+  shell.exitCode = null;
+  shell.killed = false;
+  shell.kill = () => { shell.killed = true; shell.exitCode = 0; };
+  const w = await makeServer({}, { spawnShell: () => shell });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  await fetch(`${base}/api/term/open`, { method: "POST", headers: { Cookie: cookie } });
+  shell.stdout.emit("data", "prompt$ ");
+  const open2 = await fetch(`${base}/api/term/open`, { method: "POST", headers: { Cookie: cookie } });
+  assert.equal((await open2.json()).history, "prompt$ ");
+  const noauth = await fetch(`${base}/api/term/history`);
+  assert.equal(noauth.status, 401);
+  const post = await fetch(`${base}/api/term/history`, {
+    method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ command: "ls -la" }),
+  });
+  assert.equal(post.status, 200);
+  const get = await fetch(`${base}/api/term/history`, { headers: { Cookie: cookie } });
+  const data = await get.json();
+  assert.equal(data.records.length, 1);
+  assert.equal(data.records[0].command, "ls -la");
+  assert.equal(data.records[0].user, "admin");
   w.close();
 });

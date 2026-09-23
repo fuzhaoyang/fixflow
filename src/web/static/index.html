@@ -23,8 +23,18 @@
     /* 左侧菜单 */
     aside {
       width: 210px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
-      display: flex; flex-direction: column; padding: 12px 0;
+      display: flex; flex-direction: column; padding: 12px 0; overflow: hidden;
+      transition: width .25s ease, padding .25s ease, border-color .25s ease;
     }
+    body.menu-collapsed aside { width: 52px; }
+    body.menu-collapsed .brand-name,
+    body.menu-collapsed nav .group,
+    body.menu-collapsed .menu-label,
+    body.menu-collapsed .settings-btn span { display: none; }
+    body.menu-collapsed .brand { justify-content: center; padding: 4px 0 16px; }
+    body.menu-collapsed aside .menu-item { justify-content: center; padding: 8px 0; margin: 0 4px; }
+    body.menu-collapsed .settings-btn { justify-content: center; padding: 9px 0; }
+    #menu-toggle { flex-shrink: 0; font-size: 15px; padding: 4px 8px; }
     .brand { font-size: 17px; font-weight: 700; padding: 4px 16px 16px; color: #fff; display: flex; align-items: center; gap: 10px; }
     .brand-logo { width: 34px; height: 34px; flex-shrink: 0; border-radius: 9px; background: linear-gradient(135deg, var(--accent), #1d4ed8); display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(59,130,246,.4), inset 0 1px 0 rgba(255,255,255,.3); }
     .brand-logo svg { width: 20px; height: 20px; }
@@ -32,12 +42,14 @@
     nav { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
     nav .group { font-size: 11px; color: var(--muted); padding: 12px 16px 4px; }
     .menu-item {
-      display: flex; align-items: center; gap: 8px; padding: 8px 16px; cursor: pointer;
-      color: var(--text); border: none; background: none; text-align: left; font-size: 13px;
+      display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer;
+      color: var(--text); border: none; background: none; text-align: left; font-size: 14px;
     }
+    .menu-icon { width: 21px; height: 17px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; line-height: 1; }
+    .menu-label { display: inline-flex; align-items: center; line-height: 1.4; }
     .menu-item:hover { background: var(--panel2); }
     .menu-item.active { background: var(--accent); color: #fff; border-radius: 4px; margin: 0 8px; padding: 8px; }
-    .menu-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .menu-item .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; align-self: center; }
     .menu-item .dot.ok { background: var(--ok); } .menu-item .dot.bad { background: var(--bad); }
     .menu-item .dot.na { background: var(--muted); }
     .settings-btn {
@@ -202,7 +214,23 @@
     .proc-ops a.danger { color: var(--bad); }
     .ssl-ops a { color: #5eead4; }
     /* 对话区 */
-    #view-chat { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0; position: relative; }
+    #view-chat { display: flex; flex-direction: row; height: 100%; min-height: 0; padding: 0; position: relative; }
+    .chat-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; }
+    .term-splitter { display: none; width: 5px; cursor: col-resize; background: var(--border); flex-shrink: 0; }
+    .term-splitter.show { display: block; }
+    .term-splitter:hover { background: var(--accent); }
+    .term-pane { display: none; flex-direction: column; width: 40%; min-width: 220px; max-width: 80%; height: 100%; background: var(--bg); border-left: 1px solid var(--border); }
+    .term-pane.show { display: flex; }
+    .term-head { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-bottom: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+    .term-head .spacer { flex: 1; }
+    .term-head .clear-btn { padding: 2px 8px; font-size: 12px; }
+    #term-terminal { flex: 1; min-height: 0; overflow: hidden; padding: 6px 0 0 6px; background: #0f172a; position: relative; }
+    #term-terminal .xterm { height: 100%; }
+    #term-terminal .xterm-viewport { height: 100% !important; }
+    .term-loading { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 13px; background: #0f172a; z-index: 5; }
+    .term-loading.show { display: flex; }
+    .term-loading .spinner { width: 14px; height: 14px; border: 2px solid rgba(148,163,184,.3); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+    .term-loading.error { color: var(--bad); }
     .chat-help { position: fixed; right: 14px; top: 50%; transform: translateY(-50%); z-index: 40; background: rgba(15,23,42,.85); border-color: var(--panel2); color: var(--muted); }
     #log { flex: 1; overflow-y: auto; padding: 16px 25px; display: flex; flex-direction: column; gap: 16px; }
     /* 消息结构（参考 ChatPanel/MessageItem） */
@@ -276,6 +304,8 @@
     .bubble.bot hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
     /* 输入区（参考 ChatPanel：输入框内嵌底部操作栏） */
     .input-bar { display: flex; justify-content: flex-start; padding: 8px 16px 0; background: var(--panel); }
+    .input-resize { height: 5px; cursor: ns-resize; background: var(--panel); flex-shrink: 0; }
+    .input-resize:hover, .input-resize.active { background: var(--accent); }
     .clear-btn {
       display: inline-flex; align-items: center; gap: 5px; border: none; background: none;
       color: var(--muted); font-size: 12px; cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: all .2s;
@@ -454,24 +484,24 @@
     </div>
     <nav>
       <div class="group">监控</div>
-      <button class="menu-item" data-view="monitor" data-filter="all"><span class="dot ok"></span>总览</button>
-      <button class="menu-item" data-view="monitor" data-filter="system"><span class="dot"></span>系统</button>
-      <button class="menu-item" data-view="monitor" data-filter="network"><span class="dot"></span>网络</button>
-      <button class="menu-item" data-view="monitor" data-filter="nginx"><span class="dot"></span>Nginx</button>
-      <button class="menu-item" data-view="monitor" data-filter="firewall"><span class="dot"></span>防火墙</button>
-      <button class="menu-item" data-view="monitor" data-filter="services"><span class="dot"></span>Python 服务</button>
-      <button class="menu-item" data-view="monitor" data-filter="databases"><span class="dot"></span>数据库</button>
-      <button class="menu-item" data-view="monitor" data-filter="docker"><span class="dot"></span>Docker</button>
-      <button class="menu-item" data-view="monitor" data-filter="processes"><span class="dot"></span>进程</button>
-      <button class="menu-item" data-view="monitor" data-filter="ssl"><span class="dot"></span>SSL 证书</button>
-      <button class="menu-item" data-view="monitor" data-filter="systemd"><span class="dot"></span>服务</button>
+      <button class="menu-item" data-view="monitor" data-filter="all" title="总览"><span class="menu-icon">📊</span><span class="dot ok"></span><span class="menu-label">总览</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="system" title="系统"><span class="menu-icon">🖥</span><span class="dot"></span><span class="menu-label">系统</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="network" title="网络"><span class="menu-icon">🌐</span><span class="dot"></span><span class="menu-label">网络</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="nginx" title="Nginx"><span class="menu-icon">🪶</span><span class="dot"></span><span class="menu-label">Nginx</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="firewall" title="防火墙"><span class="menu-icon">🧯</span><span class="dot"></span><span class="menu-label">防火墙</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="services" title="Python 服务"><span class="menu-icon">🐍</span><span class="dot"></span><span class="menu-label">Python 服务</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="databases" title="数据库"><span class="menu-icon">🗄</span><span class="dot"></span><span class="menu-label">数据库</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="docker" title="Docker"><span class="menu-icon">🐳</span><span class="dot"></span><span class="menu-label">Docker</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="processes" title="进程"><span class="menu-icon">⚙️</span><span class="dot"></span><span class="menu-label">进程</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="ssl" title="SSL 证书"><span class="menu-icon">🔒</span><span class="dot"></span><span class="menu-label">SSL 证书</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="systemd" title="服务"><span class="menu-icon">📦</span><span class="dot"></span><span class="menu-label">服务</span></button>
       <div class="group">操作</div>
-      <button class="menu-item" data-view="chat"><span>💬</span>Agent 对话</button>
+      <button class="menu-item" data-view="chat" title="Agent 对话"><span class="menu-icon">💬</span><span class="menu-label">Agent 对话</span></button>
     </nav>
     <div class="settings-wrap">
-      <button class="settings-btn" id="open-settings">
+      <button class="settings-btn" id="open-settings" title="设置">
         <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 8.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" stroke="currentColor" stroke-width="1.6"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.1-1.55 1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.88 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1.1 1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.88.34h.01a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.88-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.88v.01a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
-        设置
+        <span>设置</span>
       </button>
       <div class="settings-menu" id="settings-menu">
         <div class="settings-item" data-action="config">⚙️ 模型设置</div>
@@ -479,7 +509,7 @@
     </div>
   </aside>
   <main>
-    <div class="toolbar"><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="model-status" id="model-status"></span><span class="conn-wrap"><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout">🚪 退出登录</div></div></span></span></div>
+    <div class="toolbar"><button class="clear-btn" id="menu-toggle" title="折叠/展开菜单">☰</button><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" style="display:none"><span class="model-status" id="model-status"></span><span class="conn-wrap"><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout">🚪 退出登录</div></div></span></span></div>
     <div class="content" id="view-monitor">
       <div id="net-tools" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
         <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80">
@@ -526,6 +556,7 @@
       <section class="cards" id="cards"></section>
     </div>
     <div class="content" id="view-chat">
+      <div class="chat-pane">
       <div id="log">
         <div class="welcome" id="welcome"></div>
       </div>
@@ -534,7 +565,12 @@
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <span>清空历史</span>
         </button>
+        <button id="term-toggle" class="clear-btn" title="终端">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.6"/><path d="M7 9l3 3-3 3M13 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>终端</span>
+        </button>
       </div>
+      <div class="input-resize" id="input-resize" title="拖动调整输入框高度"></div>
       <div class="input-container">
         <textarea id="input" placeholder="例如：检查磁盘占用，帮我清理旧日志（Enter 发送，Shift+Enter 换行）"></textarea>
         <div id="preview"></div>
@@ -558,7 +594,28 @@
         </div>
         <input type="file" id="file" accept="image/*" multiple hidden>
       </div>
+      </div>
+      <div class="term-splitter" id="term-splitter"></div>
+      <div class="term-pane" id="term-pane">
+        <div class="term-head">
+          <span>终端</span>
+          <div class="spacer"></div>
+          <button id="term-clear" class="clear-btn" title="清空终端输出">清空</button>
+          <button id="term-log" class="clear-btn" title="查看操作记录">记录</button>
+          <button id="term-close" class="clear-btn" title="关闭终端">✕</button>
+        </div>
+        <div id="term-terminal">
+          <div class="term-loading" id="term-loading"><span class="spinner"></span><span id="term-loading-text">连接中…</span></div>
+        </div>
+      </div>
     </div>
+<div class="modal-mask" id="term-log-mask">
+  <div class="modal">
+    <button class="modal-close" id="term-log-close" title="关闭">✕</button>
+    <h2>🖥 终端操作记录</h2>
+    <div id="term-log-body" style="max-height:420px;overflow:auto"></div>
+  </div>
+</div>
   </main>
 </div>
 <button class="help-btn chat-help" id="help-btn" title="使用文档">?</button>
@@ -781,7 +838,9 @@
     </table>
   </div>
 </div>
+<link rel="stylesheet" href="xterm.css">
 <script src="echarts.min.js"></script>
+<script src="xterm.min.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

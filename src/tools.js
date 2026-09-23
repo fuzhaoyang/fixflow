@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import { readFile as fsReadFile } from "node:fs/promises";
 
 const MAX_OUTPUT = 50 * 1024;
@@ -79,25 +79,64 @@ function execRestricted(command, { timeout = 30000, signal } = {}) {
   });
 }
 
-export function runCommand(command, { timeout = 30000, signal } = {}) {
+const MAX_CONCURRENT = 16;
+let activeExec = 0;
+const execQueue = [];
+const acquire = () => new Promise((res) => {
+  if (activeExec < MAX_CONCURRENT) { activeExec++; res(); }
+  else execQueue.push(res);
+});
+const release = () => {
+  const next = execQueue.shift();
+  if (next) next();
+  else activeExec--;
+};
+
+function runExec(command, { timeout = 30000, signal } = {}) {
   return new Promise((resolve) => {
-    const child = exec(command, { timeout, maxBuffer: MAX_OUTPUT }, (err, stdout, stderr) => {
-      if (signal?.aborted) {
-        resolve({ stdout: "", stderr: "命令已中止", exitCode: 1, aborted: true });
-      } else {
-        resolve({
-          stdout: redactSecrets(truncate(stdout || "")),
-          stderr: redactSecrets(truncate(stderr || "")),
-          exitCode: err ? (typeof err.code === "number" ? err.code : 1) : 0,
-        });
-      }
+    const child = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    let stdout = "", stderr = "";
+    let done = false, overflow = false, aborted = false;
+    let timer;
+    const killTree = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
+    const finish = (code) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      resolve({
+        stdout: redactSecrets(truncate(stdout)),
+        stderr: redactSecrets(truncate(stderr)),
+        exitCode: overflow ? 1 : (typeof code === "number" ? code : 1),
+        ...(aborted ? { aborted: true } : {}),
+      });
+    };
+    child.stdout.on("data", (d) => {
+      if (overflow) return;
+      stdout += d;
+      if (stdout.length > MAX_OUTPUT) { stdout = stdout.slice(0, MAX_OUTPUT); overflow = true; killTree(); }
     });
+    child.stderr.on("data", (d) => {
+      if (overflow) return;
+      stderr += d;
+      if (stderr.length > MAX_OUTPUT) { stderr = stderr.slice(0, MAX_OUTPUT); overflow = true; killTree(); }
+    });
+    child.on("exit", finish);
+    child.on("error", () => finish(1));
+    timer = setTimeout(killTree, timeout);
     if (signal) {
-      signal.addEventListener("abort", () => {
-        child.kill("SIGKILL");
-      }, { once: true });
+      if (signal.aborted) { aborted = true; killTree(); }
+      else signal.addEventListener("abort", () => { aborted = true; killTree(); }, { once: true });
     }
   });
+}
+
+export async function runCommand(command, opts = {}) {
+  await acquire();
+  try {
+    return await runExec(command, opts);
+  } finally {
+    release();
+  }
 }
 
 export async function readFile(path) {
