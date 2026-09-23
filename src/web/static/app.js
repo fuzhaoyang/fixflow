@@ -960,12 +960,12 @@ function saveHistory() {
 
 function restoreHistory() {
   for (const msg of chatHistory) {
-    if (msg.role === "user") renderMsg(msg.text, "user");
+    if (msg.role === "user") renderMsg(msg.text, "user", msg.images);
     else if (msg.role === "assistant") renderMsg(msg.text, "assistant");
   }
 }
 
-function renderMsg(text, cls) {
+function renderMsg(text, cls, images) {
   hideWelcome();
   const item = document.createElement("div");
   item.className = "message-item " + (cls === "user" ? "user" : "bot");
@@ -976,7 +976,10 @@ function renderMsg(text, cls) {
       <span class="msg-time">${now()}</span>
     </div>
     <div class="bubble ${cls === "user" ? "user" : "bot"}"></div>`;
-  item.querySelector(".bubble").innerHTML = cls === "user" ? escapeHtml(text) : renderMarkdown(text);
+  const imgs = (images || []).filter(Boolean).map((src) => `<img class="msg-img" src="${src}" alt="图片">`).join("");
+  item.querySelector(".bubble").innerHTML = cls === "user"
+    ? imgs + (text ? `<div class="msg-text">${escapeHtml(text)}</div>` : "")
+    : renderMarkdown(text);
   log.appendChild(item);
   log.scrollTop = log.scrollHeight;
   return item;
@@ -1029,14 +1032,14 @@ function hideTyping() {
 }
 
 // ---------- 对话 ----------
-function addMsg(text, cls, { raw = false } = {}) {
+function addMsg(text, cls, { raw = false, images } = {}) {
   hideWelcome();
   if (cls === "user" || cls === "assistant") {
-    chatHistory.push({ role: cls, text });
+    chatHistory.push({ role: cls, text, ...(images && images.length ? { images } : {}) });
     saveHistory();
   }
   if (cls === "assistant") hideTyping();
-  return renderMsg(text, cls);
+  return renderMsg(text, cls, images);
 }
 
 function setBusy(b) {
@@ -1118,7 +1121,11 @@ async function termConnect() {
     for (const ch of data) {
       if (ch === "\r" || ch === "\n") {
         const cmd = termCmdBuf.trim();
-        if (cmd) fetch("api/term/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: cmd }) });
+        if (cmd) {
+          fetch("api/term/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: cmd }) });
+          const cd = cmd.match(/^cd\s+(\S+)/);
+          if (cd) fsRevealPath(cd[1]);
+        }
         termCmdBuf = "";
       } else if (ch === "\x7f") {
         termCmdBuf = termCmdBuf.slice(0, -1);
@@ -1138,13 +1145,235 @@ async function termDisconnect() {
   try { await fetch("api/term/close", { method: "POST" }); } catch {}
 }
 
-function setTermOpen(open) {
-  termOpen = open;
-  termPane.classList.toggle("show", open);
-  termSplitter.classList.toggle("show", open);
-  if (open) termConnect();
-  else termDisconnect();
+ function setTermOpen(open) {
+   termOpen = open;
+   localStorage.setItem("termOpen", open ? "1" : "0");
+   termPane.classList.toggle("show", open);
+   termSplitter.classList.toggle("show", open);
+   if (open) { termConnect(); fsRefresh(); }
+   else termDisconnect();
+ }
+
+// ---------- 文件管理器 ----------
+const fsTree = document.getElementById("fs-tree");
+const fsTbody = document.getElementById("fs-tbody");
+const fsEditMask = document.getElementById("fs-edit-mask");
+const fsEditContent = document.getElementById("fs-edit-content");
+const fsNewdir = document.getElementById("fs-newdir");
+const fsUploadBtn = document.getElementById("fs-upload-btn");
+const fsFile = document.getElementById("fs-file");
+const fsDownloadBtn = document.getElementById("fs-download");
+const fsEditBtn = document.getElementById("fs-edit");
+const fsRenameBtn = document.getElementById("fs-rename");
+const fsDeleteBtn = document.getElementById("fs-delete");
+let fsPath = "/";
+let fsItems = [];
+let fsSel = null;
+let fsSort = { key: "name", dir: -1 };
+let fsEditPath = "";
+const fsTreeState = {};
+const joinPath = (a, b) => (a === "/" ? "/" + b : a + "/" + b);
+
+function fsFileType(name) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  if (["txt", "log", "conf", "cfg", "ini", "json", "md", "yml", "yaml", "sh", "py", "js", "html", "css", "xml", "sql"].includes(ext)) return "文本";
+  if (["tgz", "gz", "zip", "tar", "rar", "7z", "bz2"].includes(ext)) return "压缩包";
+  if (["exe", "bin", "so", "dll"].includes(ext)) return "二进制";
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return "图片";
+  return "文件";
 }
+function fsFmtSize(n) {
+  if (!Number.isFinite(n)) return "—";
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + " MB";
+  return (n / 1073741824).toFixed(1) + " GB";
+}
+async function fsFetch(path) {
+  const res = await fetch(`api/fs/list?path=${encodeURIComponent(path)}`).catch(() => null);
+  return res ? await res.json() : { error: "无法访问文件系统" };
+}
+async function fsEnsureTree(path) {
+  if (fsTreeState[path]?.loaded) return fsTreeState[path];
+  const data = await fsFetch(path);
+  const dirs = (data.children || []).filter((c) => c.isDir && !c.isSymlink).map((c) => c.name).sort();
+  fsTreeState[path] = { loaded: true, expanded: path === "/", dirs };
+  return fsTreeState[path];
+}
+function fsRenderNode(path, depth, nameHint) {
+  const st = fsTreeState[path];
+  const name = nameHint || (path === "/" ? "/" : path.split("/").pop() || path);
+  if (!st) {
+    return `<div class="fs-tree-item" data-path="${escapeHtml(path)}" style="padding-left:${depth * 14 + 6}px"><span class="arrow"></span><span>📁</span><span>${escapeHtml(name)}</span></div>`;
+  }
+  const arrow = st.dirs.length ? (st.expanded ? "▼" : "▶") : "";
+  let html = `<div class="fs-tree-item${path === fsPath ? " sel" : ""}" data-path="${escapeHtml(path)}" style="padding-left:${depth * 14 + 6}px"><span class="arrow">${arrow}</span><span>📁</span><span>${escapeHtml(name)}</span></div>`;
+  if (st.expanded) for (const d of st.dirs) html += fsRenderNode(joinPath(path, d), depth + 1, d);
+  return html;
+}
+async function fsRenderTree() {
+  await fsEnsureTree("/");
+  fsTree.innerHTML = fsRenderNode("/", 0);
+}
+async function fsRevealPath(p) {
+  const raw = String(p || "").trim();
+  const abs = raw.startsWith("/") ? raw : joinPath(fsPath, raw);
+  const parts = abs.split("/").filter(Boolean);
+  await fsEnsureTree("/");
+  fsTreeState["/"].expanded = true;
+  let cur = "/";
+  for (const seg of parts) {
+    cur = joinPath(cur, seg);
+    await fsEnsureTree(cur);
+    if (cur !== abs) fsTreeState[cur].expanded = true;
+  }
+  fsRenderTree();
+  fsLoadList(abs);
+}
+function fsRenderList() {
+  const { key, dir } = fsSort;
+  const sorted = [...fsItems].sort((a, b) => {
+    if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+    const va = a[key], vb = b[key];
+    const cmp = typeof va === "number" ? va - vb : String(va ?? "").localeCompare(String(vb ?? ""));
+    return cmp * dir;
+  });
+  fsTbody.innerHTML = sorted.map((it) => {
+    const sel = fsSel && fsSel.name === it.name ? " class='sel'" : "";
+    const size = it.isDir ? "—" : fsFmtSize(it.size);
+    const mtime = (it.mtime || "").replace("T", " ").slice(0, 16);
+    return `<tr class="fs-row"${sel} data-name="${escapeHtml(it.name)}"><td><span>${it.isDir ? "📁" : "📄"}</span> ${escapeHtml(it.name)}</td><td>${size}</td><td>${it.isDir ? "目录" : it.isSymlink ? "符号链接" : fsFileType(it.name)}</td><td>${mtime}</td><td>${escapeHtml(it.mode)}</td><td>${escapeHtml(it.user)}/${escapeHtml(it.group)}</td></tr>`;
+  }).join("");
+}
+async function fsLoadList(path) {
+  fsPath = path;
+  fsSel = null;
+  fsUpdateButtons();
+  const data = await fsFetch(path);
+  if (data.error) { fsTbody.innerHTML = `<tr><td colspan="6">${escapeHtml(data.error)}</td></tr>`; fsItems = []; return; }
+  fsItems = data.children;
+  fsRenderList();
+}
+function fsRefresh() { fsRenderTree(); fsLoadList(fsPath); }
+function fsUpdateButtons() {
+  const has = !!fsSel;
+  const isFile = has && !fsSel.isDir;
+  fsDownloadBtn.disabled = !isFile;
+  fsEditBtn.disabled = !isFile;
+  fsRenameBtn.disabled = !has;
+  fsDeleteBtn.disabled = !has;
+}
+fsTree.addEventListener("click", async (e) => {
+  const item = e.target.closest(".fs-tree-item");
+  if (!item) return;
+  const path = item.dataset.path;
+  if (e.target.closest(".arrow")) {
+    const st = fsTreeState[path];
+    if (st && st.dirs.length) {
+      st.expanded = !st.expanded;
+      if (st.expanded) await fsEnsureTree(path);
+      fsRenderTree();
+    }
+  } else {
+    const st = await fsEnsureTree(path);
+    if (!st.expanded && st.dirs.length) st.expanded = true;
+    fsRenderTree();
+    fsLoadList(path);
+  }
+});
+fsTbody.addEventListener("click", (e) => {
+  const row = e.target.closest(".fs-row");
+  if (!row) return;
+  fsSel = fsItems.find((i) => i.name === row.dataset.name) || null;
+  fsRenderList();
+  fsUpdateButtons();
+});
+fsTbody.addEventListener("dblclick", (e) => {
+  const row = e.target.closest(".fs-row");
+  if (!row) return;
+  const it = fsItems.find((i) => i.name === row.dataset.name);
+  if (!it) return;
+  if (it.isDir) { fsLoadList(joinPath(fsPath, it.name)); fsRenderTree(); }
+  else fsEditFile(joinPath(fsPath, it.name));
+});
+document.querySelectorAll("#fs-table th[data-sort]").forEach((th) => {
+  th.onclick = () => {
+    const key = th.dataset.sort;
+    if (fsSort.key === key) fsSort.dir *= -1;
+    else fsSort = { key, dir: key === "name" ? -1 : 1 };
+    fsRenderList();
+  };
+});
+function fsAskPassword(title, text, body, op) {
+  procTarget = { kind: "fs", op, body };
+  document.getElementById("proc-title").textContent = title;
+  document.getElementById("proc-text").textContent = text;
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+}
+fsNewdir.onclick = () => {
+  const name = prompt("新建文件夹名称：");
+  if (!name || !name.trim()) return;
+  fsAskPassword("📁 新建文件夹", `确认在 ${fsPath} 下创建文件夹「${name.trim()}」？此操作需输入登录密码验证。`, { path: fsPath, name: name.trim() }, "mkdir");
+};
+fsRenameBtn.onclick = () => {
+  if (!fsSel) return;
+  const name = prompt("新名称：", fsSel.name);
+  if (!name || !name.trim()) return;
+  fsAskPassword("✏️ 重命名", `将「${fsSel.name}」重命名为「${name.trim()}」？此操作需输入登录密码验证。`, { path: joinPath(fsPath, fsSel.name), newName: name.trim() }, "rename");
+};
+fsDeleteBtn.onclick = () => {
+  if (!fsSel) return;
+  fsAskPassword("🗑 删除", `删除「${fsSel.name}」？${fsSel.isDir ? "目录将递归删除，" : ""}删除后不可恢复！此操作需输入登录密码验证。`, { path: joinPath(fsPath, fsSel.name) }, "delete");
+};
+fsDownloadBtn.onclick = () => {
+  if (!fsSel || fsSel.isDir) return;
+  const a = document.createElement("a");
+  a.href = `api/fs/download?path=${encodeURIComponent(joinPath(fsPath, fsSel.name))}`;
+  a.download = fsSel.name;
+  a.click();
+};
+fsUploadBtn.onclick = () => fsFile.click();
+fsFile.addEventListener("change", () => {
+  const f = fsFile.files[0];
+  fsFile.value = "";
+  if (!f) return;
+  if (f.size > 50 * 1024 * 1024) { alert("文件超过 50MB"); return; }
+  fsAskPassword("⬆️ 上传文件", `上传「${f.name}」(${fsFmtSize(f.size)}) 到 ${fsPath}？此操作需输入登录密码验证。`, { path: fsPath, file: f }, "upload");
+});
+async function fsEditFile(path) {
+  const res = await fetch("api/fs/read", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
+  const data = await res.json();
+  fsEditPath = "";
+  fsEditContent.value = "";
+  document.getElementById("fs-edit-err").textContent = "";
+  if (data.error) { document.getElementById("fs-edit-err").textContent = data.error; }
+  else {
+    fsEditPath = path;
+    fsEditContent.value = data.content ?? "";
+    document.getElementById("fs-edit-title").textContent = `📝 ${path}`;
+  }
+  fsEditMask.classList.add("show");
+}
+document.getElementById("fs-edit-cancel").onclick = () => fsEditMask.classList.remove("show");
+document.getElementById("fs-edit-save").onclick = () => {
+  if (!fsEditPath) return;
+  fsAskPassword("💾 保存文件", `保存修改到 ${fsEditPath}？此操作需输入登录密码验证。`, { path: fsEditPath, content: fsEditContent.value }, "write");
+};
+fsEditMask.addEventListener("click", (e) => { if (e.target === fsEditMask) fsEditMask.classList.remove("show"); });
+const fsSplitter = document.getElementById("term-fs-splitter");
+let fsDrag = false, fsDragY = 0, fsDragH = 0;
+fsSplitter.addEventListener("mousedown", (e) => {
+  fsDrag = true; fsDragY = e.clientY; fsDragH = document.getElementById("term-terminal").offsetHeight; e.preventDefault();
+});
+document.addEventListener("mousemove", (e) => {
+  if (!fsDrag) return;
+  document.getElementById("term-terminal").style.height = Math.max(80, Math.min(fsDragH + (e.clientY - fsDragY), window.innerHeight * 0.8)) + "px";
+});
+document.addEventListener("mouseup", () => { fsDrag = false; });
 
 document.getElementById("term-toggle").onclick = () => setTermOpen(!termOpen);
 document.getElementById("term-close").onclick = () => setTermOpen(false);
@@ -1275,16 +1504,16 @@ async function send() {
     return;
   }
   const text = input.value.trim();
-  const images = pendingImages;
-  if (!text && !images.length) return;
+  const imgs = pendingImages;
+  if (!text && !imgs.length) return;
   input.value = "";
   pendingImages = [];
   preview.innerHTML = "";
   charCount.textContent = "";
-  addMsg(text, "user");
+  addMsg(text, "user", { images: imgs });
   setBusy(true);
   showTyping();
-  await fetch("api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: text, images }) });
+  await fetch("api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: text, images: imgs }) });
 }
 
 sendBtn.onclick = send;
@@ -1320,21 +1549,26 @@ function startPolling() {
   metricsTimer = setInterval(() => { if (!chatView) refreshMetrics(); }, 10000);
   overviewTimer = setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 3000);
 }
-function initPanel() {
-  applyRoute();
-  initOverview();
-  refreshMetrics();
-  startPolling();
-  (async () => { await loadHistory(); restoreHistory(); })();
-  connectStream();
-  loadModelStatus();
-}
+ function initPanel() {
+   applyRoute();
+   initOverview();
+   refreshMetrics();
+   startPolling();
+   (async () => { await loadHistory(); restoreHistory(); })();
+connectStream();
+    loadModelStatus();
+    refreshAlerts();
+    if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
+ }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopPolling();
   else { startPolling(); refreshMetrics(); }
 });
 
-document.getElementById("menu-toggle").onclick = () => document.body.classList.toggle("menu-collapsed");
+document.getElementById("menu-toggle").onclick = () => {
+  const collapsed = document.body.classList.toggle("menu-collapsed");
+  localStorage.setItem("menuCollapsed", collapsed ? "1" : "0");
+};
 
 const inputResize = document.getElementById("input-resize");
 let resizing = false, resizeStartY = 0, resizeStartH = 0;
@@ -1729,17 +1963,30 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isFw = kind === "firewall";
   const isNginxSave = kind === "nginx-save";
   const isNginxOp = kind === "nginx-op";
+  const isFs = kind === "fs";
+  const fsOp = isFs ? procTarget.op : "";
   try {
-    const endpoint = isFw ? "api/firewall/close" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : "api/process";
-    const payload = isFw
-      ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
-      : isNginxSave
-        ? { path: procTarget.path, content: procTarget.content, password }
-        : isNginxOp
-          ? { action: procTarget.action, password }
-          : { ...procTarget, password };
-    const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-    const data = await res.json();
+    let res, data;
+    if (isFs && fsOp === "upload") {
+      const fd = new FormData();
+      fd.append("path", procTarget.body.path);
+      fd.append("password", password);
+      fd.append("file", procTarget.body.file, procTarget.body.file.name);
+      res = await fetch("api/fs/upload", { method: "POST", body: fd });
+    } else {
+      const endpoint = isFw ? "api/firewall/close" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : "api/process";
+      const payload = isFw
+        ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
+        : isNginxSave
+          ? { path: procTarget.path, content: procTarget.content, password }
+          : isNginxOp
+            ? { action: procTarget.action, password }
+            : isFs
+              ? { ...(procTarget.body || {}), password }
+              : { ...procTarget, password };
+      res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    }
+    data = await res.json();
     if (res.status === 403 || res.status === 400) {
       errEl.textContent = data.error || "操作失败";
       if (isNginxSave) document.getElementById("nginx-conf-err").textContent = data.error || "";
@@ -1747,8 +1994,10 @@ document.getElementById("proc-confirm").onclick = async () => {
     }
     if (!data.ok) { errEl.textContent = data.stderr || data.error || "操作失败"; return; }
     if (isNginxSave) nginxConfMask.classList.remove("show");
+    if (isFs && fsOp === "write") fsEditMask.classList.remove("show");
     procMask.classList.remove("show");
     refreshMetrics();
+    if (isFs) fsRefresh();
   } catch (e2) {
     errEl.textContent = String(e2);
   } finally {
@@ -1785,5 +2034,123 @@ document.getElementById("cfg-save").onclick = async () => {
   loadModelStatus();
   setTimeout(() => settingsMask.classList.remove("show"), 2000);
 };
+
+// ---------- 告警 ----------
+const alertMask = document.getElementById("alert-mask");
+let alertEditId = null;
+
+async function refreshAlerts() {
+  try {
+    const res = await fetch("api/alerts");
+    const data = await res.json();
+    document.getElementById("bell-dot").classList.toggle("on", (data.alerts || []).some((a) => a.enabled));
+    document.getElementById("alert-host").value = data.smtp?.host || "";
+    document.getElementById("alert-port").value = data.smtp?.port || "";
+    document.getElementById("alert-user").value = data.smtp?.user || "";
+    document.getElementById("alert-from").value = data.smtp?.from || "";
+    const list = document.getElementById("alert-list");
+    if (!data.alerts?.length) {
+      list.innerHTML = `<pre style="color:var(--muted)">（暂无告警）</pre>`;
+    } else {
+      list.innerHTML = data.alerts.map((a) => `<div class="alert-row">
+        <span class="tag">${a.enabled ? "启用" : "停用"}</span>
+        <b>${escapeHtml(a.name)}</b>
+        <span>${escapeHtml(a.time)}</span>
+        <span style="color:var(--muted);font-size:12px">${escapeHtml((a.recipients || []).join(", "))}</span>
+        <span class="proc-ops">
+          <a href="javascript:void(0)" data-alert-run="${escapeHtml(a.id)}">立即执行</a>
+          <a href="javascript:void(0)" data-alert-toggle="${escapeHtml(a.id)}" data-enabled="${a.enabled}">${a.enabled ? "停用" : "启用"}</a>
+          <a href="javascript:void(0)" data-alert-edit="${escapeHtml(a.id)}">编辑</a>
+          <a href="javascript:void(0)" data-alert-del="${escapeHtml(a.id)}" class="danger">删除</a>
+        </span>
+      </div>`).join("");
+    }
+    const hist = document.getElementById("alert-hist");
+    const acc = [];
+    for (const a of data.alerts || []) {
+      const hs = (data.history?.[a.id] || []).map((h) => `<div class="alert-row">
+        <span class="tag ${h.ok ? "ok" : "bad"}">${h.ok ? "成功" : "失败"}</span>
+        <b>${escapeHtml(h.subject)}</b>
+        <span style="color:var(--muted);font-size:12px">${escapeHtml(h.at)}</span>
+        <span style="color:var(--muted);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.error || h.summary)}</span>
+      </div>`).join("");
+      if (hs) acc.push(hs);
+    }
+    hist.innerHTML = acc.join("") || `<pre style="color:var(--muted)">（暂无执行记录）</pre>`;
+  } catch {}
+}
+
+document.getElementById("bell-btn").onclick = () => { refreshAlerts(); alertMask.classList.add("show"); };
+document.getElementById("alert-close").onclick = () => alertMask.classList.remove("show");
+alertMask.addEventListener("click", (e) => { if (e.target === alertMask) alertMask.classList.remove("show"); });
+
+document.getElementById("alert-smtp-save").onclick = async () => {
+  const body = {
+    host: document.getElementById("alert-host").value.trim(),
+    port: document.getElementById("alert-port").value.trim(),
+    user: document.getElementById("alert-user").value.trim(),
+    pass: document.getElementById("alert-pass").value,
+    from: document.getElementById("alert-from").value.trim(),
+  };
+  await fetch("api/alerts/smtp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  document.getElementById("alert-pass").value = "";
+  showSaveMsg("✅ 邮箱配置已保存");
+  refreshAlerts();
+};
+
+document.getElementById("alert-add").onclick = () => {
+  alertEditId = null;
+  document.getElementById("alert-form-title").textContent = "新增告警";
+  ["alert-name", "alert-time", "alert-recipients", "alert-instruction"].forEach((id) => { document.getElementById(id).value = ""; });
+  document.getElementById("alert-form-err").textContent = "";
+  document.getElementById("alert-form").style.display = "";
+};
+document.getElementById("alert-form-cancel").onclick = () => { document.getElementById("alert-form").style.display = "none"; };
+
+document.getElementById("alert-form-save").onclick = async () => {
+  const body = {
+    name: document.getElementById("alert-name").value.trim(),
+    time: document.getElementById("alert-time").value,
+    instruction: document.getElementById("alert-instruction").value.trim(),
+    recipients: document.getElementById("alert-recipients").value.split(/[,，\s]+/).filter(Boolean),
+  };
+  const errEl = document.getElementById("alert-form-err");
+  if (!body.name || !body.time || !body.instruction || !body.recipients.length) { errEl.textContent = "名称/时间/指令/收件人必填"; return; }
+  errEl.textContent = "";
+  const res = await fetch("api/alerts", { method: alertEditId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(alertEditId ? { ...body, id: alertEditId } : body) });
+  if (!res.ok) { errEl.textContent = ((await res.json()).error) || "保存失败"; return; }
+  document.getElementById("alert-form").style.display = "none";
+  refreshAlerts();
+};
+
+document.getElementById("alert-list").addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-alert-edit],[data-alert-del],[data-alert-run],[data-alert-toggle]");
+  if (!a) return;
+  const id = a.dataset.alertEdit || a.dataset.alertDel || a.dataset.alertRun || a.dataset.alertToggle;
+  if (a.dataset.alertDel) {
+    if (!confirm("确认删除该告警？")) return;
+    await fetch("api/alerts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    refreshAlerts();
+  } else if (a.dataset.alertToggle) {
+    await fetch("api/alerts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled: a.dataset.enabled === "false" }) });
+    refreshAlerts();
+  } else if (a.dataset.alertRun) {
+    const res = await fetch("api/alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    showSaveMsg(res.ok ? "✅ 已执行" : "❌ " + ((await res.json()).error || "执行失败"));
+    refreshAlerts();
+  } else if (a.dataset.alertEdit) {
+    alertEditId = id;
+    const res = await fetch("api/alerts");
+    const data = await res.json();
+    const it = data.alerts.find((x) => x.id === id);
+    document.getElementById("alert-form-title").textContent = "编辑告警";
+    document.getElementById("alert-name").value = it.name;
+    document.getElementById("alert-time").value = it.time;
+    document.getElementById("alert-recipients").value = (it.recipients || []).join(", ");
+    document.getElementById("alert-instruction").value = it.instruction;
+    document.getElementById("alert-form-err").textContent = "";
+    document.getElementById("alert-form").style.display = "";
+  }
+});
 
 setupAuth();
