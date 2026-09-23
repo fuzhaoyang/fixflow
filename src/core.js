@@ -52,7 +52,7 @@ function sanitizeHistory(history) {
   return out;
 }
 
-export function createSession({ config, onConfirm = async () => false, onEvent, llmChat = streamChat }) {
+export function createSession({ config, onConfirm = async () => false, onEvent, onUsage = () => {}, llmChat = streamChat }) {
   const history = [{ role: "system", content: SYSTEM_PROMPT }];
   const ctx = { onConfirm };
   let controller = new AbortController();
@@ -76,14 +76,18 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
         messages: sanitizeHistory(history), tools: TOOLS, signal: controller.signal,
       });
       if (result && typeof result[Symbol.asyncIterator] === "function") {
+        let usage;
         for await (const chunk of result) {
           if (chunk.delta) { text += chunk.delta; safeEvent({ type: "delta", text: chunk.delta }); }
           if (Array.isArray(chunk.toolCalls)) toolCalls = chunk.toolCalls;
+          if (chunk.usage) usage = chunk.usage;
         }
+        if (usage) onUsage(usage);
       } else {
         text = result?.text || "";
         toolCalls = result?.toolCalls || [];
         if (text) safeEvent({ type: "text", text });
+        if (result?.usage) onUsage(result.usage);
       }
       const assistantMsg = { role: "assistant", content: text || null };
       if (toolCalls.length) {
