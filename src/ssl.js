@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import net from "node:net";
 import tls from "node:tls";
+import { mdToHtml } from "./markdown.js";
 
 export function shellQuote(s) {
   return `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -238,10 +239,45 @@ export function sendSmtp(smtp) {
 
 const rfc2047 = (s) => (/^[\x00-\x7f]+$/.test(String(s)) ? String(s) : `=?UTF-8?B?${Buffer.from(String(s)).toString("base64")}?=`);
 
+const pad2 = (n) => String(n).padStart(2, "0");
+
+function wrapHtml(inner, date = new Date()) {
+  const t = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+  return `<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;font-size:14px;line-height:1.7;max-width:760px">`
+    + `<div style="color:#6b7280;font-size:12px;border-bottom:1px solid #e5e7eb;padding-bottom:8px;margin-bottom:12px">fixflow 报表 · ${t}</div>`
+    + inner + `</div>`;
+}
+
+export function buildMime(smtp, subject, body) {
+  const fromHeader = /^[^@\s<>]+@[^@\s<>]+$/.test(String(smtp.from || "")) ? smtp.from : (smtp.user || "fixflow");
+  const b64 = (s) => Buffer.from(String(s), "utf8").toString("base64").replace(/(.{76})/g, "$1\r\n");
+  const boundary = `ff-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const html = wrapHtml(mdToHtml(body));
+  return [
+    `To: ${smtp.to}`,
+    `From: ${fromHeader}`,
+    `Subject: ${rfc2047(subject)}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64(body),
+    `--${boundary}`,
+    "Content-Type: text/html; charset=utf-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64(html),
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+}
+
 export async function sendEmail(smtp = {}, subject, body, exec = runCommand) {
   if (!smtp.to) return false;
-  const fromHeader = /^[^@\s<>]+@[^@\s<>]+$/.test(String(smtp.from || "")) ? smtp.from : (smtp.user || "fixflow");
-  const msg = `To: ${smtp.to}\nFrom: ${fromHeader}\nSubject: ${rfc2047(subject)}\n\n${body}\n`;
+  const msg = buildMime(smtp, subject, body);
   if (smtp.host) {
     const r = await sendSmtp({ ...smtp, message: msg });
     if (!r.ok) console.error(`[fixflow] SMTP 发送失败: ${r.error}`);

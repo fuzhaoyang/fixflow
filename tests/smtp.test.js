@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import net from "node:net";
-import { sendEmail } from "../src/ssl.js";
+import { sendEmail, buildMime } from "../src/ssl.js";
 
 function startFakeSmtp() {
   const commands = [];
@@ -45,11 +45,26 @@ test("sendEmail 通过 SMTP AUTH LOGIN 直连发送", async () => {
     assert.ok(commands.some((c) => c.startsWith("AUTH LOGIN")));
     assert.ok(commands.some((c) => c === "MAIL FROM:<a@x.com>"));
     assert.ok(commands.some((c) => c === "RCPT TO:<b@x.com>"));
-    assert.ok(commands.some((c) => c.includes("Subject: =?UTF-8?B?5pel5oql?=")));
-    assert.ok(commands.some((c) => c === "系统一切正常"));
+    assert.ok(commands.some((c) => c.startsWith("Content-Type: multipart/alternative")));
   } finally {
     server.close();
   }
+});
+
+test("buildMime 生成 multipart/alternative 且 HTML 已渲染", () => {
+  const msg = buildMime({ from: "a@x.com", to: "b@x.com", user: "u" }, "日报", "# 标题\n\n**粗体**\n\n| a | b |\n|---|---|\n| 1 | 2 |");
+  assert.match(msg, /Content-Type: multipart\/alternative/);
+  assert.match(msg, /text\/plain/);
+  assert.match(msg, /text\/html/);
+  const grab = (type) => {
+    const m = msg.match(new RegExp(`Content-Type: ${type}; charset=utf-8\\r\\nContent-Transfer-Encoding: base64\\r\\n\\r\\n([\\s\\S]*?)\\r\\n--`));
+    return Buffer.from(m[1].replace(/\r\n/g, ""), "base64").toString("utf8");
+  };
+  const html = grab("text/html");
+  assert.match(html, /<h1/);
+  assert.match(html, /<strong>粗体<\/strong>/);
+  assert.match(html, /<table/);
+  assert.ok(grab("text/plain").includes("**粗体**"));
 });
 test("sendEmail from 不是邮箱时回退 user", async () => {
   const { port, commands, server } = await startFakeSmtp();
