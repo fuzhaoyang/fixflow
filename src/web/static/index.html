@@ -474,9 +474,10 @@
       50% { transform: translate(60px, 45px) scale(1.18); }
       100% { transform: translate(-40px, -35px) scale(.92); }
     }
-    .auth-card { width: 440px; max-width: 94vw; height: 555px; max-height: 94vh; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; }
+    .auth-card { width: 440px; max-width: 94vw; height: 455px; max-height: 94vh; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; }
     .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .auth-logo .brand-logo { width: 40px; height: 40px; font-size: 18px; }
+    .auth-logo .brand-logo { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
+    .auth-logo > div:last-child { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
     .auth-logo .sub { margin-bottom: 0; }
     .auth-card h2 { margin: 0 0 4px; font-size: 18px; }
     .auth-card p.sub { margin: 0 0 18px; font-size: 12px; color: var(--muted); }
@@ -484,6 +485,8 @@
     .auth-err.show { display: block; }
     .field input { width: 100%; padding: 9px 11px; height: 40px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; box-sizing: border-box; }
     .field input:focus { border-color: var(--accent); }
+    #auth-form input { background: var(--bg) !important; -webkit-box-shadow: 0 0 0 1000px var(--bg) inset; box-shadow: 0 0 0 1000px var(--bg) inset; }
+    #auth-form input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px var(--bg) inset; -webkit-text-fill-color: var(--text); transition: background-color 9999s ease-out 0s; }
     .captcha-row { display: flex; gap: 10px; align-items: stretch; }
     .captcha-row input { flex: 1; }
     .captcha-row img { height: 40px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer; background: #fff; align-self: stretch; box-sizing: border-box; }
@@ -507,7 +510,7 @@
 <div id="auth-mask">
   <div class="auth-card">
     <div class="auth-logo">
-      <div class="brand-logo"><span class="ai-logo">AI</span></div>
+      <div class="brand-logo"><span class="ai-logo" id="auth-logo-text">AI</span></div>
       <div>
         <h2 id="auth-title">登录 Fixflow</h2>
         <p class="sub" id="auth-sub">登录后即可使用服务器运维面板</p>

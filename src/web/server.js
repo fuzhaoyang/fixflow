@@ -979,11 +979,11 @@ function formatUptime(sec) {
         req.on("close", () => clients.delete(res));
       } else if (url.pathname === "/") {
         const html = await readFile(join(STATIC, "index.html"));
-        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate" });
         res.end(html);
       } else if (url.pathname === "/app.js") {
         const js = await readFile(join(STATIC, "app.js"));
-        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
       } else if (url.pathname === "/echarts.min.js") {
         const js = await readFile(join(STATIC, "echarts.min.js"));

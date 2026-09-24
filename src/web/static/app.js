@@ -1667,14 +1667,16 @@ function setAuthMode(mode, registered) {
   clearAuthErr();
   authCaptcha.value = "";
   if (mode === "login") {
+    document.getElementById("auth-logo-text").textContent = "AI";
     authTitle.textContent = "登录 Fixflow";
     authSub.textContent = "登录后即可使用服务器运维面板";
     authSubmit.textContent = "登录";
     authForgot.style.display = registered ? "" : "none";
-    authTip.innerHTML = registered ? "" : '<button type="button" id="auth-toggle">没有账号？去注册</button>';
+    authTip.innerHTML = '<button type="button" id="auth-toggle">没有账号？去注册</button>';
   } else {
+    document.getElementById("auth-logo-text").textContent = "注册AI";
     authTitle.textContent = "注册 Fixflow";
-    authSub.textContent = "首次使用，设置面板登录账号";
+    authSub.textContent = "注册登录 后即可使用服务器运维面板";
     authSubmit.textContent = "注册并登录";
     authForgot.style.display = "none";
     authTip.innerHTML = '<button type="button" id="auth-toggle">已有账号？去登录</button>';
