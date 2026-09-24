@@ -871,3 +871,11 @@ test("/api/metric-alerts 增删改查与鉴权", async () => {
   assert.equal(del.status, 200);
   w.close();
 });
+
+test("首页包含指标告警 UI 元素", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  for (const id of ["alert-top-tabs", "alert-metric", "ma-rules", "ma-incidents", "ma-form", "ma-rules-pager", "ma-incidents-pager"]) assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
+  w.close();
+});

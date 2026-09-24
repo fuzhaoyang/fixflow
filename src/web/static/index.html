@@ -133,8 +133,16 @@
     .modal-wide { width: 760px !important; max-height: 86vh; overflow-y: auto; }
     .alert-section { border-top: 1px solid var(--border); margin-top: 14px; padding-top: 12px; }
     .alert-section h3 { font-size: 13px; color: var(--accent); margin: 0 0 8px; }
-    .alert-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; flex-wrap: wrap; }
-    .alert-row .proc-ops { margin-left: auto; }
+    .alert-tab-panel { min-height: 440px; }
+    .alert-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel2); font-size: 13px; }
+    .alert-row .alert-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+    .alert-row .alert-title { font-weight: 600; color: var(--text); }
+    .alert-row .alert-sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alert-row .proc-ops { margin-left: auto; flex-shrink: 0; }
+    .tag.ok { background: rgba(74,222,128,.15); color: var(--ok); }
+    .tag.bad { background: rgba(248,113,113,.15); color: var(--bad); }
+    .alert-pager { display: flex; align-items: center; gap: 10px; justify-content: flex-end; margin-top: 10px; }
+    .alert-pager span { font-size: 12px; color: var(--muted); }
     .user-icon { display: flex; align-items: center; }
     .user-icon svg { width: 16px; height: 16px; }
     .user-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -422,6 +430,10 @@
       border-radius: 50%; animation: spin .8s linear infinite; display: inline-block;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-mask { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; flex-direction: column; gap: 14px; z-index: 300; }
+    .loading-mask.show { display: flex; }
+    .loading-mask .spinner-lg { width: 42px; height: 42px; border: 4px solid rgba(255,255,255,.25); border-top-color: #3b82f6; border-radius: 50%; animation: spin .8s linear infinite; }
+    .loading-mask .loading-text { color: #e2e8f0; font-size: 14px; }
     .confirm-row { display: flex; gap: 8px; margin-top: 8px; }
     .confirm-row .btn-yes { background: var(--ok); color: #052e16; } .confirm-row .btn-no { background: var(--bad); }
     .approval-card { display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
@@ -443,10 +455,29 @@
     .welcome .tag { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; font-size: 13px; color: var(--text); }
     .welcome .tip { font-size: 12px; color: var(--muted); opacity: .8; }
     /* 登录 / 注册 */
-    #auth-mask { position: fixed; inset: 0; background: rgba(15,23,42,.92); z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; }
-    .auth-card { width: 360px; max-width: 94vw; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); }
+    #auth-mask { position: fixed; inset: 0; background: #0f172a; z-index: 400; display: flex; align-items: center; justify-content: center; padding: 20px; overflow: hidden; }
+    #auth-mask::before, #auth-mask::after {
+      content: ''; position: absolute; border-radius: 50%; filter: blur(90px); opacity: .45;
+      animation: auth-glow 14s ease-in-out infinite alternate; pointer-events: none;
+    }
+    #auth-mask::before {
+      width: 540px; height: 540px; top: -160px; left: -140px;
+      background: radial-gradient(circle, #3b82f6, transparent 70%);
+    }
+    #auth-mask::after {
+      width: 480px; height: 480px; bottom: -140px; right: -120px;
+      background: radial-gradient(circle, #8b5cf6, transparent 70%);
+      animation-delay: -7s;
+    }
+    @keyframes auth-glow {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(60px, 45px) scale(1.18); }
+      100% { transform: translate(-40px, -35px) scale(.92); }
+    }
+    .auth-card { width: 440px; max-width: 94vw; height: 555px; max-height: 94vh; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; }
     .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
     .auth-logo .brand-logo { width: 40px; height: 40px; font-size: 18px; }
+    .auth-logo .sub { margin-bottom: 0; }
     .auth-card h2 { margin: 0 0 4px; font-size: 18px; }
     .auth-card p.sub { margin: 0 0 18px; font-size: 12px; color: var(--muted); }
     .auth-err { background: rgba(248,113,113,.12); color: var(--bad); font-size: 12px; padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; display: none; }
@@ -689,10 +720,16 @@
   </main>
 </div>
 <button class="help-btn chat-help" id="help-btn" title="使用文档">?</button>
+<div class="loading-mask" id="loading-mask"><div class="spinner-lg"></div><div class="loading-text" id="loading-text"></div></div>
 <div class="modal-mask" id="alert-mask">
   <div class="modal modal-wide">
     <button class="modal-close" id="alert-close" title="关闭">✕</button>
     <h2>🔔 告警管理</h2>
+    <div class="seg-tabs" id="alert-top-tabs" style="margin-top:14px">
+      <button class="seg-tab active" data-alert-top="daily">日报告警</button>
+      <button class="seg-tab" data-alert-top="metric">指标告警</button>
+    </div>
+    <div id="alert-daily">
     <div class="alert-section">
       <h3>邮箱配置（SMTP，发送走系统 sendmail）</h3>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
@@ -704,12 +741,13 @@
         <button class="btn small" id="alert-smtp-save">保存邮箱配置</button>
       </div>
     </div>
-    <div class="alert-section">
-      <h3>告警列表 <button class="btn small" id="alert-add">➕ 新增</button></h3>
-      <div id="alert-list"></div>
+    <div class="seg-tabs" id="alert-tabs" style="margin-top:16px">
+      <button class="seg-tab active" data-alert-tab="form">新增</button>
+      <button class="seg-tab" data-alert-tab="list">告警列表</button>
+      <button class="seg-tab" data-alert-tab="hist">执行历史</button>
     </div>
-    <div class="alert-section" id="alert-form" style="display:none">
-      <h3 id="alert-form-title">新增告警</h3>
+    <div id="alert-form" class="alert-tab-panel" style="margin-top:12px">
+      <h3 id="alert-form-title" style="font-size:13px;color:var(--accent);margin:0 0 8px">新增告警</h3>
       <div class="field"><label>名称</label><input class="field-textarea" id="alert-name"></div>
       <div class="field"><label>每日执行时间</label><input class="field-textarea" type="time" id="alert-time"></div>
       <div class="field"><label>收件邮箱（逗号分隔）</label><input class="field-textarea" id="alert-recipients"></div>
@@ -720,9 +758,68 @@
         <button class="btn" id="alert-form-save">保存</button>
       </div>
     </div>
-    <div class="alert-section">
-      <h3>执行历史</h3>
+    <div id="alert-list-wrap" class="alert-tab-panel" style="display:none;margin-top:12px">
+      <div id="alert-list"></div>
+      <div class="alert-pager" id="alert-list-pager"></div>
+    </div>
+    <div id="alert-hist-wrap" class="alert-tab-panel" style="display:none;margin-top:12px">
       <div id="alert-hist"></div>
+      <div class="alert-pager" id="alert-hist-pager"></div>
+    </div>
+    </div>
+    <div id="alert-metric" style="display:none;margin-top:12px">
+      <div class="alert-section" style="border-top:none;margin-top:0;padding-top:0">
+        <h3>通知设置</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input id="ma-panel-url" class="field-textarea" style="width:260px" placeholder="面板外网地址（邮件按钮链接）">
+          <input id="ma-webhook" class="field-textarea" style="width:260px" placeholder="Webhook URL（留空复用 SSL 告警）">
+          <button class="btn small" id="ma-settings-save">保存</button>
+        </div>
+      </div>
+      <div class="seg-tabs" id="ma-tabs" style="margin-top:12px">
+        <button class="seg-tab active" data-ma-tab="rules">规则</button>
+        <button class="seg-tab" data-ma-tab="incidents">事件</button>
+      </div>
+      <div id="ma-rules-wrap" class="alert-tab-panel" style="margin-top:12px">
+        <div style="margin-bottom:8px"><button class="btn small" id="ma-add">➕ 新增规则</button> <button class="btn small" id="ma-check">立即检测</button></div>
+        <div id="ma-rules"></div>
+        <div class="alert-pager" id="ma-rules-pager"></div>
+      </div>
+      <div id="ma-incidents-wrap" class="alert-tab-panel" style="display:none;margin-top:12px">
+        <div id="ma-incidents"></div>
+        <div class="alert-pager" id="ma-incidents-pager"></div>
+      </div>
+      <div id="ma-form" style="display:none;margin-top:12px">
+        <h3 id="ma-form-title" style="font-size:13px;color:var(--accent);margin:0 0 8px">新增规则</h3>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <input id="ma-name" class="field-textarea" style="width:200px" placeholder="名称">
+          <select id="ma-metric" class="field-textarea" style="width:130px"><option value="cpu">CPU使用率</option><option value="mem">内存使用率</option><option value="disk">磁盘使用率</option><option value="net">网络流量</option><option value="sessions">TCP会话数</option></select>
+          <select id="ma-op" class="field-textarea" style="width:80px"><option value=">=">≥</option><option value="<=">≤</option></select>
+          <input id="ma-threshold" class="field-textarea" style="width:90px" placeholder="阈值">
+          <input id="ma-duration" class="field-textarea" style="width:90px" placeholder="持续(分钟)">
+          <select id="ma-level" class="field-textarea" style="width:110px"><option value="1">P1 紧急</option><option value="2">P2 严重</option><option value="3" selected>P3 重要</option><option value="4">P4 一般</option><option value="5">P5 提示</option></select>
+        </div>
+        <div class="field" style="margin-top:8px"><label>收件邮箱（逗号分隔）</label><input class="field-textarea" id="ma-recipients"></div>
+        <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">选填：标签 / 负责人 / 链接 / 升级</summary>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+            <input id="ma-env" class="field-textarea" style="width:120px" placeholder="环境">
+            <input id="ma-service" class="field-textarea" style="width:120px" placeholder="服务">
+            <input id="ma-team" class="field-textarea" style="width:120px" placeholder="团队">
+            <input id="ma-owner" class="field-textarea" style="width:120px" placeholder="负责人">
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <input id="ma-runbook" class="field-textarea" style="width:180px" placeholder="Runbook 链接">
+            <input id="ma-dashboard" class="field-textarea" style="width:180px" placeholder="监控面板链接">
+            <input id="ma-log" class="field-textarea" style="width:180px" placeholder="日志查询链接">
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <input id="ma-escalate-to" class="field-textarea" style="width:220px" placeholder="升级收件人（逗号分隔）">
+            <input id="ma-escalate-after" class="field-textarea" style="width:120px" placeholder="升级时长(分钟)">
+          </div>
+        </details>
+        <div class="hint" id="ma-form-err" style="color:var(--bad)"></div>
+        <div class="modal-actions"><button class="btn" id="ma-form-cancel">取消</button><button class="btn" id="ma-form-save">保存</button></div>
+      </div>
     </div>
   </div>
 </div>

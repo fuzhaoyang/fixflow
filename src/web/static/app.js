@@ -2052,25 +2052,45 @@ document.getElementById("cfg-save").onclick = async () => {
 // ---------- 告警 ----------
 const alertMask = document.getElementById("alert-mask");
 let alertEditId = null;
+let alertListPage = 1;
+let alertHistPage = 1;
+let alertCache = { alerts: [], history: {}, smtp: {} };
+const ALERT_PAGE_SIZE = 10;
 
-async function refreshAlerts() {
-  try {
-    const res = await fetch("api/alerts");
-    const data = await res.json();
-    document.getElementById("bell-dot").classList.toggle("on", (data.alerts || []).some((a) => a.enabled));
-    document.getElementById("alert-host").value = data.smtp?.host || "";
-    document.getElementById("alert-port").value = data.smtp?.port || "";
-    document.getElementById("alert-user").value = data.smtp?.user || "";
-    document.getElementById("alert-from").value = data.smtp?.from || "";
-    const list = document.getElementById("alert-list");
-    if (!data.alerts?.length) {
-      list.innerHTML = `<pre style="color:var(--muted)">（暂无告警）</pre>`;
-    } else {
-      list.innerHTML = data.alerts.map((a) => `<div class="alert-row">
-        <span class="tag">${a.enabled ? "启用" : "停用"}</span>
-        <b>${escapeHtml(a.name)}</b>
-        <span>${escapeHtml(a.time)}</span>
-        <span style="color:var(--muted);font-size:12px">${escapeHtml((a.recipients || []).join(", "))}</span>
+function showLoading(text) {
+  document.getElementById("loading-text").textContent = text || "处理中…";
+  document.getElementById("loading-mask").classList.add("show");
+}
+function hideLoading() {
+  document.getElementById("loading-mask").classList.remove("show");
+}
+
+function renderPager(el, total, page, onGo) {
+  const pages = Math.max(1, Math.ceil(total / ALERT_PAGE_SIZE));
+  const p = Math.min(Math.max(1, page), pages);
+  el.innerHTML = total > ALERT_PAGE_SIZE
+    ? `<button class="btn small" data-page="${p - 1}" ${p <= 1 ? "disabled" : ""}>上一页</button><span>${p} / ${pages}</span><button class="btn small" data-page="${p + 1}" ${p >= pages ? "disabled" : ""}>下一页</button>`
+    : "";
+  el.querySelectorAll("button[data-page]").forEach((b) => { b.onclick = () => onGo(Number(b.dataset.page)); });
+}
+
+function renderAlertList() {
+  const alerts = alertCache.alerts || [];
+  const list = document.getElementById("alert-list");
+  if (!alerts.length) {
+    list.innerHTML = `<pre style="color:var(--muted)">（暂无告警）</pre>`;
+    renderPager(document.getElementById("alert-list-pager"), 0, 1, () => {});
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(alerts.length / ALERT_PAGE_SIZE));
+  if (alertListPage > pages) alertListPage = pages;
+  const slice = alerts.slice((alertListPage - 1) * ALERT_PAGE_SIZE, alertListPage * ALERT_PAGE_SIZE);
+  list.innerHTML = slice.map((a) => `<div class="alert-row">
+        <span class="tag ${a.enabled ? "ok" : ""}">${a.enabled ? "启用" : "停用"}</span>
+        <div class="alert-main">
+          <span class="alert-title">${escapeHtml(a.name)}</span>
+          <span class="alert-sub">每天 ${escapeHtml(a.time)} · ${escapeHtml((a.recipients || []).join(", "))}</span>
+        </div>
         <span class="proc-ops">
           <a href="javascript:void(0)" data-alert-run="${escapeHtml(a.id)}">立即执行</a>
           <a href="javascript:void(0)" data-alert-toggle="${escapeHtml(a.id)}" data-enabled="${a.enabled}">${a.enabled ? "停用" : "启用"}</a>
@@ -2078,23 +2098,68 @@ async function refreshAlerts() {
           <a href="javascript:void(0)" data-alert-del="${escapeHtml(a.id)}" class="danger">删除</a>
         </span>
       </div>`).join("");
-    }
-    const hist = document.getElementById("alert-hist");
-    const acc = [];
-    for (const a of data.alerts || []) {
-      const hs = (data.history?.[a.id] || []).map((h) => `<div class="alert-row">
+  renderPager(document.getElementById("alert-list-pager"), alerts.length, alertListPage, (p) => { alertListPage = p; renderAlertList(); });
+}
+
+function renderAlertHist() {
+  const flat = [];
+  for (const a of alertCache.alerts || []) for (const h of (alertCache.history?.[a.id] || [])) flat.push({ ...h, name: a.name });
+  flat.sort((x, y) => String(y.at).localeCompare(String(x.at)));
+  const hist = document.getElementById("alert-hist");
+  if (!flat.length) {
+    hist.innerHTML = `<pre style="color:var(--muted)">（暂无执行记录）</pre>`;
+    renderPager(document.getElementById("alert-hist-pager"), 0, 1, () => {});
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(flat.length / ALERT_PAGE_SIZE));
+  if (alertHistPage > pages) alertHistPage = pages;
+  const slice = flat.slice((alertHistPage - 1) * ALERT_PAGE_SIZE, alertHistPage * ALERT_PAGE_SIZE);
+  hist.innerHTML = slice.map((h) => `<div class="alert-row">
         <span class="tag ${h.ok ? "ok" : "bad"}">${h.ok ? "成功" : "失败"}</span>
-        <b>${escapeHtml(h.subject)}</b>
-        <span style="color:var(--muted);font-size:12px">${escapeHtml(h.at)}</span>
-        <span style="color:var(--muted);font-size:12px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(h.error || h.summary)}</span>
+        <div class="alert-main">
+          <span class="alert-title">${escapeHtml(h.name)}</span>
+          <span class="alert-sub">${escapeHtml(h.at)} · ${escapeHtml(h.error || h.summary)}</span>
+        </div>
       </div>`).join("");
-      if (hs) acc.push(hs);
-    }
-    hist.innerHTML = acc.join("") || `<pre style="color:var(--muted)">（暂无执行记录）</pre>`;
+  renderPager(document.getElementById("alert-hist-pager"), flat.length, alertHistPage, (p) => { alertHistPage = p; renderAlertHist(); });
+}
+
+async function refreshAlerts() {
+  try {
+    const res = await fetch("api/alerts");
+    alertCache = await res.json();
+    updateBellDot();
+    document.getElementById("alert-host").value = alertCache.smtp?.host || "";
+    document.getElementById("alert-port").value = alertCache.smtp?.port || "";
+    document.getElementById("alert-user").value = alertCache.smtp?.user || "";
+    document.getElementById("alert-from").value = alertCache.smtp?.from || "";
+    renderAlertList();
+    renderAlertHist();
   } catch {}
 }
 
-document.getElementById("bell-btn").onclick = () => { refreshAlerts(); alertMask.classList.add("show"); };
+function switchAlertTab(tab) {
+  document.querySelectorAll("#alert-tabs .seg-tab").forEach((x) => x.classList.toggle("active", x.dataset.alertTab === tab));
+  document.getElementById("alert-form").style.display = tab === "form" ? "" : "none";
+  document.getElementById("alert-list-wrap").style.display = tab === "list" ? "" : "none";
+  document.getElementById("alert-hist-wrap").style.display = tab === "hist" ? "" : "none";
+}
+
+function resetAlertForm() {
+  alertEditId = null;
+  document.getElementById("alert-form-title").textContent = "新增告警";
+  ["alert-name", "alert-time", "alert-recipients", "alert-instruction"].forEach((id) => { document.getElementById(id).value = ""; });
+  document.getElementById("alert-form-err").textContent = "";
+}
+
+document.getElementById("alert-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-alert-tab]");
+  if (!b) return;
+  if (b.dataset.alertTab === "form") resetAlertForm();
+  switchAlertTab(b.dataset.alertTab);
+});
+
+document.getElementById("bell-btn").onclick = () => { resetAlertForm(); refreshAlerts(); refreshMetricAlerts(); switchAlertTab("form"); alertMask.classList.add("show"); };
 document.getElementById("alert-close").onclick = () => alertMask.classList.remove("show");
 alertMask.addEventListener("click", (e) => { if (e.target === alertMask) alertMask.classList.remove("show"); });
 
@@ -2112,14 +2177,7 @@ document.getElementById("alert-smtp-save").onclick = async () => {
   refreshAlerts();
 };
 
-document.getElementById("alert-add").onclick = () => {
-  alertEditId = null;
-  document.getElementById("alert-form-title").textContent = "新增告警";
-  ["alert-name", "alert-time", "alert-recipients", "alert-instruction"].forEach((id) => { document.getElementById(id).value = ""; });
-  document.getElementById("alert-form-err").textContent = "";
-  document.getElementById("alert-form").style.display = "";
-};
-document.getElementById("alert-form-cancel").onclick = () => { document.getElementById("alert-form").style.display = "none"; };
+document.getElementById("alert-form-cancel").onclick = () => switchAlertTab("list");
 
 document.getElementById("alert-form-save").onclick = async () => {
   const body = {
@@ -2133,7 +2191,7 @@ document.getElementById("alert-form-save").onclick = async () => {
   errEl.textContent = "";
   const res = await fetch("api/alerts", { method: alertEditId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(alertEditId ? { ...body, id: alertEditId } : body) });
   if (!res.ok) { errEl.textContent = ((await res.json()).error) || "保存失败"; return; }
-  document.getElementById("alert-form").style.display = "none";
+  switchAlertTab("list");
   refreshAlerts();
 };
 
@@ -2149,22 +2207,212 @@ document.getElementById("alert-list").addEventListener("click", async (e) => {
     await fetch("api/alerts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled: a.dataset.enabled === "false" }) });
     refreshAlerts();
   } else if (a.dataset.alertRun) {
-    const res = await fetch("api/alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-    showSaveMsg(res.ok ? "✅ 已执行" : "❌ " + ((await res.json()).error || "执行失败"));
-    refreshAlerts();
+    showLoading("正在执行告警：模型生成报表并发送邮件，请稍候…");
+    try {
+      const res = await fetch("api/alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+      showSaveMsg(res.ok ? "✅ 已执行" : "❌ " + ((await res.json()).error || "执行失败"));
+    } finally {
+      hideLoading();
+      refreshAlerts();
+    }
   } else if (a.dataset.alertEdit) {
+    const it = (alertCache.alerts || []).find((x) => x.id === id);
+    if (!it) return;
     alertEditId = id;
-    const res = await fetch("api/alerts");
-    const data = await res.json();
-    const it = data.alerts.find((x) => x.id === id);
     document.getElementById("alert-form-title").textContent = "编辑告警";
     document.getElementById("alert-name").value = it.name;
     document.getElementById("alert-time").value = it.time;
     document.getElementById("alert-recipients").value = (it.recipients || []).join(", ");
     document.getElementById("alert-instruction").value = it.instruction;
     document.getElementById("alert-form-err").textContent = "";
-    document.getElementById("alert-form").style.display = "";
+    switchAlertTab("form");
   }
+});
+
+// ---------- 指标告警 ----------
+let maCache = { rules: [], incidents: [] };
+let maRulesPage = 1;
+let maIncPage = 1;
+let maEditId = null;
+const MA_METRIC_NAME = { cpu: "CPU使用率", mem: "内存使用率", disk: "磁盘使用率", net: "网络流量", sessions: "TCP会话数" };
+
+function updateBellDot() {
+  const daily = (alertCache.alerts || []).some((a) => a.enabled);
+  const inc = (maCache.incidents || []).some((i) => i.state !== "resolved");
+  document.getElementById("bell-dot").classList.toggle("on", daily || inc);
+}
+
+async function refreshMetricAlerts() {
+  try {
+    const res = await fetch("api/metric-alerts");
+    maCache = await res.json();
+    document.getElementById("ma-panel-url").value = maCache.panelBaseUrl || "";
+    document.getElementById("ma-webhook").value = maCache.webhook || "";
+    renderMaRules();
+    renderMaIncidents();
+    updateBellDot();
+  } catch {}
+}
+
+function renderMaRules() {
+  const rules = maCache.rules || [];
+  const box = document.getElementById("ma-rules");
+  if (!rules.length) {
+    box.innerHTML = `<pre style="color:var(--muted)">（暂无规则）</pre>`;
+    renderPager(document.getElementById("ma-rules-pager"), 0, 1, () => {});
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(rules.length / ALERT_PAGE_SIZE));
+  if (maRulesPage > pages) maRulesPage = pages;
+  const slice = rules.slice((maRulesPage - 1) * ALERT_PAGE_SIZE, maRulesPage * ALERT_PAGE_SIZE);
+  box.innerHTML = slice.map((r) => `<div class="alert-row">
+        <span class="tag ${r.enabled ? "ok" : ""}">${r.enabled ? "启用" : "停用"}</span>
+        <div class="alert-main">
+          <span class="alert-title">${escapeHtml(r.name)}</span>
+          <span class="alert-sub">${escapeHtml(MA_METRIC_NAME[r.metric] || r.metric)} ${escapeHtml(r.op)} ${escapeHtml(r.threshold)} · 持续${escapeHtml(r.duration)}分钟 · P${escapeHtml(r.level)} · ${escapeHtml((r.recipients || []).join(", "))}</span>
+        </div>
+        <span class="proc-ops">
+          <a href="javascript:void(0)" data-ma-toggle="${escapeHtml(r.id)}" data-enabled="${r.enabled}">${r.enabled ? "停用" : "启用"}</a>
+          <a href="javascript:void(0)" data-ma-edit="${escapeHtml(r.id)}">编辑</a>
+          <a href="javascript:void(0)" data-ma-del="${escapeHtml(r.id)}" class="danger">删除</a>
+        </span>
+      </div>`).join("");
+  renderPager(document.getElementById("ma-rules-pager"), rules.length, maRulesPage, (p) => { maRulesPage = p; renderMaRules(); });
+}
+
+function renderMaIncidents() {
+  const incs = maCache.incidents || [];
+  const box = document.getElementById("ma-incidents");
+  if (!incs.length) {
+    box.innerHTML = `<pre style="color:var(--muted)">（暂无事件）</pre>`;
+    renderPager(document.getElementById("ma-incidents-pager"), 0, 1, () => {});
+    return;
+  }
+  const pages = Math.max(1, Math.ceil(incs.length / ALERT_PAGE_SIZE));
+  if (maIncPage > pages) maIncPage = pages;
+  const slice = incs.slice((maIncPage - 1) * ALERT_PAGE_SIZE, maIncPage * ALERT_PAGE_SIZE);
+  const ruleName = (id) => (maCache.rules || []).find((x) => x.id === id)?.name || id;
+  box.innerHTML = slice.map((i) => `<div class="alert-row">
+        <span class="tag ${i.state === "resolved" ? "ok" : i.state === "ack" ? "" : "bad"}">${i.state === "resolved" ? "已恢复" : i.state === "ack" ? "已认领" : "未认领"}</span>
+        <div class="alert-main">
+          <span class="alert-title">P${escapeHtml(i.level)} ${escapeHtml(ruleName(i.ruleId))} · ${escapeHtml(i.id)}</span>
+          <span class="alert-sub">当前 ${escapeHtml(i.lastValue)} · 峰值 ${escapeHtml(i.peak)} · 开始 ${escapeHtml(new Date(i.startedAt).toLocaleString())}</span>
+        </div>
+        ${i.state === "firing" ? `<span class="proc-ops"><a href="javascript:void(0)" data-ma-ack="${escapeHtml(i.id)}">认领</a></span>` : ""}
+      </div>`).join("");
+  renderPager(document.getElementById("ma-incidents-pager"), incs.length, maIncPage, (p) => { maIncPage = p; renderMaIncidents(); });
+}
+
+document.getElementById("alert-top-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-alert-top]");
+  if (!b) return;
+  document.querySelectorAll("#alert-top-tabs .seg-tab").forEach((x) => x.classList.toggle("active", x === b));
+  const daily = b.dataset.alertTop === "daily";
+  document.getElementById("alert-daily").style.display = daily ? "" : "none";
+  document.getElementById("alert-metric").style.display = daily ? "none" : "";
+  if (!daily) refreshMetricAlerts();
+});
+
+document.getElementById("ma-tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-ma-tab]");
+  if (!b) return;
+  document.querySelectorAll("#ma-tabs .seg-tab").forEach((x) => x.classList.toggle("active", x === b));
+  const r = b.dataset.maTab === "rules";
+  document.getElementById("ma-rules-wrap").style.display = r ? "" : "none";
+  document.getElementById("ma-incidents-wrap").style.display = r ? "none" : "";
+});
+
+const MA_FIELDS = ["ma-name", "ma-threshold", "ma-duration", "ma-recipients", "ma-env", "ma-service", "ma-team", "ma-owner", "ma-runbook", "ma-dashboard", "ma-log", "ma-escalate-to", "ma-escalate-after"];
+document.getElementById("ma-add").onclick = () => {
+  maEditId = null;
+  document.getElementById("ma-form-title").textContent = "新增规则";
+  MA_FIELDS.forEach((id) => { document.getElementById(id).value = ""; });
+  document.getElementById("ma-form-err").textContent = "";
+  document.getElementById("ma-form").style.display = "";
+};
+document.getElementById("ma-form-cancel").onclick = () => { document.getElementById("ma-form").style.display = "none"; };
+
+document.getElementById("ma-form-save").onclick = async () => {
+  const val = (id) => document.getElementById(id).value.trim();
+  const body = {
+    name: val("ma-name"),
+    metric: document.getElementById("ma-metric").value,
+    op: document.getElementById("ma-op").value,
+    threshold: Number(val("ma-threshold")),
+    duration: Number(val("ma-duration")) || 5,
+    level: Number(document.getElementById("ma-level").value),
+    recipients: val("ma-recipients").split(/[,，\s]+/).filter(Boolean),
+    env: val("ma-env"), service: val("ma-service"), team: val("ma-team"), owner: val("ma-owner"),
+    runbookUrl: val("ma-runbook"), dashboardUrl: val("ma-dashboard"), logUrl: val("ma-log"),
+    escalateTo: val("ma-escalate-to").split(/[,，\s]+/).filter(Boolean),
+    escalateAfter: Number(val("ma-escalate-after")) || 30,
+  };
+  const errEl = document.getElementById("ma-form-err");
+  if (!body.name || !Number.isFinite(body.threshold) || !body.recipients.length) { errEl.textContent = "名称/阈值/收件人必填"; return; }
+  errEl.textContent = "";
+  const res = await fetch("api/metric-alerts", { method: maEditId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(maEditId ? { ...body, id: maEditId } : body) });
+  if (!res.ok) { errEl.textContent = ((await res.json()).error) || "保存失败"; return; }
+  document.getElementById("ma-form").style.display = "none";
+  refreshMetricAlerts();
+};
+
+document.getElementById("ma-check").onclick = async () => {
+  showLoading("正在采样并检测指标…");
+  try {
+    await fetch("api/metric-alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+  } finally {
+    hideLoading();
+    refreshMetricAlerts();
+  }
+};
+
+document.getElementById("ma-settings-save").onclick = async () => {
+  await fetch("api/metric-alerts/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ panelBaseUrl: document.getElementById("ma-panel-url").value.trim(), webhook: document.getElementById("ma-webhook").value.trim() }) });
+  showSaveMsg("✅ 已保存");
+};
+
+document.getElementById("ma-rules").addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-ma-toggle],[data-ma-del],[data-ma-edit]");
+  if (!a) return;
+  const id = a.dataset.maToggle || a.dataset.maDel || a.dataset.maEdit;
+  if (a.dataset.maDel) {
+    if (!confirm("确认删除该规则？")) return;
+    await fetch("api/metric-alerts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    refreshMetricAlerts();
+  } else if (a.dataset.maToggle) {
+    await fetch("api/metric-alerts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled: a.dataset.enabled === "false" }) });
+    refreshMetricAlerts();
+  } else if (a.dataset.maEdit) {
+    const r = (maCache.rules || []).find((x) => x.id === id);
+    if (!r) return;
+    maEditId = id;
+    document.getElementById("ma-form-title").textContent = "编辑规则";
+    document.getElementById("ma-name").value = r.name;
+    document.getElementById("ma-metric").value = r.metric;
+    document.getElementById("ma-op").value = r.op;
+    document.getElementById("ma-threshold").value = r.threshold;
+    document.getElementById("ma-duration").value = r.duration;
+    document.getElementById("ma-level").value = r.level;
+    document.getElementById("ma-recipients").value = (r.recipients || []).join(", ");
+    document.getElementById("ma-env").value = r.env || "";
+    document.getElementById("ma-service").value = r.service || "";
+    document.getElementById("ma-team").value = r.team || "";
+    document.getElementById("ma-owner").value = r.owner || "";
+    document.getElementById("ma-runbook").value = r.runbookUrl || "";
+    document.getElementById("ma-dashboard").value = r.dashboardUrl || "";
+    document.getElementById("ma-log").value = r.logUrl || "";
+    document.getElementById("ma-escalate-to").value = (r.escalateTo || []).join(", ");
+    document.getElementById("ma-escalate-after").value = r.escalateAfter || 30;
+    document.getElementById("ma-form-err").textContent = "";
+    document.getElementById("ma-form").style.display = "";
+  }
+});
+
+document.getElementById("ma-incidents").addEventListener("click", async (e) => {
+  const a = e.target.closest("[data-ma-ack]");
+  if (!a) return;
+  await fetch("api/metric-alerts/ack", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.dataset.maAck }) });
+  refreshMetricAlerts();
 });
 
 setupAuth();
