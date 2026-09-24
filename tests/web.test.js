@@ -847,6 +847,27 @@ test("首页包含告警铃铛与弹窗元素", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const body = await (await fetch(`${base}/`)).text();
-  for (const id of ["bell-btn", "alert-mask", "alert-list", "alert-form", "alert-hist"]) assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
+  for (const id of ["bell-btn", "alert-mask", "alert-list", "alert-form", "alert-hist", "alert-tabs", "alert-list-pager", "alert-hist-pager"]) assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
+  w.close();
+});
+
+test("/api/metric-alerts 增删改查与鉴权", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  assert.equal((await fetch(`${base}/api/metric-alerts`)).status, 401);
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const add = await fetch(`${base}/api/metric-alerts`, { method: "POST", headers: H, body: JSON.stringify({ name: "CPU", metric: "cpu", op: ">=", threshold: 80, duration: 5, level: 1, recipients: ["a@x.com"] }) });
+  assert.equal(add.status, 200);
+  const { rule } = await add.json();
+  const bad = await fetch(`${base}/api/metric-alerts`, { method: "POST", headers: H, body: JSON.stringify({ name: "", metric: "x" }) });
+  assert.equal(bad.status, 400);
+  const patch = await fetch(`${base}/api/metric-alerts`, { method: "PATCH", headers: H, body: JSON.stringify({ id: rule.id, enabled: false }) });
+  assert.equal(patch.status, 200);
+  const list = await (await fetch(`${base}/api/metric-alerts`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.rules[0].enabled, false);
+  assert.ok(Array.isArray(list.incidents));
+  const del = await fetch(`${base}/api/metric-alerts`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id }) });
+  assert.equal(del.status, 200);
   w.close();
 });

@@ -11,6 +11,7 @@ import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
 import { createAlertsManager } from "../alerts.js";
+import { createMetricAlerts, buildAlertEmail, METRICS } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -277,6 +278,23 @@ export async function startWeb(config = {}, deps = {}) {
     alertTimer = setInterval(() => alertsManager.tick(), 60000);
   }
 
+  const metricAlerts = await createMetricAlerts({
+    config, configPath, monitor, exec: execCmd,
+    onNotify: async (e) => {
+      try {
+        const { subject, html } = buildAlertEmail(e.kind, { rule: e.rule, incident: e.incident, value: e.value, host: e.host, panelBaseUrl: config.panelBaseUrl || "" });
+        const to = [...(e.rule.recipients || [])];
+        if (e.kind === "escalation") to.push(...(e.rule.escalateTo || []));
+        if (to.length) await sendEmail({ ...(config.alertSmtp || {}), to: to.join(",") }, subject, "", execCmd, { html });
+        await sendWebhook(config.metricAlertWebhook || config.sslAlerts?.webhook, { kind: e.kind, level: e.incident.level, metric: e.rule.metric, value: e.value, host: e.host, incidentId: e.incident.id });
+      } catch (err) { console.error("[fixflow] 指标告警通知失败:", err?.message || err); }
+    },
+  });
+  let metricAlertTimer = null;
+  if (!deps.noAlertsTimer && config.apiKey) {
+    metricAlertTimer = setInterval(() => metricAlerts.tick(), 60000);
+  }
+
   async function collectStatus() {
     const [uptime, mem, df, nproc, osRelease, uname, procUptime] = await Promise.all([
       runCommand("uptime"),
@@ -477,6 +495,72 @@ function formatUptime(sec) {
         const r = await alertsManager.runNow(id);
         res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json" });
         res.end(JSON.stringify(r));
+      } else if (url.pathname === "/api/metric-alerts" && req.method === "GET") {
+        const [rules, settings] = await Promise.all([metricAlerts.list(), metricAlerts.settings()]);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ rules, incidents: metricAlerts.incidents(), ...settings }));
+      } else if (url.pathname === "/api/metric-alerts" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const r = JSON.parse(body || "{}");
+        if (!r.name || !Object.keys(METRICS).includes(r.metric) || !["<=", ">="].includes(r.op) || !Number.isFinite(Number(r.threshold)) || !Array.isArray(r.recipients) || !r.recipients.length) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "名称/指标/运算符/阈值/收件人必填" }));
+          return;
+        }
+        const rule = {
+          id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          name: String(r.name), metric: r.metric, op: r.op, threshold: Number(r.threshold),
+          duration: Number(r.duration) || 5, level: Math.min(5, Math.max(1, Number(r.level) || 3)),
+          recipients: r.recipients, enabled: true,
+          env: r.env || "", service: r.service || "", team: r.team || "", owner: r.owner || "",
+          runbookUrl: r.runbookUrl || "", dashboardUrl: r.dashboardUrl || "", logUrl: r.logUrl || "",
+          escalateTo: Array.isArray(r.escalateTo) ? r.escalateTo : [], escalateAfter: Number(r.escalateAfter) || 30,
+        };
+        const rules = await metricAlerts.list();
+        rules.push(rule);
+        await metricAlerts.save(rules);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, rule }));
+      } else if (url.pathname === "/api/metric-alerts" && req.method === "PATCH") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const r = JSON.parse(body || "{}");
+        const rules = await metricAlerts.list();
+        const rule = rules.find((x) => x.id === r.id);
+        if (!rule) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "规则不存在" })); return; }
+        for (const k of ["name", "metric", "op", "env", "service", "team", "owner", "runbookUrl", "dashboardUrl", "logUrl"]) if (r[k] !== undefined) rule[k] = String(r[k]);
+        for (const k of ["threshold", "duration", "level", "escalateAfter"]) if (r[k] !== undefined) rule[k] = Number(r[k]);
+        if (r.enabled !== undefined) rule.enabled = Boolean(r.enabled);
+        if (Array.isArray(r.recipients)) rule.recipients = r.recipients;
+        if (Array.isArray(r.escalateTo)) rule.escalateTo = r.escalateTo;
+        await metricAlerts.save(rules);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/metric-alerts" && req.method === "DELETE") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id } = JSON.parse(body || "{}");
+        await metricAlerts.save((await metricAlerts.list()).filter((x) => x.id !== id));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/metric-alerts/ack" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        const { id } = JSON.parse(body || "{}");
+        const r = await metricAlerts.ack(id);
+        res.writeHead(r.ok ? 200 : 404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r));
+      } else if (url.pathname === "/api/metric-alerts/run" && req.method === "POST") {
+        const r = await metricAlerts.runRule();
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify(r));
+      } else if (url.pathname === "/api/metric-alerts/settings" && req.method === "POST") {
+        let body = "";
+        for await (const chunk of req) body += chunk;
+        await metricAlerts.saveSettings(JSON.parse(body || "{}"));
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/report") {
         const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
         const s = data.system;
@@ -936,6 +1020,6 @@ function formatUptime(sec) {
   console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {
     server,
-    close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(sseGuard); server.close(resolve); }),
+    close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); server.close(resolve); }),
   };
 }
