@@ -11,7 +11,7 @@ import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
 import { createAlertsManager } from "../alerts.js";
-import { createMetricAlerts, buildAlertEmail, METRICS } from "../metric-alerts.js";
+import { createMetricAlerts, buildAlertEmail, METRICS, metricLabel } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
@@ -279,9 +279,22 @@ export async function startWeb(config = {}, deps = {}) {
   }
 
   const metricAlerts = await createMetricAlerts({
-    config, configPath, monitor, exec: execCmd,
+    config, configPath, monitor, exec: execCmd, aggregate: true,
     onNotify: async (e) => {
       try {
+        if (e.kind === "aggregate") {
+          const to = [...new Set(e.events.flatMap((x) => x.rule.recipients || []))];
+          let rootCause = "";
+          try {
+            const makeSess = deps.sessionFactory || ((cfg) => createSession({ config: cfg, onConfirm: async () => false, onEvent: () => {}, onUsage: () => {} }));
+            const lines = e.events.map((x) => `- P${x.incident.level} ${metricLabel(x.rule.metric)} 当前 ${x.value}${METRICS[x.rule.metric]?.unit || ""}（规则：${x.rule.name}）`).join("\n");
+            rootCause = await makeSess(config).send(`服务器 ${e.host} 同时出现以下告警，请用一两句话推测可能的根本原因：\n${lines}`);
+          } catch {}
+          const { subject, html } = buildAlertEmail("aggregate", { host: e.host, events: e.events, rootCause, panelBaseUrl: config.panelBaseUrl || "" });
+          if (to.length) await sendEmail({ ...(config.alertSmtp || {}), to: to.join(",") }, subject, "", execCmd, { html });
+          await sendWebhook(config.metricAlertWebhook || config.sslAlerts?.webhook, { kind: "aggregate", host: e.host, count: e.events.length });
+          return;
+        }
         const { subject, html } = buildAlertEmail(e.kind, { rule: e.rule, incident: e.incident, value: e.value, host: e.host, panelBaseUrl: config.panelBaseUrl || "" });
         const to = [...(e.rule.recipients || [])];
         if (e.kind === "escalation") to.push(...(e.rule.escalateTo || []));

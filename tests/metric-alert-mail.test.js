@@ -29,3 +29,14 @@ test("正文含三层与关键字段", () => {
   assert.match(html, /张三/);
   assert.match(html, /Runbook|立即处理/);
 });
+test("聚合邮件主题与正文", () => {
+  const events = [
+    { rule: { ...rule, metric: "cpu", name: "CPU高" }, incident: { ...inc, level: 3, startedAt: Date.parse("2026-09-24T14:30:00Z") }, value: 92 },
+    { rule: { ...rule, metric: "mem", name: "内存高" }, incident: { ...inc, level: 2, startedAt: Date.parse("2026-09-24T14:31:00Z") }, value: 88 },
+  ];
+  const { subject, html } = buildAlertEmail("aggregate", { host: "prod-01", events, rootCause: "疑似磁盘故障导致整体性能下降" });
+  assert.match(subject, /^\[聚合告警\] prod-01 发生2条告警/);
+  assert.match(html, /根因推测/);
+  assert.match(html, /疑似磁盘故障/);
+  assert.match(html, /优先级建议/);
+});

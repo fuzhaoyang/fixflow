@@ -36,7 +36,7 @@ export async function sampleMetrics({ monitor, run = runCommand } = {}) {
   return out;
 }
 
-export async function createMetricAlerts({ config, configPath, monitor, exec = runCommand, now = () => new Date(), onNotify = () => {} } = {}) {
+export async function createMetricAlerts({ config, configPath, monitor, exec = runCommand, now = () => new Date(), onNotify = () => {}, aggregate = false } = {}) {
   const statePath = join(dirname(configPath), "metric-incidents.json");
   const readCfg = async () => { try { return JSON.parse(await readFile(configPath, "utf8")); } catch { return {}; } };
   const writeCfg = async (patch) => { const e = await readCfg(); await writeFile(configPath, JSON.stringify({ ...e, ...patch }, null, 2)); };
@@ -44,6 +44,7 @@ export async function createMetricAlerts({ config, configPath, monitor, exec = r
   try { state = { ...state, ...JSON.parse(await readFile(statePath, "utf8")) }; } catch {}
   const persist = async () => { await mkdir(dirname(statePath), { recursive: true }); await writeFile(statePath, JSON.stringify(state, null, 2)).catch(() => {}); };
   const breachSince = new Map();
+  const pending = [];
 
   const list = async () => (await readCfg()).metricAlerts || [];
   const save = async (rules) => { await writeCfg({ metricAlerts: rules }); };
@@ -62,6 +63,7 @@ export async function createMetricAlerts({ config, configPath, monitor, exec = r
     const rules = await list();
     const values = await sampleMetrics({ monitor, run: exec });
     const t = now().getTime();
+    const host = hostname();
     for (const r of rules) {
       if (!r.enabled) continue;
       const v = values[r.metric];
@@ -70,11 +72,12 @@ export async function createMetricAlerts({ config, configPath, monitor, exec = r
         if (!inc) {
           if (!breachSince.get(r.id)) breachSince.set(r.id, t);
           if (t - breachSince.get(r.id) >= (r.duration || 0) * 60000) {
-            const event = { id: nextId(), ruleId: r.id, level: r.level || 3, state: "firing", startedAt: breachSince.get(r.id), peak: v, lastValue: v, samples: 1, ackedAt: 0, escalatedAt: 0, escalatedLevel: 0, recoveredAt: 0 };
+            const event = { id: nextId(), ruleId: r.id, level: r.level || 3, baseLevel: r.level || 3, state: "firing", startedAt: breachSince.get(r.id), firedAt: t, peak: v, lastValue: v, samples: 1, ackedAt: 0, escalatedAt: 0, escalatedLevel: 0, recoveredAt: 0 };
             state.incidents.unshift(event);
             if (state.incidents.length > 200) state.incidents.length = 200;
             await persist();
-            onNotify({ kind: "firing", rule: r, incident: event, value: v, host: hostname() });
+            if (aggregate) pending.push({ event, rule: r, host, at: t });
+            else onNotify({ kind: "firing", rule: r, incident: event, value: v, host });
           }
         } else {
           inc.lastValue = v;
@@ -88,7 +91,42 @@ export async function createMetricAlerts({ config, configPath, monitor, exec = r
           inc.state = "resolved";
           inc.recoveredAt = t;
           await persist();
-          onNotify({ kind: "recovery", rule: r, incident: inc, value: v, host: hostname() });
+          onNotify({ kind: "recovery", rule: r, incident: inc, value: v, host });
+        }
+      }
+    }
+
+    for (const inc of state.incidents) {
+      if (inc.state !== "firing") continue;
+      const rule = rules.find((x) => x.id === inc.ruleId);
+      if (!rule) continue;
+      const after = (rule.escalateAfter || 30) * 60000;
+      const periods = Math.floor((t - (inc.firedAt || inc.startedAt)) / after);
+      const target = Math.max(1, (inc.baseLevel || rule.level || 3) - periods);
+      if (target < inc.level) {
+        inc.level = target;
+        inc.escalatedAt = t;
+        inc.escalatedLevel = target;
+        await persist();
+        onNotify({ kind: "escalation", rule, incident: inc, value: inc.lastValue, host });
+      }
+    }
+
+    if (aggregate && pending.length) {
+      const cutoff = t - 5 * 60000;
+      const byHost = new Map();
+      for (const p of pending.filter((x) => x.at >= cutoff)) {
+        if (!byHost.has(p.host)) byHost.set(p.host, []);
+        byHost.get(p.host).push(p);
+      }
+      for (const [h, group] of byHost) {
+        if (group.length >= 2) {
+          onNotify({ kind: "aggregate", host: h, events: group.map((g) => ({ rule: g.rule, incident: g.event, value: g.event.lastValue })) });
+          for (const g of group) pending.splice(pending.indexOf(g), 1);
+        } else if (t - group[0].at >= 60000) {
+          const g = group[0];
+          onNotify({ kind: "firing", rule: g.rule, incident: g.event, value: g.event.lastValue, host: h });
+          pending.splice(pending.indexOf(g), 1);
         }
       }
     }
@@ -105,7 +143,15 @@ export async function createMetricAlerts({ config, configPath, monitor, exec = r
 
   const runRule = async () => { await tick(); return { ok: true }; };
 
-  return { list, save, incidents, tick, ack, runRule };
+  const settings = async () => { const c = await readCfg(); return { panelBaseUrl: c.panelBaseUrl || "", webhook: c.metricAlertWebhook || "" }; };
+  const saveSettings = async (s = {}) => {
+    const patch = {};
+    if (s.panelBaseUrl !== undefined) patch.panelBaseUrl = String(s.panelBaseUrl);
+    if (s.webhook !== undefined) patch.metricAlertWebhook = String(s.webhook);
+    await writeCfg(patch);
+  };
+
+  return { list, save, incidents, tick, ack, runRule, settings, saveSettings };
 }
 
 const LEVEL_TIME = { 1: "≤15 分钟", 2: "≤30 分钟", 3: "≤60 分钟", 4: "≤4 小时", 5: "≤24 小时" };
@@ -122,7 +168,31 @@ const fmtLocal = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pa
 const durMin = (ms) => `${Math.max(1, Math.round(ms / 60000))} 分钟`;
 const row = (k, v) => (v ? `<tr><td style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;white-space:nowrap">${k}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(v)}</td></tr>` : "");
 
-export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUrl = "", support = "", now = () => new Date() }) {
+export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUrl = "", support = "", now = () => new Date(), events, rootCause }) {
+  if (kind === "aggregate") {
+    const evs = events || [];
+    const n = evs.length;
+    const earliest = Math.min(...evs.map((e) => e.incident.startedAt));
+    const maxLevel = Math.min(...evs.map((e) => e.incident.level || e.rule.level || 3));
+    const subject = `[聚合告警] ${host} 发生${n}条告警 - ${fmtLocal(earliest)}`;
+    const rows = evs.map((e) => `<tr><td style="border:1px solid #e5e7eb;padding:5px 9px">P${e.incident.level || e.rule.level}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(metricLabel(e.rule.metric))}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(e.value)}${esc(METRICS[e.rule.metric]?.unit || "")}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(e.rule.name)}</td></tr>`).join("");
+    const svc = [...new Set(evs.map((e) => e.rule.service).filter(Boolean))].join(", ") || "—";
+    const html = `<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;font-size:14px;line-height:1.7;max-width:760px">
+      <div style="border-left:4px solid #dc2626;padding:8px 12px;background:#f9fafb;margin-bottom:12px">
+        <div style="font-weight:700;color:#dc2626">聚合告警 · 最高 P${maxLevel} ${LEVEL_NAME[maxLevel]} · 共 ${n} 条</div>
+        <div style="color:#6b7280;font-size:12px">主机 ${esc(host)} · 涉及服务 ${esc(svc)}</div>
+      </div>
+      <h3 style="font-size:14px;margin:14px 0 6px">告警列表</h3>
+      <table style="border-collapse:collapse;font-size:13px;width:100%"><thead><tr><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">级别</th><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">指标</th><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">当前值</th><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">规则</th></tr></thead><tbody>${rows}</tbody></table>
+      <h3 style="font-size:14px;margin:14px 0 6px">根因推测</h3>
+      <p style="margin:8px 0">${esc(rootCause || "（AI 分析不可用）")}</p>
+      <h3 style="font-size:14px;margin:14px 0 6px">处理优先级建议</h3>
+      <ol style="margin:6px 0;padding-left:22px">${[...evs].sort((a, b) => (a.incident.level || 9) - (b.incident.level || 9)).map((e) => `<li style="margin:3px 0">优先处理 P${e.incident.level || e.rule.level} ${esc(metricLabel(e.rule.metric))}（${esc(e.rule.name)}）</li>`).join("")}</ol>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0">
+      <div style="color:#9ca3af;font-size:12px">本邮件由智能运维助手自动发送，请勿回复。</div>
+    </div>`;
+    return { subject, html };
+  }
   const nowDate = typeof now === "function" ? now() : now;
   const metric = metricLabel(rule.metric);
   const unit = METRICS[rule.metric]?.unit || "";

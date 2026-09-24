@@ -11,7 +11,7 @@ function fakeMonitor(values) {
   return { cpu: () => values.cpu, net: () => ({ samples: [{ up: { eth0: values.netBps / 2 }, down: { eth0: values.netBps / 2 } }] }) };
 }
 
-async function mk(cfgPath, values, nowRef) {
+async function mk(cfgPath, values, nowRef, extra = {}) {
   const notified = [];
   const m = await createMetricAlerts({
     config: { baseUrl: "https://x", apiKey: "k", model: "m", metricAlerts: [], alertSmtp: { host: "h", from: "f@x.com" }, sslAlerts: { webhook: "" } },
@@ -25,6 +25,7 @@ async function mk(cfgPath, values, nowRef) {
     },
     now: () => new Date(nowRef.t),
     onNotify: (e) => notified.push(e),
+    ...extra,
   });
   m._notified = notified;
   return m;
@@ -74,4 +75,38 @@ test("回落触发恢复", async () => {
   values.cpu = 30;
   nowRef.t += 60 * 1000; await m.tick();
   assert.equal(m._notified.filter((e) => e.kind === "recovery").length, 1);
+});
+test("未认领超时逐级升级，最高 P1，认领后停止", async () => {
+  const cfgPath = join(dir(), "config.json");
+  writeFileSync(cfgPath, JSON.stringify({ metricAlerts: [{ id: "m1", name: "CPU", metric: "cpu", op: ">=", threshold: 80, duration: 1, level: 3, recipients: ["a@x.com"], escalateAfter: 1, enabled: true }] }));
+  const nowRef = { t: new Date("2026-09-24T10:00:00").getTime() };
+  const m = await mk(cfgPath, { cpu: 95, netBps: 0 }, nowRef);
+  await m.tick();
+  nowRef.t += 60000; await m.tick();
+  const fire = m._notified.find((e) => e.kind === "firing");
+  assert.equal(fire.incident.level, 3);
+  nowRef.t += 60000; await m.tick();
+  nowRef.t += 60000; await m.tick();
+  const esc = m._notified.filter((e) => e.kind === "escalation");
+  assert.ok(esc.length >= 2);
+  assert.equal(esc[esc.length - 1].incident.level, 1);
+  await m.ack(fire.incident.id);
+  const before = m._notified.filter((e) => e.kind === "escalation").length;
+  nowRef.t += 60000; await m.tick();
+  assert.equal(m._notified.filter((e) => e.kind === "escalation").length, before);
+});
+
+test("同主机 5 分钟 ≥2 条聚合成一封", async () => {
+  const cfgPath = join(dir(), "config.json");
+  writeFileSync(cfgPath, JSON.stringify({ metricAlerts: [
+    { id: "m1", name: "CPU-A", metric: "cpu", op: ">=", threshold: 80, duration: 1, level: 3, recipients: ["a@x.com"], enabled: true },
+    { id: "m2", name: "CPU-B", metric: "cpu", op: ">=", threshold: 70, duration: 1, level: 2, recipients: ["a@x.com"], enabled: true },
+  ] }));
+  const nowRef = { t: new Date("2026-09-24T10:00:00").getTime() };
+  const m = await mk(cfgPath, { cpu: 95, netBps: 0 }, nowRef, { aggregate: true });
+  await m.tick();
+  nowRef.t += 60000; await m.tick();
+  nowRef.t += 60000; await m.tick();
+  assert.equal(m._notified.filter((e) => e.kind === "aggregate").length, 1);
+  assert.equal(m._notified.filter((e) => e.kind === "aggregate")[0].events.length, 2);
 });
