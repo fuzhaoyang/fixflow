@@ -474,9 +474,9 @@
       50% { transform: translate(60px, 45px) scale(1.18); }
       100% { transform: translate(-40px, -35px) scale(.92); }
     }
-    .auth-card { width: 440px; max-width: 94vw; height: 455px; max-height: 94vh; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: center; overflow-y: auto; }
+    .auth-card { width: 440px; max-width: 94vw; height: 470px; max-height: 94vh; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 28px; box-shadow: 0 20px 60px rgba(0,0,0,.55); position: relative; z-index: 1; display: flex; flex-direction: column; overflow-y: auto; }
     .auth-logo { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-    .auth-logo .brand-logo { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; }
+    .auth-logo .brand-logo { width: 40px; height: 40px; font-size: 18px; flex-shrink: 0; margin-top: -13px; }
     .auth-logo > div:last-child { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
     .auth-logo .sub { margin-bottom: 0; }
     .auth-card h2 { margin: 0 0 4px; font-size: 18px; }
@@ -533,9 +533,9 @@
           <img id="auth-captcha-img" src="api/captcha" alt="验证码" title="点击刷新">
         </div>
       </div>
-      <div class="forgot" id="auth-forgot" style="display:none"><a id="auth-forgot-link">忘记密码？</a></div>
+      <div class="forgot" id="auth-forgot"><a id="auth-forgot-link">忘记密码？</a></div>
       <button class="btn" style="width:100%;padding:10px" id="auth-submit">登录</button>
-      <div class="auth-tip" id="auth-tip"></div>
+      <div class="auth-tip" id="auth-tip"><button type="button" id="auth-toggle">没有账号？去注册</button></div>
     </form>
   </div>
 </div>
