@@ -248,11 +248,12 @@ function wrapHtml(inner, date = new Date()) {
     + inner + `</div>`;
 }
 
-export function buildMime(smtp, subject, body) {
+export function buildMime(smtp, subject, body, opts = {}) {
   const fromHeader = /^[^@\s<>]+@[^@\s<>]+$/.test(String(smtp.from || "")) ? smtp.from : (smtp.user || "fixflow");
   const b64 = (s) => Buffer.from(String(s), "utf8").toString("base64").replace(/(.{76})/g, "$1\r\n");
   const boundary = `ff-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
-  const html = wrapHtml(mdToHtml(body));
+  const html = opts.html || wrapHtml(mdToHtml(body));
+  const text = opts.text != null ? opts.text : String(body);
   return [
     `To: ${smtp.to}`,
     `From: ${fromHeader}`,
@@ -264,7 +265,7 @@ export function buildMime(smtp, subject, body) {
     "Content-Type: text/plain; charset=utf-8",
     "Content-Transfer-Encoding: base64",
     "",
-    b64(body),
+    b64(text),
     `--${boundary}`,
     "Content-Type: text/html; charset=utf-8",
     "Content-Transfer-Encoding: base64",
@@ -275,9 +276,9 @@ export function buildMime(smtp, subject, body) {
   ].join("\r\n");
 }
 
-export async function sendEmail(smtp = {}, subject, body, exec = runCommand) {
+export async function sendEmail(smtp = {}, subject, body, exec = runCommand, opts = {}) {
   if (!smtp.to) return false;
-  const msg = buildMime(smtp, subject, body);
+  const msg = buildMime(smtp, subject, body, opts);
   if (smtp.host) {
     const r = await sendSmtp({ ...smtp, message: msg });
     if (!r.ok) console.error(`[fixflow] SMTP 发送失败: ${r.error}`);
