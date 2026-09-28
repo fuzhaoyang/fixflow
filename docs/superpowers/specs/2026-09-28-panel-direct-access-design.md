@@ -14,8 +14,9 @@
 3. 只有带入口前缀的请求可访问，其余 404（防扫描）
 4. 启动时探测**内网 IP**（`os.networkInterfaces()`）+ **公网 IP**（外部回显，超时降级），打印完整访问地址
 5. 新增 CLI 命令 **`fixflow default`**：在服务器执行即可打印面板访问地址（仿宝塔 `bt default`，用于忘记入口路径/端口时）
-6. 登录鉴权不变
-7. 零依赖
+6. 启动时自动放行**本机防火墙**端口（ufw/firewalld/iptables），失败/跳过时提示手动开放（含云安全组）
+7. 登录鉴权不变
+8. 零依赖
 
 ## 需求详情
 
@@ -102,7 +103,17 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
 - 无需改动：所有请求用相对 URL（`api/...`、`app.js`、`xterm.min.js`），页面在 `/<panelPath>/` 下天然带前缀
 - 唯一注意：确认没有以 `/` 开头的绝对资源/接口引用（如有需改为相对）
 
-### 八、安全
+### 八、本机防火墙自动放行（对齐宝塔）
+
+- 新增 `src/firewall.js`：`openFirewallPort(port)` —— 仅 root 执行，依次检测并放行：
+  - **ufw** 存在 → `ufw allow <port>/tcp`
+  - **firewalld** 运行中 → `firewall-cmd --permanent --add-port=<port>/tcp && firewall-cmd --reload`
+  - **iptables**（INPUT 策略为 DROP/REJECT 时）→ `iptables -I INPUT -p tcp --dport <port> -j ACCEPT`（幂等）
+  - 都没有 → 返回未放行
+- 面板启动（`fixflow web`）时调用；成功打印「已放行端口」；**失败/跳过时提示用户手动开放**，明确给出本机防火墙命令与**云安全组**放行指引
+- ⚠ 云安全组（阿里云/腾讯云）无法自动改（需云 API 凭证），始终提示手动
+
+### 九、安全
 
 - 0.0.0.0 暴露公网，靠「随机端口 + 随机入口路径 + 登录」防护（宝塔同款）
 - 本次不做 IP 白名单 / 面板 TLS（预留后续）
@@ -112,7 +123,7 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
 - 不做面板 HTTPS（自签证书）
 - 不做面板监听 80/443（域名访问走 `http://域名:<随机端口>/<入口>/`，不做无端口/HTTPS）
 - 不做 IP 白名单
-- 不做防火墙自动放行（仅启动提示）
+- 不自动修改云安全组（无云 API 凭证，仅提示手动放行）
 - 不改登录/鉴权逻辑
 
 ## 测试（node --test）
