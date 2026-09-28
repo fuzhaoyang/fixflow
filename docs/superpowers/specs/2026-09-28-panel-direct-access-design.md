@@ -13,8 +13,9 @@
 2. 安装/首次运行时生成**随机端口**（10000-65535 空闲）与**随机安全入口路径**（12 位 hex），写入 config
 3. 只有带入口前缀的请求可访问，其余 404（防扫描）
 4. 启动时探测**内网 IP**（`os.networkInterfaces()`）+ **公网 IP**（外部回显，超时降级），打印完整访问地址
-5. 登录鉴权不变
-6. 零依赖
+5. 新增 CLI 命令 **`fixflow default`**：在服务器执行即可打印面板访问地址（仿宝塔 `bt default`，用于忘记入口路径/端口时）
+6. 登录鉴权不变
+7. 零依赖
 
 ## 需求详情
 
@@ -73,12 +74,28 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
 - nginx 反代仍可用：转发到 `127.0.0.1:<port>` 并保留路径（README 更新）
 - 旧的 `127.0.0.1:2222` 直连不再有效（需带入口路径）
 
-### 六、前端
+### 六、CLI 命令 `fixflow default`（仿宝塔 bt default）
+
+用于**忘记面板入口/端口**时在服务器执行获取访问地址：
+
+- 读取 config 的 `port` + `panelPath`（缺失则按启动逻辑生成并写回）
+- 探测内网 IP（`lanIPs()`）+ 公网 IP（`publicIP()`，失败降级）
+- 打印：
+  ```
+  Fixflow 面板访问地址：
+    内网：http://<lan>:<port>/<panelPath>/
+    公网：http://<pub>:<port>/<panelPath>/   （需能出公网 + 安全组放行端口 <port>）
+  忘记密码可运行：fixflow reset-password
+  ```
+- 在 `bin/fixflow.js` 增加 `cmd === "default"` 分支
+- 内网/公网探测逻辑与启动时共用（`src/netip.js`）
+
+### 七、前端
 
 - 无需改动：所有请求用相对 URL（`api/...`、`app.js`、`xterm.min.js`），页面在 `/<panelPath>/` 下天然带前缀
 - 唯一注意：确认没有以 `/` 开头的绝对资源/接口引用（如有需改为相对）
 
-### 七、安全
+### 八、安全
 
 - 0.0.0.0 暴露公网，靠「随机端口 + 随机入口路径 + 登录」防护（宝塔同款）
 - 本次不做 IP 白名单 / 面板 TLS（预留后续）
@@ -100,7 +117,8 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
    - `/api/status`（无前缀）→ 404
    - `/app.js`（无前缀）→ 404
 3. **IP 探测**：`lanIPs()` 返回非回环地址；`publicIP` 用注入的 fetch 成功/失败/超时三态
-4. 现有 web 测试适配（路由前缀）
+4. **`fixflow default`**：读取 config（port/panelPath）打印含入口的完整地址；公网失败时只打印内网
+5. 现有 web 测试适配（路由前缀）
 
 ## 风险与降级
 
