@@ -6,6 +6,7 @@ import { DEFAULT_BASE_URL, setReconfigureFlag, RECONFIGURE_FLAG } from "../src/s
 import { install as installService, restartIfActive } from "../src/service.js";
 import { ensurePanelAccess, buildUrls } from "../src/panel-access.js";
 import { lanIPs as defaultLanIPs, publicIP as defaultPublicIP } from "../src/netip.js";
+import { openFirewallPort } from "../src/firewall.js";
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), ".config", "fixflow", "config.json");
 
@@ -40,6 +41,11 @@ function persistPanel(configPath, panelEnabled, write) {
 
 async function printPanelAddress(config, configPath, { log, lanIPs, publicIP }) {
   const access = await ensurePanelAccess(config, { configPath });
+  try {
+    const fw = await openFirewallPort(access.port);
+    if (fw.ok) log(`  ✓ 已放行本机防火墙端口 ${access.port}（${fw.method}）`);
+    else if (fw.reason) log(`  ⚠ 本机防火墙未自动放行（${fw.reason}），请手动放行端口 ${access.port}`);
+  } catch {}
   const pub = await publicIP({ timeout: 2000 }).catch(() => null);
   log(`  面板访问地址（请确保安全组/防火墙放行端口 ${access.port}）：`);
   for (const u of buildUrls({ port: access.port, panelPath: access.panelPath, lan: lanIPs(), pub })) log("    " + u);
