@@ -66,9 +66,15 @@ test("带 tool_calls 的 assistant 消息原样回传", async () => {
   await s.send("检查磁盘");
   const assistant = s.history.filter((m) => m.role === "assistant")[0];
   assert.equal(assistant.tool_calls.length, 1);
-  assert.equal(assistant.content, null);
+  assert.equal(assistant.content, "");
   assert.equal(assistant.tool_calls[0].function.name, "run_command");
   assert.equal(JSON.parse(assistant.tool_calls[0].function.arguments).command, "df -h");
+});
+
+test("空文本且无工具调用时不推入空 assistant", async () => {
+  const s = createSession({ config: {}, llmChat: fakeLlm([{ text: "", toolCalls: [] }]) });
+  assert.equal(await s.send("x"), "");
+  assert.ok(!s.history.some((m) => m.role === "assistant" && !m.content && !m.tool_calls));
 });
 
 test("会话可被中止（abort）", async () => {

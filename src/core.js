@@ -44,7 +44,7 @@ function sanitizeHistory(history) {
         if (m.content) out.push({ role: "assistant", content: m.content });
         continue;
       }
-      out.push({ ...m, tool_calls: kept });
+      out.push({ ...m, content: m.content || "", tool_calls: kept });
       continue;
     }
     out.push(m);
@@ -89,11 +89,11 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
         if (text) safeEvent({ type: "text", text });
         if (result?.usage) onUsage(result.usage);
       }
-      const assistantMsg = { role: "assistant", content: text || null };
+      const assistantMsg = { role: "assistant", content: text || (toolCalls.length ? "" : null) };
       if (toolCalls.length) {
         assistantMsg.tool_calls = toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }));
       }
-      history.push(assistantMsg);
+      if (text || toolCalls.length) history.push(assistantMsg);
       if (!toolCalls.length) return text || "";
       for (const call of toolCalls) {
         let result;
