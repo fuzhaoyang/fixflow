@@ -5,6 +5,8 @@ import { startFlow } from "../src/cli.js";
 import { startWeb } from "../src/web/server.js";
 import { runSetup, writeConfig, printSuccess, DEFAULT_CONFIG_PATH, needsReconfigure, clearReconfigureFlag, backupConfig } from "../src/setup.js";
 import { install as installService, restart as restartService } from "../src/service.js";
+import { ensurePanelAccess, buildUrls } from "../src/panel-access.js";
+import { lanIPs, publicIP } from "../src/netip.js";
 import { runUninstall } from "../scripts/uninstall.js";
 import { runDoctor } from "../src/doctor.js";
 import { hashPassword } from "../src/auth.js";
@@ -71,7 +73,20 @@ if (cmd === "restart") {
   process.exit(0);
 }
 
+if (cmd === "default") {
+  const access = await ensurePanelAccess(config, { configPath: DEFAULT_CONFIG_PATH });
+  const lan = lanIPs();
+  const pub = await publicIP();
+  const urls = buildUrls({ port: access.port, panelPath: access.panelPath, lan, pub });
+  console.log("Fixflow 面板访问地址：");
+  for (const u of urls) console.log("  " + u);
+  if (!pub) console.log("  （公网 IP 获取失败，可能无外网）");
+  console.log("  忘记密码可运行：fixflow reset-password");
+  process.exit(0);
+}
+
 if (cmd === "web") {
+  await ensurePanelAccess(config, { configPath: DEFAULT_CONFIG_PATH });
   await startWeb(config);
 } else if (!config.apiKey || !config.baseUrl || !config.model || needsReconfigure()) {
   console.log(needsReconfigure() ? "检测到重新安装，需重新配置（模型 / 地址 / Key）...\n" : "检测到尚未配置完整（模型 / 地址 / Key），进入配置向导...\n");

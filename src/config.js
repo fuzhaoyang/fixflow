@@ -37,7 +37,7 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     databases: file.databases || [],
     sslSites: normalizeSslSites(file.sslSites),
     pingTargets: file.pingTargets || [],
-    serviceKeywords: Array.isArray(file.serviceKeywords) ? file.serviceKeywords : DEFAULT_SERVICE_KEYWORDS,
     sslAlerts: file.sslAlerts || { webhook: "", smtp: {} },
+    panelPath: file.panelPath || "",
   };
 }

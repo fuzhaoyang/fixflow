@@ -70,3 +70,11 @@ test("sslAlerts 默认值", () => {
   const cfg = loadConfig({ filePath: file });
   assert.deepEqual(cfg.sslAlerts, { webhook: "", smtp: {} });
 });
+test("loadConfig 读取 panelPath", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ panelPath: "abcdef123456", port: 46833 }));
+  const cfg = loadConfig({ filePath: file });
+  assert.equal(cfg.panelPath, "abcdef123456");
+  assert.equal(cfg.port, 46833);
+});
