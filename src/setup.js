@@ -160,12 +160,17 @@ export async function runSetup({ configPath = DEFAULT_CONFIG_PATH, readConfig = 
   config.model = model;
 
   console.log("\n第四步：是否现在启动 Web 面板");
-  for (;;) {
-    const ans = await q("立即启动面板服务，用浏览器管理（推荐）？[Y/n] ");
-    if (ans === null) return null;
-    if (ans === "" || ans === "y" || ans === "yes") { config._startPanel = true; break; }
-    if (ans === "n" || ans === "no") { config._startPanel = false; break; }
-    console.log("请输入 y 或 n。");
+  if (config.panel === false) {
+    console.log("  （安装时已选择不启用面板，跳过）");
+    config._startPanel = false;
+  } else {
+    for (;;) {
+      const ans = await q("立即启动面板服务，用浏览器管理（推荐）？[Y/n] ");
+      if (ans === null) return null;
+      if (ans === "" || ans === "y" || ans === "yes") { config._startPanel = true; break; }
+      if (ans === "n" || ans === "no") { config._startPanel = false; break; }
+      console.log("请输入 y 或 n。");
+    }
   }
 
   return config;

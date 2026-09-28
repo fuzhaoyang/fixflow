@@ -93,7 +93,7 @@ if (cmd === "web") {
     }
     for (const k of ["baseUrl", "apiKey", "model"]) if (again[k]) saved[k] = again[k];
   }
-  const startPanel = saved._startPanel !== false;
+  const startPanel = saved._startPanel !== false && saved.panel !== false;
   delete saved._startPanel;
   const bak = backupConfig(DEFAULT_CONFIG_PATH);
   if (bak) console.log(`旧配置已备份：${bak}`);

@@ -82,3 +82,47 @@ test("服务注册失败时提示但配置仍保存", async () => {
   assert.equal(r.service.installed, false);
   assert.ok(JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8")).apiKey);
 });
+test("FIXFLOW_PANEL=0 时不注册面板服务并写 panel:false", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  const flag = join(dir, "reconfigure.flag");
+  let installed = false;
+  const r = await runPostinstall({
+    configPath: cfg, markerPath: flag,
+    env: { FIXFLOW_API_KEY: "k1", FIXFLOW_PANEL: "0" },
+    install: async () => { installed = true; return { installed: true }; },
+  });
+  assert.equal(installed, false);
+  const saved = JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8"));
+  assert.equal(saved.panel, false);
+  assert.equal(r.service.installed, false);
+});
+
+test("FIXFLOW_PANEL=1 时注册面板服务", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  const flag = join(dir, "reconfigure.flag");
+  let installed = false;
+  const r = await runPostinstall({
+    configPath: cfg, markerPath: flag,
+    env: { FIXFLOW_API_KEY: "k1", FIXFLOW_PANEL: "1" },
+    install: async () => { installed = true; return { installed: true }; },
+  });
+  assert.equal(installed, true);
+  assert.equal(r.service.installed, true);
+});
+
+test("FIXFLOW_PANEL=0 且无 apiKey 时写 panel:false 且不重启", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  const flag = join(dir, "reconfigure.flag");
+  let restarted = false;
+  const r = await runPostinstall({
+    configPath: cfg, markerPath: flag,
+    env: { FIXFLOW_PANEL: "0" },
+    restart: async () => { restarted = true; return { active: true }; },
+  });
+  assert.equal(restarted, false);
+  assert.equal(JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8")).panel, false);
+  assert.equal(r.panelEnabled, false);
+});
