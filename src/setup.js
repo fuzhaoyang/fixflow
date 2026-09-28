@@ -3,6 +3,7 @@ import { stdin, stdout } from "node:process";
 import { mkdirSync, writeFileSync, existsSync, unlinkSync, copyFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
+import { lanIPs } from "./netip.js";
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), ".config", "fixflow", "config.json");
 export const RECONFIGURE_FLAG = join(homedir(), ".config", "fixflow", "reconfigure.flag");
@@ -182,13 +183,14 @@ export function printSuccess(config, { configPath = DEFAULT_CONFIG_PATH, service
   console.log(`  模型: ${config.model}`);
   console.log(`\n=== 面板访问 ===`);
   if (startPanel) {
-    if (serviceInstalled) {
-      console.log(`  面板服务已由 systemd 托管（开机自启，崩溃自动恢复）`);
-      console.log(`  访问地址: http://127.0.0.1:${config.port || 2222}`);
-    } else {
-      console.log(`  启动面板: fixflow web`);
-      console.log(`  访问地址: http://127.0.0.1:${config.port || 2222}`);
-    }
+    if (serviceInstalled) console.log(`  面板服务已由 systemd 托管（开机自启，崩溃自动恢复）`);
+    else console.log(`  启动面板: fixflow web`);
+    const suffix = config.panelPath ? `/${config.panelPath}/` : "/";
+    const port = config.port || 2222;
+    const ips = lanIPs();
+    for (const ip of ips) console.log(`  访问地址: http://${ip}:${port}${suffix}`);
+    if (!ips.length) console.log(`  访问地址: http://<服务器IP>:${port}${suffix}`);
+    console.log(`  查看/重查访问地址: fixflow default`);
   } else {
     console.log(`  本次未启动面板。想用时运行: fixflow web`);
   }

@@ -27,7 +27,8 @@ async function checkApi({ config, verify }) {
 
 async function checkPanel({ config, fetchFn }) {
   try {
-    const res = await fetchFn(`http://127.0.0.1:${config.port || DEFAULT_PORT}/`);
+    const suffix = config.panelPath ? `/${config.panelPath}/` : "/";
+    const res = await fetchFn(`http://127.0.0.1:${config.port || DEFAULT_PORT}${suffix}`);
     return { name: "面板服务", ok: res.ok, detail: `HTTP ${res.status}`, advice: res.ok ? "" : "面板未运行，执行 fixflow web 或启动 systemd 服务。" };
   } catch {
     return { name: "面板服务", ok: false, detail: "无法连接", advice: "面板未运行，执行 fixflow web 或启动 systemd 服务。" };
