@@ -899,3 +899,14 @@ test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async
   assert.doesNotMatch(js, /if \(cd\) fsRevealPath/);
   w.close();
 });
+
+test("panelPath 前缀路由：带前缀可访问，无前缀 404", async () => {
+  const w = await makeServer({ panelPath: "abcdef123456" });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  assert.equal((await fetch(`${base}/abcdef123456/`)).status, 200);
+  assert.equal((await fetch(`${base}/abcdef123456/api/status`)).status, 200);
+  assert.equal((await fetch(`${base}/`)).status, 404);
+  assert.equal((await fetch(`${base}/api/status`)).status, 404);
+  assert.equal((await fetch(`${base}/app.js`)).status, 404);
+  w.close();
+});

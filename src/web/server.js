@@ -11,6 +11,7 @@ import { loadConfig, normalizeSslSites } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
 import { createAlertsManager } from "../alerts.js";
+import { lanIPs, publicIP } from "../netip.js";
 import { createMetricAlerts, buildAlertEmail, METRICS, metricLabel } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
@@ -19,6 +20,16 @@ import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
+
+async function printAccess(port, panelPath) {
+  const suffix = `/${panelPath}/`;
+  console.log("fixflow 面板已启动，访问地址：");
+  for (const ip of lanIPs()) console.log(`  内网：http://${ip}:${port}${suffix}`);
+  const pub = await publicIP();
+  if (pub) console.log(`  公网：http://${pub}:${port}${suffix}`);
+  else console.log(`  公网：获取失败（可能无外网），请在云安全组/防火墙放行端口 ${port}`);
+  console.log(`  域名：把域名解析到本机后，用 http://域名:${port}${suffix} 访问（无需 nginx）`);
+}
 
 function safeFsPath(p) {
   if (!p || typeof p !== "string") return null;
@@ -352,6 +363,13 @@ function formatUptime(sec) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     try {
+      const base = config.panelPath ? "/" + config.panelPath : "";
+      if (base) {
+        if (url.pathname === base) { res.writeHead(301, { Location: base + "/" + (url.search || "") }); res.end(); return; }
+        if (url.pathname === base + "/") url.pathname = "/";
+        else if (url.pathname.startsWith(base + "/")) url.pathname = url.pathname.slice(base.length);
+        else { res.writeHead(404); res.end("Not Found"); return; }
+      }
       const isPublic = url.pathname === "/api/login" || url.pathname === "/api/register" || url.pathname === "/api/status" || url.pathname === "/api/captcha";
       const needsAuth = url.pathname.startsWith("/api/") && !isPublic;
       if (needsAuth && !authHeader(req)) { send401(res); return; }
@@ -1009,7 +1027,7 @@ function formatUptime(sec) {
   await new Promise((resolve, reject) => {
     let attempts = 0;
     const tryListen = () => {
-      const srv = server.listen(listenPort, "127.0.0.1", resolve);
+      const srv = server.listen(listenPort, "0.0.0.0", resolve);
       srv.once("error", (e) => {
         if (e.code === "EADDRINUSE" && attempts < 5) {
           attempts++;
@@ -1026,7 +1044,8 @@ function formatUptime(sec) {
     tryListen();
   });
   const address = server.address();
-  console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
+  if (config.panelPath) printAccess(address.port, config.panelPath);
+  else console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {
     server,
     close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); server.close(resolve); }),
