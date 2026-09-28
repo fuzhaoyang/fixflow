@@ -74,6 +74,13 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
 - nginx 反代仍可用：转发到 `127.0.0.1:<port>` 并保留路径（README 更新）
 - 旧的 `127.0.0.1:2222` 直连不再有效（需带入口路径）
 
+#### 域名访问（无需 nginx）
+
+- 把域名 **A 记录**解析到服务器 IP，即可用 `http://域名:<随机端口>/<入口>/` 访问，**不需要 nginx**
+- 面板不校验 `Host` 头，任意域名/IP 均可；随机端口 + 入口路径 + 登录即为防护
+- 启动打印与 `fixflow default` 除 IP 外，可附带一行「域名：把域名解析到本机后用 http://域名:<端口>/<入口>/」
+- 若要用 `http://域名/`（无端口）或 `https://域名/`，需面板自身监听 80/443（本期不做，见「不做的事」）
+
 ### 六、CLI 命令 `fixflow default`（仿宝塔 bt default）
 
 用于**忘记面板入口/端口**时在服务器执行获取访问地址：
@@ -103,6 +110,7 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
 ## 不做的事
 
 - 不做面板 HTTPS（自签证书）
+- 不做面板监听 80/443（域名访问走 `http://域名:<随机端口>/<入口>/`，不做无端口/HTTPS）
 - 不做 IP 白名单
 - 不做防火墙自动放行（仅启动提示）
 - 不改登录/鉴权逻辑
