@@ -24,20 +24,22 @@ test("ufw 存在时放行端口", async () => {
   assert.ok(calls.some((c) => c === "ufw allow 1234/tcp"));
 });
 
-test("firewalld 运行时放行端口", async () => {
+test("firewalld 按活动区域放行端口（含 docker 区域）", async () => {
   const calls = [];
   const run = async (cmd) => {
     calls.push(cmd);
     if (cmd.includes("command -v ufw")) return { exitCode: 1, stdout: "" };
     if (cmd.includes("command -v firewall-cmd")) return { exitCode: 0, stdout: "/usr/bin/firewall-cmd\n" };
     if (cmd.includes("firewall-cmd --state")) return { exitCode: 0, stdout: "running\n" };
+    if (cmd.includes("--get-active-zones")) return { exitCode: 0, stdout: "docker\n  interfaces: eth0\n" };
     if (cmd.includes("--add-port")) return { exitCode: 0, stdout: "success" };
+    if (cmd.includes("--reload")) return { exitCode: 0, stdout: "success" };
     return { exitCode: 1, stdout: "" };
   };
   const r = await openFirewallPort(1234, { getuid: () => 0, run });
   assert.equal(r.ok, true);
-  assert.equal(r.method, "firewalld");
-  assert.ok(calls.some((c) => c.includes("--permanent --add-port=1234/tcp")));
+  assert.match(r.method, /firewalld/);
+  assert.ok(calls.some((c) => c.includes("--zone=docker --add-port=1234/tcp --permanent")));
 });
 
 test("无防火墙时返回未放行", async () => {

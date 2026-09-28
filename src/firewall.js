@@ -12,8 +12,18 @@ export async function openFirewallPort(port, { run = runCommand, getuid = () => 
   if (hasFwd.exitCode === 0 && hasFwd.stdout.trim()) {
     const st = await run("firewall-cmd --state 2>/dev/null");
     if ((st.stdout || "").includes("running")) {
-      const r = await run(`firewall-cmd --permanent --add-port=${p}/tcp && firewall-cmd --reload`);
-      return { ok: r.exitCode === 0, method: "firewalld", detail: (r.stdout || r.stderr || "").trim() };
+      const az = await run("firewall-cmd --get-active-zones 2>/dev/null");
+      const zones = (az.stdout || "").split("\n").filter((l) => l && !/^\s/.test(l)).map((s) => s.trim());
+      const list = zones.length ? zones : ["public"];
+      let ok = true;
+      let detail = "";
+      for (const z of list) {
+        const r = await run(`firewall-cmd --zone=${z} --add-port=${p}/tcp --permanent`);
+        if (r.exitCode !== 0) ok = false;
+        detail += (r.stdout || r.stderr || "").trim();
+      }
+      const reload = await run("firewall-cmd --reload");
+      return { ok: ok && reload.exitCode === 0, method: `firewalld(${list.join(",")})`, detail: detail || (reload.stdout || "").trim() };
     }
   }
   const pol = await run("iptables -L INPUT -n 2>/dev/null | head -1");
