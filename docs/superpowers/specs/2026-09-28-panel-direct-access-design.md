@@ -78,7 +78,7 @@ export async function publicIP({ fetchImpl = fetch, timeout = 3000 } = {})
 
 - 把域名 **A 记录**解析到服务器 IP，即可用 `http://域名:<随机端口>/<入口>/` 访问，**不需要 nginx**
 - 面板不校验 `Host` 头，任意域名/IP 均可；随机端口 + 入口路径 + 登录即为防护
-- 启动打印与 `fixflow default` 除 IP 外，可附带一行「域名：把域名解析到本机后用 http://域名:<端口>/<入口>/」
+- **不探测、不配置域名**：启动打印与 `fixflow default` 只打印 IP 地址，域名由用户自行替换（服务器无法可靠得知绑定的域名）
 - 若要用 `http://域名/`（无端口）或 `https://域名/`，需面板自身监听 80/443（本期不做，见「不做的事」）
 
 ### 六、CLI 命令 `fixflow default`（仿宝塔 bt default）

@@ -28,7 +28,6 @@ async function printAccess(port, panelPath) {
   const pub = await publicIP();
   if (pub) console.log(`  公网：http://${pub}:${port}${suffix}`);
   else console.log(`  公网：获取失败（可能无外网），请在云安全组/防火墙放行端口 ${port}`);
-  console.log(`  域名：把域名解析到本机后，用 http://域名:${port}${suffix} 访问（无需 nginx）`);
 }
 
 function safeFsPath(p) {
