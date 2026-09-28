@@ -17,10 +17,34 @@ test("无环境变量且未配置时写重配标记、不改写配置，且重�
     markerPath: flag,
     env: {},
     restart: async () => { restarted = true; return { active: true }; },
+    lanIPs: () => [],
+    publicIP: async () => null,
   });
   assert.equal(r.done, false);
   assert.equal(restarted, true);
   assert.equal(r.restarted, true);
+  assert.ok(existsSync(flag));
+});
+
+test("首次安装(未配置)也打印访问地址", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  const flag = join(dir, "reconfigure.flag");
+  writeFileSync(cfg, JSON.stringify({}));
+  const lines = [];
+  const r = await runPostinstall({
+    configPath: cfg,
+    markerPath: flag,
+    env: {},
+    restart: async () => ({ active: false }),
+    log: (m) => lines.push(String(m)),
+    lanIPs: () => ["10.0.0.9"],
+    publicIP: async () => null,
+  });
+  const out = lines.join("\n");
+  assert.match(out, /面板访问地址/);
+  assert.match(out, /http:\/\/10\.0\.0\.9:\d+\/[0-9a-f]{12}\//);
+  assert.equal(r.done, false);
   assert.ok(existsSync(flag));
 });
 
@@ -55,6 +79,8 @@ test("无环境变量且服务未运行时不报错", async () => {
     markerPath: flag,
     env: {},
     restart: async () => ({ active: false }),
+    lanIPs: () => [],
+    publicIP: async () => null,
   });
   assert.equal(r.done, false);
   assert.equal(r.restarted, false);

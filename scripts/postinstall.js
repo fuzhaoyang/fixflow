@@ -70,7 +70,7 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
     if (r.active) log("✓ 已重启正在运行的 fixflow 服务，新版本已生效");
     if (panelEnabled) {
       log("  请运行 fixflow 进入配置向导（选择服务商 → 粘贴 API Key → 选模型）。");
-      log("  配置完成后运行 fixflow default 可查看面板访问地址。");
+      await printPanelAddress(existing, configPath, { log, lanIPs, publicIP });
     } else {
       log("  ⚪ 已选择不启用 Web 面板（CLI 模式）");
       log(`  ${SIZE_NOTE}`);
