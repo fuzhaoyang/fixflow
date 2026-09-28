@@ -1693,6 +1693,7 @@ function setupAuth() {
   (async () => {
     const res = await fetch("api/status");
     const data = await res.json();
+    document.getElementById("boot-mask").style.display = "none";
     if (data.loggedIn) { setUserName(data.username); authMask.style.display = "none"; initPanel(); return; }
     setAuthMode(data.registered ? "login" : "register", Boolean(data.registered));
     authMask.style.display = "flex";

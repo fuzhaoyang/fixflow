@@ -879,3 +879,12 @@ test("首页包含指标告警 UI 元素", async () => {
   for (const id of ["alert-top-tabs", "alert-metric", "ma-rules", "ma-incidents", "ma-form", "ma-rules-pager", "ma-incidents-pager"]) assert.match(body, new RegExp(`id="${id}"`), `缺少 ${id}`);
   w.close();
 });
+
+test("登录遮罩默认隐藏 + 启动遮罩兜底，双场景无闪烁", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  assert.match(body, /#auth-mask \{[^}]*display: none/);
+  assert.match(body, /id="boot-mask"/);
+  w.close();
+});
