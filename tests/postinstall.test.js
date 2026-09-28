@@ -126,3 +126,23 @@ test("FIXFLOW_PANEL=0 且无 apiKey 时写 panel:false 且不重启", async () =
   assert.equal(JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8")).panel, false);
   assert.equal(r.panelEnabled, false);
 });
+
+test("面板安装后打印带入口的访问地址", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-"));
+  const cfg = join(dir, "config.json");
+  const flag = join(dir, "reconfigure.flag");
+  const lines = [];
+  await runPostinstall({
+    configPath: cfg, markerPath: flag,
+    env: { FIXFLOW_API_KEY: "k1", FIXFLOW_PANEL: "1" },
+    install: async () => ({ installed: true }),
+    log: (m) => lines.push(String(m)),
+    lanIPs: () => ["192.168.1.5"],
+    publicIP: async () => "1.2.3.4",
+  });
+  const out = lines.join("\n");
+  assert.match(out, /面板访问地址/);
+  assert.match(out, /http:\/\/192\.168\.1\.5:\d+\/[0-9a-f]{12}\//);
+  assert.match(out, /http:\/\/1\.2\.3\.4:\d+\/[0-9a-f]{12}\//);
+  assert.equal(JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8")).panelPath.length, 12);
+});

@@ -4,6 +4,8 @@ import { pathToFileURL } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
 import { DEFAULT_BASE_URL, setReconfigureFlag, clearReconfigureFlag, RECONFIGURE_FLAG } from "../src/setup.js";
 import { install as installService, restartIfActive } from "../src/service.js";
+import { ensurePanelAccess, buildUrls } from "../src/panel-access.js";
+import { lanIPs as defaultLanIPs, publicIP as defaultPublicIP } from "../src/netip.js";
 
 export const DEFAULT_CONFIG_PATH = join(homedir(), ".config", "fixflow", "config.json");
 
@@ -38,7 +40,7 @@ function persistPanel(configPath, panelEnabled, write) {
 
 const SIZE_NOTE = "包体参考：全量安装包 ~483KB(tgz) / ~2.3MB(解压)；面板（echarts+web）约占 1.6MB；仅 CLI 核心约 0.7MB。";
 
-export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerPath = RECONFIGURE_FLAG, env = process.env, write = writeFileSync, log = console.log, install = installService, restart = restartIfActive, askPanel = defaultAskPanel } = {}) {
+export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerPath = RECONFIGURE_FLAG, env = process.env, write = writeFileSync, log = console.log, install = installService, restart = restartIfActive, askPanel = defaultAskPanel, lanIPs = defaultLanIPs, publicIP = defaultPublicIP } = {}) {
   const panelEnabled = panelFromEnv(env) ?? (await askPanel()) ?? true;
   const apiKey = env.FIXFLOW_API_KEY?.trim();
   if (!apiKey) {
@@ -49,6 +51,7 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
     if (r.active) log("✓ 已重启正在运行的 fixflow 服务，新版本已生效");
     if (panelEnabled) {
       log("  请运行 fixflow 进入配置向导（选择服务商 → 粘贴 API Key → 选模型）。");
+      log("  配置完成后运行 fixflow default 可查看面板访问地址。");
     } else {
       log("  ⚪ 已选择不启用 Web 面板（CLI 模式）");
       log(`  ${SIZE_NOTE}`);
@@ -74,8 +77,12 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
     const svc = await install();
     if (svc.installed) {
       log("✓ 面板服务已注册并启动（systemd 托管，开机自启、退出终端不影响）");
-      log("  访问地址: http://127.0.0.1:2222");
       log("  管理命令: systemctl status fixflow / restart fixflow / stop fixflow");
+      const access = await ensurePanelAccess(config, { configPath });
+      const pub = await publicIP({ timeout: 2000 }).catch(() => null);
+      log(`  面板访问地址（请确保安全组/防火墙放行端口 ${access.port}）：`);
+      for (const u of buildUrls({ port: access.port, panelPath: access.panelPath, lan: lanIPs(), pub })) log("    " + u);
+      if (!pub) log("    （公网 IP 获取失败；可运行 fixflow default 重查）");
     } else {
       log(`\n⚠ 面板未注册为系统服务：${svc.reason}`);
     }
