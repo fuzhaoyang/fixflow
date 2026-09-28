@@ -83,13 +83,11 @@ document.querySelectorAll(".menu-item").forEach((item) => {
 window.addEventListener("hashchange", applyRoute);
 
 // ---------- 总览：状态圆环 + 流量/磁盘IO ----------
-let ringCharts = {};
-let trafficChart = null;
-let ioChart = null;
-let tokenChart = null;
+
 let overviewData = null;
 let nicFilter = "all";
 let unitDivider = 1;
+let tokenUnit = 1000000;
 let trafficTab = "traffic";
 let unitTouched = false;
 
@@ -126,19 +124,6 @@ function ringLabel(pct) {
 }
 
 function initRings() {
-  for (const key of ["load", "cpu", "mem", "disk"]) {
-    ringCharts[key] = echarts.init(document.getElementById("ring-" + key));
-    ringCharts[key].setOption({
-      series: [{
-        type: "pie",
-        radius: ["72%", "88%"],
-        center: ["50%", "50%"],
-        silent: true,
-        label: { show: false },
-        data: [{ value: 0, itemStyle: { color: ringColor(0) } }, { value: 100, itemStyle: { color: "#334155" } }],
-      }],
-    });
-  }
 }
 
 function renderRings(status) {
@@ -151,9 +136,9 @@ function renderRings(status) {
   for (const key of ["load", "cpu", "mem", "disk"]) {
     const it = map[key];
     const pct = Math.min(100, Math.max(0, it.val));
-    ringCharts[key].setOption({
-      series: [{ data: [{ value: pct, itemStyle: { color: ringColor(pct) } }, { value: 100 - pct, itemStyle: { color: "#334155" } }] }],
-    });
+    const el = document.getElementById("ring-" + key);
+    el.style.setProperty("--pct", pct);
+    el.style.setProperty("--rc", ringColor(pct));
     document.getElementById("val-" + key).textContent = (Number.isInteger(pct) ? pct : pct.toFixed(1)) + "%";
     document.getElementById("val-" + key).style.color = ringColor(pct);
     document.getElementById("sub-" + key).textContent = it.sub + " · " + ringLabel(pct);
@@ -218,11 +203,10 @@ function fmtBytes(b) {
   return v + " B";
 }
 
-function chartOption(mode) {
-  if (!overviewData) return null;
-  const points = mode === "traffic" ? overviewData.net : overviewData.io;
+function chartData(mode) {
+  const points = mode === "traffic" ? overviewData?.net : overviewData?.io;
   if (!points?.length) return null;
-  const times = points.map((p) => {
+  const labels = points.map((p) => {
     const d = new Date(p.t * 1000);
     const pad = (n) => String(n).padStart(2, "0");
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
@@ -232,64 +216,123 @@ function chartOption(mode) {
     upData = points.map((p) => {
       let v = 0;
       for (const [name, x] of Object.entries(p.up || {})) if (nicFilter === "all" || name === nicFilter) v += x;
-      return (v / (unitDivider || 1)).toFixed(2);
+      return v / (unitDivider || 1);
     });
     downData = points.map((p) => {
       let v = 0;
       for (const [name, x] of Object.entries(p.down || {})) if (nicFilter === "all" || name === nicFilter) v += x;
-      return (v / (unitDivider || 1)).toFixed(2);
+      return v / (unitDivider || 1);
     });
   } else {
     upData = points.map((p) => {
       let v = 0;
       for (const x of Object.values(p.read || {})) v += x;
-      return (v / (unitDivider || 1)).toFixed(2);
+      return v / (unitDivider || 1);
     });
     downData = points.map((p) => {
       let v = 0;
       for (const x of Object.values(p.write || {})) v += x;
-      return (v / (unitDivider || 1)).toFixed(2);
+      return v / (unitDivider || 1);
     });
   }
   const [upName, downName, upColor, downColor] = mode === "traffic"
     ? ["上行", "下行", "#f97316", "#3b82f6"]
     : ["读取", "写入", "#ec4899", "#06b6d4"];
   return {
-    tooltip: {
-      trigger: "axis",
-      backgroundColor: "#ffffff",
-      borderColor: "#e2e8f0",
-      borderWidth: 1,
-      padding: [10, 14],
-      textStyle: { color: "#334155", fontSize: 12 },
-      extraCssText: "box-shadow: 0 4px 16px rgba(0,0,0,.12); border-radius: 8px;",
-    },
-    grid: { left: 52, right: 16, top: 40, bottom: 28 },
-    xAxis: {
-      type: "category", data: times, boundaryGap: false,
-      axisLine: { lineStyle: { color: "#334155" } },
-      axisLabel: { color: "#94a3b8", fontSize: 11 },
-    },
-    yAxis: {
-      type: "value", min: 0,
-      max: unitDivider >= 1024 * 1024 ? undefined : (mode === "io" ? 2.5 : 50),
-      interval: unitDivider >= 1024 * 1024 ? undefined : (mode === "io" ? 0.5 : 10),
-      axisLabel: { color: "#94a3b8", fontSize: 11 },
-      splitLine: { lineStyle: { color: "#1e293b" } },
-    },
+    labels,
     series: [
-      {
-        name: downName, type: "line", data: downData, smooth: true, symbol: "none",
-        lineStyle: { color: downColor, width: 1.5 },
-        areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: hexToRgba(downColor, 0.45) }, { offset: 1, color: hexToRgba(downColor, 0.08) }] } },
-      },
-      {
-        name: upName, type: "line", data: upData, smooth: true, symbol: "none",
-        lineStyle: { color: upColor, width: 1.5 },
-        areaStyle: { color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1, colorStops: [{ offset: 0, color: hexToRgba(upColor, 0.4) }, { offset: 1, color: hexToRgba(upColor, 0.05) }] } },
-      },
+      { name: downName, color: downColor, data: downData },
+      { name: upName, color: upColor, data: upData },
     ],
+    fixedMax: unitDivider >= 1024 * 1024 ? null : (mode === "io" ? 2.5 : 50),
   };
+}
+
+function niceCeil(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(Math.max(1, v))));
+  return Math.ceil(v / p) * p;
+}
+
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 400;
+  const h = canvas.clientHeight || 200;
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
+let chartTip = null;
+function ensureTip() {
+  if (chartTip) return chartTip;
+  chartTip = document.createElement("div");
+  chartTip.className = "chart-tip";
+  document.body.appendChild(chartTip);
+  return chartTip;
+}
+
+function attachChartTip(canvas) {
+  canvas.addEventListener("mousemove", (e) => {
+    const meta = canvas._chart;
+    if (!meta || !meta.n) return;
+    const rect = canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const idx = Math.min(meta.n - 1, Math.max(0, Math.round(((px - meta.padL) / meta.pw) * (meta.n - 1))));
+    const tip = ensureTip();
+    tip.innerHTML = `<b>${escapeHtml(meta.labels[idx])}</b><br>` + meta.series.map((s) => `<span style="color:${s.color}">● ${escapeHtml(s.name)} ${Math.round(s.data[idx] * 100) / 100}</span>`).join("<br>");
+    tip.style.display = "block";
+    const tw = tip.offsetWidth;
+    let left = e.clientX - tw / 2;
+    left = Math.max(6, Math.min(window.innerWidth - tw - 6, left));
+    tip.style.left = left + "px";
+    tip.style.top = (e.clientY - tip.offsetHeight - 10) + "px";
+  });
+  canvas.addEventListener("mouseleave", () => { if (chartTip) chartTip.style.display = "none"; });
+}
+
+function drawLineChart(canvas, { labels, series, fixedMax = null }) {
+  const { ctx, w, h } = setupCanvas(canvas);
+  const pad = { l: 44, r: 12, t: 30, b: 22 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  let max = fixedMax;
+  if (max == null) for (const s of series) for (const v of s.data) if (typeof v === "number" && (max == null || v > max)) max = v;
+  const niceMax = Math.max(1, niceCeil(max || 1));
+  const steps = 4;
+  ctx.font = "10px sans-serif";
+  for (let i = 0; i <= steps; i++) {
+    const y = pad.t + ph - (i / steps) * ph;
+    ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(String(Math.round((niceMax * i / steps) * 100) / 100), 4, y + 3);
+  }
+  const n = labels.length;
+  const showIdx = n <= 8 ? labels.map((_, i) => i) : [0, Math.floor((n - 1) / 2), n - 1];
+  const X = (i) => (n <= 1 ? pad.l + pw / 2 : pad.l + (i / (n - 1)) * pw);
+  const Y = (v) => pad.t + ph - (v / niceMax) * ph;
+  for (const i of showIdx) {
+    ctx.textAlign = i === 0 ? "left" : i === n - 1 ? "right" : "center";
+    ctx.fillText(labels[i], i === 0 ? pad.l : i === n - 1 ? pad.l + pw : X(i), h - 6);
+  }
+  ctx.textAlign = "left";
+  for (const s of series) {
+    ctx.strokeStyle = s.color; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    s.data.forEach((v, i) => { const px = X(i), py = Y(v); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+    ctx.stroke();
+    const g = ctx.createLinearGradient(0, pad.t, 0, pad.t + ph);
+    g.addColorStop(0, hexToRgba(s.color, 0.3));
+    g.addColorStop(1, hexToRgba(s.color, 0.03));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.moveTo(X(0), Y(s.data[0]));
+    s.data.forEach((v, i) => ctx.lineTo(X(i), Y(v)));
+    ctx.lineTo(X(n - 1), pad.t + ph); ctx.lineTo(X(0), pad.t + ph); ctx.closePath(); ctx.fill();
+  }
+  canvas._chart = { labels, series, padL: pad.l, pw, n, niceMax };
+  attachChartTip(canvas);
 }
 
 function hexToRgba(hex, a) {
@@ -300,15 +343,15 @@ function hexToRgba(hex, a) {
 function renderChart() {
   if (trafficTab === "token") {
     const days = overviewData?.usage || [];
-    if (tokenChart) tokenChart.setOption(tokenChartOption(days), true);
+    drawTokenChart(document.getElementById("token-chart"), days);
     const last = days[days.length - 1];
-    document.getElementById("token-today").textContent = last ? fmtNum(last.total) : "--";
-    document.getElementById("token-total30").textContent = fmtNum(days.reduce((s, d) => s + d.total, 0));
+    document.getElementById("token-today").textContent = last ? fmtNum(last.total / tokenUnit) : "--";
+    document.getElementById("token-total30").textContent = fmtNum(days.reduce((s, d) => s + d.total, 0) / tokenUnit);
     return;
   }
-  const chart = trafficTab === "traffic" ? trafficChart : ioChart;
-  const option = chartOption(trafficTab);
-  if (option) chart.setOption(option, true);
+  const data = chartData(trafficTab);
+  const canvas = trafficTab === "traffic" ? document.getElementById("traffic-chart") : document.getElementById("io-chart");
+  if (data) drawLineChart(canvas, data);
   renderKpi();
 }
 
@@ -318,19 +361,52 @@ function fmtNum(n) {
   return String(n);
 }
 
-function tokenChartOption(days) {
-  return {
-    tooltip: { trigger: "axis" },
-    legend: { data: ["输入 prompt", "输出 completion", "总 token"], textStyle: { color: "#94a3b8" }, top: 0 },
-    grid: { left: 56, right: 20, top: 36, bottom: 28 },
-    xAxis: { type: "category", data: days.map((d) => d.date.slice(5)), axisLabel: { color: "#94a3b8" } },
-    yAxis: { type: "value", axisLabel: { color: "#94a3b8" }, splitLine: { lineStyle: { color: "rgba(255,255,255,.08)" } } },
+function drawTokenChart(canvas, days) {
+  const { ctx, w, h } = setupCanvas(canvas);
+  const pad = { l: 44, r: 12, t: 30, b: 24 };
+  const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+  const labels = days.map((d) => d.date.slice(5));
+  const totals = days.map((d) => d.total / tokenUnit);
+  const max = niceCeil(Math.max(1, ...totals));
+  ctx.font = "10px sans-serif";
+  for (let i = 0; i <= 4; i++) {
+    const y = pad.t + ph - (i / 4) * ph;
+    ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText(fmtNum(max * i / 4), 4, y + 3);
+  }
+  const n = days.length;
+  const slot = pw / Math.max(1, n);
+  const X = (i) => pad.l + (i + 0.5) * slot;
+  const Y = (v) => pad.t + ph - (v / max) * ph;
+  const bw = Math.min(22, Math.max(3, slot * 0.6));
+  days.forEach((d, i) => {
+    const x = X(i) - bw / 2;
+    const p = d.prompt / tokenUnit, c = d.completion / tokenUnit;
+    const yP = Y(p), yC = Y(p + c);
+    ctx.fillStyle = "#3b82f6"; ctx.fillRect(x, yP, bw, (pad.t + ph) - yP);
+    ctx.fillStyle = "#ec4899"; ctx.fillRect(x, yC, bw, yP - yC);
+  });
+  ctx.strokeStyle = "#fbbf24"; ctx.lineWidth = 2; ctx.beginPath();
+  totals.forEach((v, i) => { const px = X(i), py = Y(v); if (i) ctx.lineTo(px, py); else ctx.moveTo(px, py); });
+  ctx.stroke();
+  const showIdx = n <= 8 ? labels.map((_, i) => i) : [0, Math.floor((n - 1) / 2), n - 1];
+  for (const i of showIdx) {
+    ctx.textAlign = i === 0 ? "left" : i === n - 1 ? "right" : "center";
+    ctx.fillText(labels[i], i === 0 ? pad.l : i === n - 1 ? pad.l + pw : X(i), h - 6);
+  }
+  ctx.textAlign = "left";
+  canvas._chart = {
+    labels,
     series: [
-      { name: "输入 prompt", type: "bar", stack: "t", barMaxWidth: 22, data: days.map((d) => d.prompt), itemStyle: { color: "#3b82f6" } },
-      { name: "输出 completion", type: "bar", stack: "t", barMaxWidth: 22, data: days.map((d) => d.completion), itemStyle: { color: "#ec4899" } },
-      { name: "总 token", type: "line", smooth: true, data: days.map((d) => d.total), itemStyle: { color: "#fbbf24" }, lineStyle: { color: "#fbbf24", width: 2 } },
+      { name: "输入 prompt", color: "#3b82f6", data: days.map((d) => d.prompt / tokenUnit) },
+      { name: "输出 completion", color: "#ec4899", data: days.map((d) => d.completion / tokenUnit) },
+      { name: "总 token", color: "#fbbf24", data: totals },
     ],
+    padL: pad.l, pw, n, niceMax: max,
   };
+  attachChartTip(canvas);
 }
 
 async function refreshOverview() {
@@ -362,6 +438,8 @@ function switchTrafficTab(mode) {
   document.getElementById("io-chart").style.display = mode === "io" ? "" : "none";
   document.getElementById("token-chart").style.display = isToken ? "" : "none";
   document.getElementById("nic-select").style.display = isTraffic ? "" : "none";
+  document.getElementById("unit-select").style.display = isToken ? "none" : "";
+  document.getElementById("token-unit-select").style.display = isToken ? "" : "none";
   document.getElementById("kpi-row").style.display = mode === "io" ? "" : "none";
   document.getElementById("token-kpi").style.display = isToken ? "" : "none";
   const dots = document.querySelectorAll("#kpi-row .dot");
@@ -388,8 +466,6 @@ function switchTrafficTab(mode) {
     unitSel.value = "MB/s";
     unitDivider = 1024 * 1024;
   }
-  const chart = isTraffic ? trafficChart : isToken ? tokenChart : ioChart;
-  setTimeout(() => chart?.resize(), 0);
   renderChart();
 }
 document.getElementById("nic-select").onchange = (e) => { nicFilter = e.target.value; renderChart(); };
@@ -398,12 +474,13 @@ document.getElementById("unit-select").onchange = (e) => {
   unitDivider = e.target.value === "MB/s" ? 1024 * 1024 : 1;
   renderChart();
 };
+document.getElementById("token-unit-select").onchange = (e) => {
+  tokenUnit = Number(e.target.value) || 1;
+  renderChart();
+};
 
 function initOverview() {
   initRings();
-  trafficChart = echarts.init(document.getElementById("traffic-chart"));
-  ioChart = echarts.init(document.getElementById("io-chart"));
-  tokenChart = echarts.init(document.getElementById("token-chart"));
   switchTrafficTab("traffic");
   document.getElementById("unit-select").value = "MB/s";
   unitDivider = 1024 * 1024;

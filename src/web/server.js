@@ -985,10 +985,6 @@ function formatUptime(sec) {
         const js = await readFile(join(STATIC, "app.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
-      } else if (url.pathname === "/echarts.min.js") {
-        const js = await readFile(join(STATIC, "echarts.min.js"));
-        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-        res.end(js);
       } else if (url.pathname === "/xterm.min.js") {
         const js = await readFile(join(STATIC, "xterm.min.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
