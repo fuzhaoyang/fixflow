@@ -95,7 +95,7 @@ test("needsReconfigure 反映标记状态", () => {
   assert.equal(needsReconfigure(flag), false);
 });
 
-test("环境变量齐全时自动写入配置并清除标记", async () => {
+test("环境变量齐全时自动写入配置并设置重配标记(下次进向导)", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-"));
   const cfg = join(dir, "config.json");
   const flag = join(dir, "reconfigure.flag");
@@ -106,12 +106,14 @@ test("环境变量齐全时自动写入配置并清除标记", async () => {
     markerPath: flag,
     env: { FIXFLOW_API_KEY: "k1", FIXFLOW_BASE_URL: "https://deepseek/v1", FIXFLOW_MODEL: "deepseek-flash" },
     install: async () => { installed = true; return { installed: true }; },
+    lanIPs: () => [],
+    publicIP: async () => null,
   });
   assert.equal(r.config.apiKey, "k1");
   assert.equal(r.config.baseUrl, "https://deepseek/v1");
   assert.equal(r.config.model, "deepseek-flash");
   assert.equal(installed, true);
-  assert.equal(existsSync(flag), false);
+  assert.ok(existsSync(flag));
   assert.equal(JSON.parse((await import("node:fs")).readFileSync(cfg, "utf8")).apiKey, "k1");
 });
 

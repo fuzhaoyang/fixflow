@@ -2,7 +2,7 @@ import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
 import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
-import { DEFAULT_BASE_URL, setReconfigureFlag, clearReconfigureFlag, RECONFIGURE_FLAG } from "../src/setup.js";
+import { DEFAULT_BASE_URL, setReconfigureFlag, RECONFIGURE_FLAG } from "../src/setup.js";
 import { install as installService, restartIfActive } from "../src/service.js";
 import { ensurePanelAccess, buildUrls } from "../src/panel-access.js";
 import { lanIPs as defaultLanIPs, publicIP as defaultPublicIP } from "../src/netip.js";
@@ -91,10 +91,11 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
   if (!panelEnabled) config.panel = false;
   mkdirSync(dirname(configPath), { recursive: true });
   write(configPath, JSON.stringify(config, null, 2));
-  clearReconfigureFlag(markerPath);
+  setReconfigureFlag(markerPath);
   log(`✓ 已自动保存配置到 ${configPath}`);
   log(`  Base URL: ${config.baseUrl}`);
   log(`  模型: ${config.model || "（未指定，运行 fixflow 选择）"}`);
+  log("  运行 fixflow 进入配置向导（可确认配置并选择是否启动面板）。");
   if (panelEnabled) {
     const svc = await install();
     if (svc.installed) {
