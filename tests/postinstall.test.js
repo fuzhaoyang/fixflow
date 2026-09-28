@@ -48,7 +48,7 @@ test("首次安装(未配置)也打印访问地址", async () => {
   assert.ok(existsSync(flag));
 });
 
-test("存量已配置重装时打印访问地址且不触发重配", async () => {
+test("存量已配置重装时打印访问地址并设置重配标记", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-"));
   const cfg = join(dir, "config.json");
   const flag = join(dir, "reconfigure.flag");
@@ -66,7 +66,7 @@ test("存量已配置重装时打印访问地址且不触发重配", async () =>
   const out = lines.join("\n");
   assert.match(out, /面板访问地址/);
   assert.match(out, /http:\/\/10\.0\.0\.1:\d+\/[0-9a-f]{12}\//);
-  assert.equal(existsSync(flag), false);
+  assert.ok(existsSync(flag));
   assert.equal(r.alreadyConfigured, true);
 });
 

@@ -56,10 +56,12 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
 
   if (!apiKey) {
     if (existing.apiKey) {
+      setReconfigureFlag(markerPath);
       const r = panelEnabled ? await restart() : { active: false };
       log("\nfixflow 已更新（检测到已有配置）。");
       if (r.active) log("✓ 已重启面板服务，新版本已生效");
       if (panelEnabled) await printPanelAddress(existing, configPath, { log, lanIPs, publicIP });
+      log("  下次运行 fixflow 可进入配置向导（继续面板设置）。");
       log("  ⚠ 卸载请务必运行 fixflow uninstall（会停服务+卸载包），不要直接用 npm uninstall。");
       return { done: true, restarted: r.active, panelEnabled, alreadyConfigured: true };
     }
