@@ -1115,17 +1115,17 @@ async function termConnect() {
   });
   terminal.open(document.getElementById("term-terminal"));
   if (r.history) terminal.write(r.history);
+  terminal.onTitleChange((title) => {
+    const t = String(title || "").trim();
+    if (t.startsWith("/") && t !== fsPath) fsRevealPath(t);
+  });
   let termCmdBuf = "";
   terminal.onData((data) => {
     fetch("api/term/input", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
     for (const ch of data) {
       if (ch === "\r" || ch === "\n") {
         const cmd = termCmdBuf.trim();
-        if (cmd) {
-          fetch("api/term/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: cmd }) });
-          const cd = cmd.match(/^cd\s+(\S+)/);
-          if (cd) fsRevealPath(cd[1]);
-        }
+        if (cmd) fetch("api/term/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ command: cmd }) });
         termCmdBuf = "";
       } else if (ch === "\x7f") {
         termCmdBuf = termCmdBuf.slice(0, -1);
@@ -1230,6 +1230,11 @@ async function fsRevealPath(p) {
   fsRenderTree();
   fsLoadList(abs);
 }
+function fsTermCd(path) {
+  if (!terminal || !path) return;
+  const q = "'" + String(path).replace(/'/g, `'\\''`) + "'";
+  fetch("api/term/input", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data: `cd ${q}\r` }) });
+}
 function fsRenderList() {
   const { key, dir } = fsSort;
   const sorted = [...fsItems].sort((a, b) => {
@@ -1279,6 +1284,7 @@ fsTree.addEventListener("click", async (e) => {
     if (!st.expanded && st.dirs.length) st.expanded = true;
     fsRenderTree();
     fsLoadList(path);
+    fsTermCd(path);
   }
 });
 fsTbody.addEventListener("click", (e) => {
@@ -1293,7 +1299,7 @@ fsTbody.addEventListener("dblclick", (e) => {
   if (!row) return;
   const it = fsItems.find((i) => i.name === row.dataset.name);
   if (!it) return;
-  if (it.isDir) { fsLoadList(joinPath(fsPath, it.name)); fsRenderTree(); }
+  if (it.isDir) { const np = joinPath(fsPath, it.name); fsLoadList(np); fsRenderTree(); fsTermCd(np); }
   else fsEditFile(joinPath(fsPath, it.name));
 });
 document.querySelectorAll("#fs-table th[data-sort]").forEach((th) => {

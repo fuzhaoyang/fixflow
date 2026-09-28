@@ -888,3 +888,12 @@ test("登录遮罩默认隐藏 + 启动遮罩兜底，双场景无闪烁", async
   assert.match(body, /id="boot-mask"/);
   w.close();
 });
+
+test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const js = await (await fetch(`${base}/app.js`)).text();
+  assert.match(js, /onTitleChange/);
+  assert.doesNotMatch(js, /if \(cd\) fsRevealPath/);
+  w.close();
+});

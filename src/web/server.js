@@ -222,7 +222,7 @@ export async function startWeb(config = {}, deps = {}) {
       try { res.write(data); } catch { clients.delete(res); }
     }
   };
-  const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: process.env }));
+  const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: { ...process.env, PROMPT_COMMAND: 'printf "\\033]2;%s\\007" "$PWD"' } }));
   let termShell = null;
   let termBuffer = "";
   const MAX_TERM_BUFFER = 1024 * 1024;
