@@ -847,29 +847,6 @@
       <select id="cfg-model"></select>
       <div class="model-loading" id="cfg-model-status"></div>
     </div>
-    <div class="field">
-      <label>证书到期告警 Webhook（钉钉/企业微信等，可留空）</label>
-      <input id="cfg-ssl-webhook" type="text" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
-    </div>
-    <div class="field">
-      <label>邮件通知（SMTP，需系统已装 sendmail）</label>
-      <div style="display:flex;gap:6px">
-        <input id="cfg-smtp-host" type="text" placeholder="SMTP 主机">
-        <input id="cfg-smtp-port" type="text" placeholder="端口" style="width:80px">
-      </div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <input id="cfg-smtp-user" type="text" placeholder="用户名">
-        <input id="cfg-smtp-pass" type="password" placeholder="密码">
-      </div>
-      <div style="display:flex;gap:6px;margin-top:6px">
-        <input id="cfg-smtp-from" type="text" placeholder="发件人">
-        <input id="cfg-smtp-to" type="text" placeholder="收件人（逗号分隔）">
-      </div>
-    </div>
-    <div class="field">
-      <label>服务白名单（逗号分隔，服务页只统计名称包含这些关键词的服务/进程）</label>
-      <input id="cfg-service-keywords" type="text" placeholder="nginx,docker,pm2,python,java,node">
-    </div>
     <div class="modal-actions">
       <button class="btn" id="cfg-cancel">取消</button>
       <button class="btn" id="cfg-save">保存</button>

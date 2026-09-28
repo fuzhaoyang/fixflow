@@ -1,5 +1,10 @@
 const cards = document.getElementById("cards");
 const log = document.getElementById("log");
+let stickToBottom = true;
+const scrollLog = () => { if (stickToBottom) log.scrollTop = log.scrollHeight; };
+log.addEventListener("scroll", () => {
+  stickToBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+});
 const welcome = document.getElementById("welcome");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
@@ -981,7 +986,7 @@ function renderMsg(text, cls, images) {
     ? imgs + (text ? `<div class="msg-text">${escapeHtml(text)}</div>` : "")
     : renderMarkdown(text);
   log.appendChild(item);
-  log.scrollTop = log.scrollHeight;
+  scrollLog();
   return item;
 }
 
@@ -1002,7 +1007,7 @@ function scheduleStreamRender() {
     streamRenderTimer = null;
     if (streamingEl) {
       streamingEl.querySelector(".bubble").innerHTML = streamingText ? renderMarkdown(streamingText) : "";
-      log.scrollTop = log.scrollHeight;
+      scrollLog();
     }
   }, 120);
 }
@@ -1446,7 +1451,7 @@ function connectStream() {
       streamingText += ev.text;
       if (!streamingEl) streamingEl = renderMsg("", "assistant");
       scheduleStreamRender();
-      log.scrollTop = log.scrollHeight;
+      scrollLog();
     }
     else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }
     else if (ev.type === "confirm") {
@@ -1478,7 +1483,7 @@ function connectStream() {
       btnRow.append(yes, no);
       card.appendChild(btnRow);
       log.appendChild(card);
-      log.scrollTop = log.scrollHeight;
+      scrollLog();
     } else if (ev.type === "clear") {
       clearHistory();
       addSimpleMsg("🧹 聊天历史已清空", "system", { keepWelcome: true });
@@ -1506,7 +1511,7 @@ function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
   div.className = "msg " + cls;
   div.textContent = text;
   log.appendChild(div);
-  log.scrollTop = log.scrollHeight;
+  scrollLog();
 }
 
 function clearHistory() {
@@ -1531,6 +1536,7 @@ async function send() {
   preview.innerHTML = "";
   charCount.textContent = "";
   addMsg(text, "user", { images: imgs });
+  stickToBottom = true;
   setBusy(true);
   showTyping();
   await fetch("api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ input: text, images: imgs }) });
@@ -1794,16 +1800,6 @@ async function openSettings() {
   apiKeyTouched = false;
   cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
   currentKey = cfg.apiKey || "";
-  const al = cfg.sslAlerts || {};
-  const smtp = al.smtp || {};
-  document.getElementById("cfg-ssl-webhook").value = al.webhook || "";
-  document.getElementById("cfg-smtp-host").value = smtp.host || "";
-  document.getElementById("cfg-smtp-port").value = smtp.port || "";
-  document.getElementById("cfg-smtp-user").value = smtp.user || "";
-  document.getElementById("cfg-smtp-pass").value = smtp.pass || "";
-  document.getElementById("cfg-smtp-from").value = smtp.from || "";
-  document.getElementById("cfg-smtp-to").value = smtp.to || "";
-  document.getElementById("cfg-service-keywords").value = (cfg.serviceKeywords || []).join(",");
   settingsMask.classList.add("show");
   await loadModels();
   if (cfg.model) cfgModel.value = cfg.model;
@@ -2036,18 +2032,6 @@ document.getElementById("cfg-save").onclick = async () => {
   if (newBaseUrl) body.baseUrl = newBaseUrl;
   const newKey = cfgApiKey.value.trim();
   if (newKey) body.apiKey = newKey;
-  body.sslAlerts = {
-    webhook: document.getElementById("cfg-ssl-webhook").value.trim(),
-    smtp: {
-      host: document.getElementById("cfg-smtp-host").value.trim(),
-      port: document.getElementById("cfg-smtp-port").value.trim(),
-      user: document.getElementById("cfg-smtp-user").value.trim(),
-      pass: document.getElementById("cfg-smtp-pass").value,
-      from: document.getElementById("cfg-smtp-from").value.trim(),
-      to: document.getElementById("cfg-smtp-to").value.trim(),
-    },
-  };
-  body.serviceKeywords = document.getElementById("cfg-service-keywords").value.split(/[,，\s]+/).map((s) => s.trim()).filter(Boolean);
   const res = await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { alert("保存失败：" + (data.error || res.status)); return; }

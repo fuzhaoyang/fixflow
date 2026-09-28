@@ -12,7 +12,12 @@ function cause(e) {
 async function fetchWithRetry(url, opts, { retries = 1, delay = 800 } = {}) {
   for (let attempt = 0; ; attempt++) {
     try {
-      return await fetch(url, opts);
+      const res = await fetch(url, opts);
+      if (res.status >= 500 && attempt < retries && !(opts.signal && opts.signal.aborted)) {
+        await new Promise((r) => setTimeout(r, delay));
+        continue;
+      }
+      return res;
     } catch (e) {
       if (attempt >= retries || (opts.signal && opts.signal.aborted)) throw e;
       await new Promise((r) => setTimeout(r, delay));
@@ -32,7 +37,7 @@ export async function chat({ apiKey, baseUrl, model, messages, tools, signal, ti
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model, messages, tools, tool_choice: "auto" }),
       signal: ctrl.signal,
-    });
+    }, { retries: 2 });
   } catch (e) {
     if (ctrl.signal.aborted && !signal?.aborted) throw new Error(`LLM 请求超时（${timeout / 1000}s 无响应）`);
     throw new Error(`无法连接 LLM 服务: ${e.message}${cause(e)}`);
@@ -63,7 +68,7 @@ export async function* streamChat({ apiKey, baseUrl, model, messages, tools, sig
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify({ model, messages, tools, tool_choice: "auto", stream: true }),
       signal: ctrl.signal,
-    });
+    }, { retries: 2 });
   } catch (e) {
     if (ctrl.signal.aborted && !signal?.aborted) throw new Error(`LLM 请求超时（${timeout / 1000}s 无响应）`);
     throw new Error(`无法连接 LLM 服务: ${e.message}${cause(e)}`);

@@ -719,7 +719,7 @@ function formatUptime(sec) {
         res.end(JSON.stringify({ ok: true }));
         session.send(input, images)
           .then(() => broadcast({ type: "done" }))
-          .catch((e) => broadcast({ type: "error", text: String(e) }));
+          .catch((e) => { console.error("[fixflow] 对话错误:", e?.message || e); broadcast({ type: "error", text: String(e) }); });
       } else if (url.pathname === "/api/confirm" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
