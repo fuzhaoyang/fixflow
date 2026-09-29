@@ -133,6 +133,21 @@ test("配置热更新：修改 config 对象后 llmChat 收到新值", async () 
   assert.equal(seen.apiKey, "old");
 });
 
+test("语言热更新：config.lang 决定 system 提示词语言", async () => {
+  const config = { lang: "zh" };
+  let seen;
+  const s = createSession({
+    config,
+    llmChat: async (opts) => { seen = opts.messages[0]; return { text: "ok", toolCalls: [] }; },
+  });
+  await s.send("hi");
+  assert.equal(seen.role, "system");
+  assert.match(seen.content, /简体中文/);
+  config.lang = "en";
+  await s.send("hi2");
+  assert.match(seen.content, /English/);
+});
+
 test("run_command 命中写操作时需确认（非 root 环境被沙箱拒绝）", async () => {
   const confirmations = [];
   const s = createSession({

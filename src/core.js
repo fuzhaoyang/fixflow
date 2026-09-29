@@ -19,6 +19,15 @@ const SYSTEM_PROMPT = `你是 fixflow，一名专业的服务器运维助手。
 
 【输出格式】检查与汇报全部使用 Markdown：标题用 #、列表用 -、表格用 |、代码块用 \`\`\`。需要用户确认的修复动作，先说明原因再调用 apply_fix。用户要求清空/清除聊天历史时，调用 clear_history。`;
 
+const LANG_HINT = {
+  zh: "【语言要求】默认用简体中文回答，除非用户明确要求使用其他语言。",
+  en: "[Language] Respond in English by default, unless the user explicitly asks for another language.",
+};
+
+function buildSystemPrompt(lang) {
+  return `${SYSTEM_PROMPT}\n\n${LANG_HINT[lang] || LANG_HINT.zh}`;
+}
+
 const HANDLERS = {
   run_command: async ({ command }, ctx) => {
     if (isWriteCommand(command)) {
@@ -53,13 +62,13 @@ function sanitizeHistory(history) {
 }
 
 export function createSession({ config, onConfirm = async () => false, onEvent, onUsage = () => {}, llmChat = streamChat }) {
-  const history = [{ role: "system", content: SYSTEM_PROMPT }];
+  const history = [{ role: "system", content: buildSystemPrompt(config.lang) }];
   const ctx = { onConfirm };
   let controller = new AbortController();
   const safeEvent = (e) => { try { onEvent?.(e); } catch {} };
   function clearHistory() {
     history.length = 0;
-    history.push({ role: "system", content: SYSTEM_PROMPT });
+    history.push({ role: "system", content: buildSystemPrompt(config.lang) });
     safeEvent({ type: "clear" });
     return { cleared: true };
   }
@@ -67,6 +76,7 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
   async function doSend(input, images = []) {
     controller = new AbortController();
     ctx.signal = controller.signal;
+    history[0] = { role: "system", content: buildSystemPrompt(config.lang) };
     history.push({ role: "user", content: images.length ? [{ type: "text", text: input }, ...images.map((url) => ({ type: "image_url", image_url: { url } }))] : input });
     for (;;) {
       let text = "";
