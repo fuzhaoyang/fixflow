@@ -236,11 +236,14 @@ export async function startWeb(config = {}, deps = {}) {
   const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: { ...process.env, PROMPT_COMMAND: 'printf "\\033]2;%s\\007" "$PWD"' } }));
   let termShell = null;
   let termBuffer = "";
+  let termGen = 0;
   const MAX_TERM_BUFFER = 1024 * 1024;
   const ensureShell = () => {
     if (termShell && termShell.exitCode === null && !termShell.killed) return termShell;
+    const gen = ++termGen;
     termShell = spawnShell();
     const push = (d) => {
+      if (gen !== termGen) return;
       const s = String(d);
       termBuffer += s;
       if (termBuffer.length > MAX_TERM_BUFFER) termBuffer = termBuffer.slice(-MAX_TERM_BUFFER);
@@ -248,8 +251,12 @@ export async function startWeb(config = {}, deps = {}) {
     };
     termShell.stdout?.on("data", push);
     termShell.stderr?.on("data", push);
-    termShell.on("exit", () => { broadcast({ type: "term", data: "\n[会话已结束]\n" }); termShell = null; });
-    termShell.on("error", (e) => broadcast({ type: "term", data: `\n[shell 错误] ${e.message}\n` }));
+    termShell.on("exit", () => {
+      if (gen !== termGen) return;
+      broadcast({ type: "term", data: "\n[会话已结束]\n" });
+      termShell = null;
+    });
+    termShell.on("error", (e) => { if (gen === termGen) broadcast({ type: "term", data: `\n[shell 错误] ${e.message}\n` }); });
     return termShell;
   };
   const sseGuard = setInterval(() => {
@@ -765,6 +772,7 @@ function formatUptime(sec) {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end("{}");
       } else if (url.pathname === "/api/term/close" && req.method === "POST") {
+        termGen++;
         if (termShell) { try { termShell.kill(); } catch {} termShell = null; }
         termBuffer = "";
         res.writeHead(200, { "Content-Type": "application/json" });
@@ -1053,6 +1061,6 @@ function formatUptime(sec) {
   else console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
   return {
     server,
-    close: () => new Promise((resolve) => { clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); server.close(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); server.close(resolve); }),
   };
 }

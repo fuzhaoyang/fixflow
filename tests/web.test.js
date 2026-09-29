@@ -916,6 +916,64 @@ test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async
   w.close();
 });
 
+test("终端初始化防丢帧：app.js 增量写入历史并补拉二次 open", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const js = await (await fetch(`${base}/app.js`)).text();
+  assert.match(js, /writeHistory/);
+  assert.match(js, /h\.slice\(written\)/);
+  assert.match(js, /fetch\("api\/term\/open"/);
+  const hintIdx = js.indexOf('hintTimer = setTimeout(() => termSetLoading(true, "正在启动 shell');
+  const readyWriteIdx = js.indexOf("writeHistory(r.history)");
+  assert.ok(hintIdx !== -1 && readyWriteIdx !== -1 && hintIdx < readyWriteIdx, "hintTimer 必须先于可同步触发 ready 的 writeHistory 赋值");
+  w.close();
+});
+
+test("关闭终端时旧会话的死亡输出不泄漏到新会话", async () => {
+  const spawnShell = () => {
+    const sh = new EventEmitter();
+    sh.exitCode = null;
+    sh.killed = false;
+    sh.stdout = new EventEmitter();
+    sh.stderr = new EventEmitter();
+    sh.stdin = { write: () => {} };
+    sh.kill = () => {
+      sh.killed = true;
+      setTimeout(() => {
+        sh.stdout.emit("data", "Session terminated, killing shell...\n...killed.\n");
+        sh.exitCode = 1;
+        sh.emit("exit");
+      }, 30);
+    };
+    return sh;
+  };
+  const w = await makeServer({}, { spawnShell });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const ac = new AbortController();
+  const sseRes = await fetch(`${base}/api/stream`, { headers: { Cookie: cookie }, signal: ac.signal });
+  const reader = sseRes.body.getReader();
+  let sseText = "";
+  (async () => {
+    const dec = new TextDecoder();
+    while (true) { const { done, value } = await reader.read(); if (done) break; sseText += dec.decode(value); }
+  })().catch(() => {});
+
+  await fetch(`${base}/api/term/open`, { method: "POST", headers: H });
+  await new Promise((r) => setTimeout(r, 50));
+  await fetch(`${base}/api/term/close`, { method: "POST", headers: H });
+  await new Promise((r) => setTimeout(r, 120));
+  assert.ok(!sseText.includes("Session terminated"), "旧会话死亡输出不应被广播");
+  assert.ok(!sseText.includes("会话已结束"), "旧会话结束提示不应被广播");
+
+  const reopen = await (await fetch(`${base}/api/term/open`, { method: "POST", headers: H })).json();
+  assert.ok(!String(reopen.history || "").includes("Session terminated"), "旧会话死亡输出不应写入新会话历史");
+  ac.abort();
+  w.close();
+});
+
 test("panelPath 前缀路由：带前缀可访问，无前缀 404", async () => {
   const w = await makeServer({ panelPath: "abcdef123456" });
   const base = `http://127.0.0.1:${w.server.address().port}`;

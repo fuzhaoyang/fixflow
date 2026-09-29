@@ -1196,6 +1196,8 @@ async function termConnect() {
   let settled = false;
   let hintTimer = null, safetyTimer = null;
   const ready = () => { if (settled) return; settled = true; clearTimeout(hintTimer); clearTimeout(safetyTimer); termOnOutput = null; termSetLoading(false); };
+  hintTimer = setTimeout(() => termSetLoading(true, "正在启动 shell（首次加载需初始化环境），请稍候…"), 5000);
+  safetyTimer = setTimeout(ready, 120000);
   try {
   terminal = new Terminal({
     cols: 80,
@@ -1210,7 +1212,17 @@ async function termConnect() {
     if (m) { ready(); if (m[1] !== fsPath) fsRevealPath(m[1]); }
   });
   termOnOutput = ready;
-  if (r.history) { terminal.write(r.history); ready(); }
+  let written = 0;
+  const writeHistory = (hist) => {
+    const h = String(hist || "");
+    if (h.length > written) { terminal.write(h.slice(written)); written = h.length; }
+    if (h) ready();
+  };
+  writeHistory(r.history);
+  setTimeout(async () => {
+    if (settled) return;
+    try { writeHistory((await fetch("api/term/open", { method: "POST" }).then((res) => res.json())).history); } catch {}
+  }, 400);
   let termCmdBuf = "";
   terminal.onData((data) => {
     fetch("api/term/input", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
@@ -1228,8 +1240,6 @@ async function termConnect() {
   });
   terminal.focus();
   fitTerminal();
-  hintTimer = setTimeout(() => termSetLoading(true, "正在启动 shell（首次加载需初始化环境），请稍候…"), 5000);
-  safetyTimer = setTimeout(ready, 120000);
   } catch (e) {
     ready();
   }
