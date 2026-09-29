@@ -148,6 +148,34 @@ test("语言热更新：config.lang 决定 system 提示词语言", async () => 
   assert.match(seen.content, /English/);
 });
 
+test("语言热更新：clearHistory 按当前语言重建 system 提示词", async () => {
+  const config = { lang: "zh" };
+  let seen = null;
+  const s = createSession({
+    config,
+    llmChat: async (opts) => { seen = opts.messages; return { text: "ok", toolCalls: [] }; },
+  });
+  await s.send("hi");
+  assert.match(seen[0].content, /简体中文/);
+  config.lang = "en";
+  s.clear();
+  await s.send("hi again");
+  assert.equal(seen[0].role, "system");
+  assert.match(seen[0].content, /English/);
+  assert.equal(seen[1].role, "user");
+});
+
+test("语言热更新：非法 lang 回退简体中文", async () => {
+  const config = { lang: "fr" };
+  let seen;
+  const s = createSession({
+    config,
+    llmChat: async (opts) => { seen = opts.messages[0]; return { text: "ok", toolCalls: [] }; },
+  });
+  await s.send("hi");
+  assert.match(seen.content, /简体中文/);
+});
+
 test("run_command 命中写操作时需确认（非 root 环境被沙箱拒绝）", async () => {
   const confirmations = [];
   const s = createSession({
