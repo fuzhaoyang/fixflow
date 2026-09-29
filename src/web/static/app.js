@@ -25,16 +25,16 @@ let pendingImages = [];
 let chatHistory = [];
 
 const MODULES = [
-  ["system", "系统"],
-  ["network", "网络"],
-  ["nginx", "Nginx"],
-  ["firewall", "防火墙"],
-  ["services", "Python 服务"],
-  ["databases", "数据库"],
-  ["docker", "Docker"],
-  ["processes", "进程"],
-  ["ssl", "SSL 证书"],
-  ["systemd", "服务"],
+  ["system", "menu.system"],
+  ["network", "menu.network"],
+  ["nginx", "menu.nginx"],
+  ["firewall", "menu.firewall"],
+  ["services", "menu.services"],
+  ["databases", "menu.databases"],
+  ["docker", "menu.docker"],
+  ["processes", "menu.processes"],
+  ["ssl", "menu.ssl"],
+  ["systemd", "menu.systemd"],
 ];
 
 let currentFilter = "all";
@@ -116,14 +116,14 @@ function renderSysInfo(sys) {
   if (!sys) return;
   const osEl = document.querySelector("#sys-info .sys-os");
   const upEl = document.querySelector("#sys-info .sys-uptime");
-  if (osEl) osEl.textContent = `当前系统：${sys.os} · ${sys.arch}`;
-  if (upEl) upEl.textContent = `持续运行：${sys.uptime}`;
+  if (osEl) osEl.textContent = t("sys.os").replace("{os}", sys.os).replace("{arch}", sys.arch);
+  if (upEl) upEl.textContent = t("sys.uptime").replace("{up}", sys.uptime);
 }
 
 function ringLabel(pct) {
-  if (pct >= 90) return "危险";
-  if (pct >= 80) return "警戒";
-  return "正常";
+  if (pct >= 90) return t("mon.danger");
+  if (pct >= 80) return t("mon.guard");
+  return t("mon.ok");
 }
 
 function initRings() {
@@ -142,6 +142,8 @@ function renderRings(status) {
     const el = document.getElementById("ring-" + key);
     el.style.setProperty("--pct", pct);
     el.style.setProperty("--rc", ringColor(pct));
+    const labelEl = el.parentElement?.querySelector(".label");
+    if (labelEl) labelEl.textContent = it.label;
     document.getElementById("val-" + key).textContent = (Number.isInteger(pct) ? pct : pct.toFixed(1)) + "%";
     document.getElementById("val-" + key).style.color = ringColor(pct);
     document.getElementById("sub-" + key).textContent = it.sub + " · " + ringLabel(pct);
@@ -185,7 +187,7 @@ function renderKpi() {
     for (const x of Object.values(last?.write || {})) writeB += x;
     document.getElementById("kpi-up").textContent = fmtBytes(readB);
     document.getElementById("kpi-down").textContent = fmtBytes(writeB);
-    document.getElementById("kpi-tx").textContent = `${last?.iops ?? 0} 次`;
+    document.getElementById("kpi-tx").textContent = `${last?.iops ?? 0} ${t("io.ops")}`;
     const lat = document.getElementById("kpi-rx");
     lat.textContent = `${last?.latency ?? 0} ms`;
     lat.style.color = "#22c55e";
@@ -403,9 +405,9 @@ function drawTokenChart(canvas, days) {
   canvas._chart = {
     labels,
     series: [
-      { name: "输入 prompt", color: "#3b82f6", data: days.map((d) => d.prompt / tokenUnit) },
-      { name: "输出 completion", color: "#ec4899", data: days.map((d) => d.completion / tokenUnit) },
-      { name: "总 token", color: "#fbbf24", data: totals },
+      { name: t("ov.tokPrompt"), color: "#3b82f6", data: days.map((d) => d.prompt / tokenUnit) },
+      { name: t("ov.tokCompletion"), color: "#ec4899", data: days.map((d) => d.completion / tokenUnit) },
+      { name: t("ov.tokTotal"), color: "#fbbf24", data: totals },
     ],
     padL: pad.l, pw, n, niceMax: max,
   };
@@ -421,7 +423,7 @@ async function refreshOverview() {
     const sel = document.getElementById("nic-select");
     const prev = sel.value;
     const nics = (overviewData.nics || []).filter((n) => n !== "lo");
-    sel.innerHTML = '<option value="all">所有</option>' + nics.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
+    sel.innerHTML = `<option value="all" data-i18n="ov.all">${t("ov.all")}</option>` + nics.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
     if (nics.includes(prev)) sel.value = prev;
     renderChart();
   } catch {}
@@ -457,10 +459,10 @@ function switchTrafficTab(mode) {
     dots[0].style.background = "#f97316";
     dots[1].style.background = "#3b82f6";
   } else {
-    document.getElementById("kpi-up-key").innerHTML = '<span class="dot" style="background:#ec4899"></span>读取';
-    document.getElementById("kpi-down-key").innerHTML = '<span class="dot" style="background:#06b6d4"></span>写入';
-    document.getElementById("kpi-tx-key").textContent = "每秒读写 (IOPS)";
-    document.getElementById("kpi-rx-key").textContent = "IO 延迟";
+    document.getElementById("kpi-up-key").innerHTML = `<span class="dot" style="background:#ec4899"></span>${t("io.read")}`;
+    document.getElementById("kpi-down-key").innerHTML = `<span class="dot" style="background:#06b6d4"></span>${t("io.write")}`;
+    document.getElementById("kpi-tx-key").textContent = t("io.iops");
+    document.getElementById("kpi-rx-key").textContent = t("io.latency");
     dots[0].style.background = "#ec4899";
     dots[1].style.background = "#06b6d4";
   }
@@ -494,7 +496,8 @@ function initOverview() {
 function renderCards() {
   cards.innerHTML = "";
   const items = currentFilter === "all" ? MODULES : MODULES.filter(([k]) => k === currentFilter);
-  for (const [key, label] of items) {
+  for (const [key, lkey] of items) {
+    const label = t(lkey);
     const m = metrics[key];
     const card = document.createElement("div");
     card.className = "card";
@@ -525,9 +528,9 @@ function renderCards() {
       }
       let scanHtml = "";
       if (scan?.results?.length) {
-        scanHtml = `<pre>【端口占用】${scan.results.map((p) => `${p.port} (${p.service}): ${p.ok ? "监听中" : "未监听"}\n${p.detail}`).join("\n----\n")}</pre>`;
+        scanHtml = `<pre>${t("net.scanTitle")}${scan.results.map((p) => `${p.port} (${p.service}): ${p.ok ? t("net.listening") : t("net.notListening")}\n${p.detail}`).join("\n----\n")}</pre>`;
       }
-      card.innerHTML = `<h2>${label}</h2>${netHtml}${scanHtml}${ping ? `<pre>【连通性】${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
+      card.innerHTML = `<h2>${label}</h2>${netHtml}${scanHtml}${ping ? `<pre>${t("net.pingTitle")}${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
     } else if (key === "processes") {
       card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
     } else if (key === "ssl") {
@@ -745,7 +748,7 @@ cards.addEventListener("click", async (e) => {
     document.getElementById("ssl-renew-err").textContent = "";
     sslRenewMask.classList.add("show");
   } else if (action === "del") {
-    if (!confirm("确认删除该监控条目？")) return;
+    if (!confirm(t("ssl.delConfirm"))) return;
     await fetch("api/ssl", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     refreshMetrics();
   } else if (action === "toggle") {
@@ -767,7 +770,7 @@ document.getElementById("ssl-add-save").onclick = async () => {
   else { body.host = document.getElementById("ssl-add-host").value.trim(); body.port = document.getElementById("ssl-add-port").value.trim() || "443"; }
   const res = await fetch("api/ssl", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
-  if (!res.ok) { document.getElementById("ssl-add-err").textContent = data.error || "添加失败"; return; }
+  if (!res.ok) { document.getElementById("ssl-add-err").textContent = data.error || t("ssl.addFail"); return; }
   sslAddMask.classList.remove("show");
   refreshMetrics();
 };
@@ -776,14 +779,14 @@ document.getElementById("ssl-renew-cancel").onclick = () => sslRenewMask.classLi
 document.getElementById("ssl-renew-confirm").onclick = async () => {
   const errEl = document.getElementById("ssl-renew-err");
   const password = document.getElementById("ssl-renew-password").value.trim();
-  if (!password) { errEl.textContent = "请输入登录密码"; return; }
+  if (!password) { errEl.textContent = t("proc.pwdRequired"); return; }
   errEl.textContent = "";
   const btn = document.getElementById("ssl-renew-confirm");
   btn.disabled = true;
   try {
     const res = await fetch("api/ssl/renew", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: sslRenewTarget.id, password }) });
     const data = await res.json();
-    if (!res.ok || !data.ok) { errEl.textContent = data.error || data.stderr || "续签失败"; return; }
+    if (!res.ok || !data.ok) { errEl.textContent = data.error || data.stderr || t("ssl.renewFail"); return; }
     sslRenewMask.classList.remove("show");
     refreshMetrics();
   } finally { btn.disabled = false; }
@@ -971,7 +974,7 @@ function fmtSize(bytes) {
   return (bytes / 1024 / 1024).toFixed(1) + " MB";
 }
 
-function addImage(dataUrl, name = "图片", size = 0) {
+function addImage(dataUrl, name = t("fs.image"), size = 0) {
   pendingImages.push(dataUrl);
   const wrap = document.createElement("span");
   wrap.className = "thumb";
@@ -1019,13 +1022,16 @@ input.addEventListener("paste", (e) => {
 });
 
 // ---------- 欢迎语 ----------
-welcome.innerHTML = `
+function renderWelcome() {
+  welcome.innerHTML = `
   <h2>${t("chat.welcomeTitle")}</h2>
   <p>${t("chat.welcomeSub")}</p>
   <div class="tag-list">
     <span class="tag">${t("chat.tagSys")}</span><span class="tag">${t("chat.tagNet")}</span><span class="tag">${t("chat.tagNginx")}</span><span class="tag">${t("chat.tagFw")}</span><span class="tag">${t("chat.tagPy")}</span><span class="tag">${t("chat.tagDb")}</span><span class="tag">${t("chat.tagDocker")}</span><span class="tag">${t("chat.tagFix")}</span>
   </div>
   <p class="tip">${t("chat.welcomeTip")}</p>`;
+}
+renderWelcome();
 
 function hideWelcome() { welcome.style.display = "none"; }
 
@@ -1057,11 +1063,11 @@ function renderMsg(text, cls, images) {
   item.innerHTML = `
     <div class="msg-header">
       <span class="avatar ${cls === "user" ? "user" : "bot"}">${cls === "user" ? "🧑‍💻" : "🤖"}</span>
-      <span class="msg-name">${cls === "user" ? "我" : "Fixflow"}</span>
+      <span class="msg-name">${cls === "user" ? t("chat.me") : "Fixflow"}</span>
       <span class="msg-time">${now()}</span>
     </div>
     <div class="bubble ${cls === "user" ? "user" : "bot"}"></div>`;
-  const imgs = (images || []).filter(Boolean).map((src) => `<img class="msg-img" src="${src}" alt="图片">`).join("");
+  const imgs = (images || []).filter(Boolean).map((src) => `<img class="msg-img" src="${src}" alt="${t("fs.image")}">`).join("");
   item.querySelector(".bubble").innerHTML = cls === "user"
     ? imgs + (text ? `<div class="msg-text">${escapeHtml(text)}</div>` : "")
     : renderMarkdown(text);
@@ -1107,7 +1113,7 @@ function showTyping() {
   typingEl = renderMsg("", "assistant");
   typingEl.querySelector(".bubble").innerHTML = `
     <div class="typing">
-      <span class="thinking">思</span><span class="thinking">考</span><span class="thinking">中</span>
+      ${[...t("chat.thinkingChars")].map((c) => `<span class="thinking">${c}</span>`).join("")}
       <span class="dot"></span><span class="dot"></span><span class="dot"></span>
     </div>`;
 }
@@ -1140,7 +1146,7 @@ function toolSummary(ev) {
   let out = "";
   const r = ev.result;
   if (r) {
-    if (r.confirmed === false) out = "\n（用户已拒绝）";
+    if (r.confirmed === false) out = "\n" + t("chat.rejected");
     else {
       if (r.stdout) out += "\n" + r.stdout.replace(/\n$/, "");
       if (r.stderr) out += "\n[stderr] " + r.stderr.replace(/\n$/, "");
@@ -1196,7 +1202,7 @@ async function termConnect() {
   let settled = false;
   let hintTimer = null, safetyTimer = null;
   const ready = () => { if (settled) return; settled = true; clearTimeout(hintTimer); clearTimeout(safetyTimer); termOnOutput = null; termSetLoading(false); };
-  hintTimer = setTimeout(() => termSetLoading(true, "正在启动 shell（首次加载需初始化环境），请稍候…"), 5000);
+  hintTimer = setTimeout(() => termSetLoading(true, t("term.starting")), 5000);
   safetyTimer = setTimeout(ready, 120000);
   try {
   terminal = new Terminal({
@@ -1283,11 +1289,11 @@ const joinPath = (a, b) => (a === "/" ? "/" + b : a + "/" + b);
 
 function fsFileType(name) {
   const ext = (name.split(".").pop() || "").toLowerCase();
-  if (["txt", "log", "conf", "cfg", "ini", "json", "md", "yml", "yaml", "sh", "py", "js", "html", "css", "xml", "sql"].includes(ext)) return "文本";
-  if (["tgz", "gz", "zip", "tar", "rar", "7z", "bz2"].includes(ext)) return "压缩包";
-  if (["exe", "bin", "so", "dll"].includes(ext)) return "二进制";
-  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return "图片";
-  return "文件";
+  if (["txt", "log", "conf", "cfg", "ini", "json", "md", "yml", "yaml", "sh", "py", "js", "html", "css", "xml", "sql"].includes(ext)) return t("fs.text");
+  if (["tgz", "gz", "zip", "tar", "rar", "7z", "bz2"].includes(ext)) return t("fs.archive");
+  if (["exe", "bin", "so", "dll"].includes(ext)) return t("fs.binary");
+  if (["png", "jpg", "jpeg", "gif", "svg", "webp", "ico"].includes(ext)) return t("fs.image");
+  return t("fs.file");
 }
 function fsFmtSize(n) {
   if (!Number.isFinite(n)) return "—";
@@ -1298,7 +1304,7 @@ function fsFmtSize(n) {
 }
 async function fsFetch(path) {
   const res = await fetch(`api/fs/list?path=${encodeURIComponent(path)}`).catch(() => null);
-  return res ? await res.json() : { error: "无法访问文件系统" };
+  return res ? await res.json() : { error: t("fs.unreachable") };
 }
 async function fsEnsureTree(path) {
   if (fsTreeState[path]?.loaded) return fsTreeState[path];
@@ -1354,7 +1360,7 @@ function fsRenderList() {
     const sel = fsSel && fsSel.name === it.name ? " class='sel'" : "";
     const size = it.isDir ? "—" : fsFmtSize(it.size);
     const mtime = (it.mtime || "").replace("T", " ").slice(0, 16);
-    return `<tr class="fs-row"${sel} data-name="${escapeHtml(it.name)}"><td><span>${it.isDir ? "📁" : "📄"}</span> ${escapeHtml(it.name)}</td><td>${size}</td><td>${it.isDir ? "目录" : it.isSymlink ? "符号链接" : fsFileType(it.name)}</td><td>${mtime}</td><td>${escapeHtml(it.mode)}</td><td>${escapeHtml(it.user)}/${escapeHtml(it.group)}</td></tr>`;
+    return `<tr class="fs-row"${sel} data-name="${escapeHtml(it.name)}"><td><span>${it.isDir ? "📁" : "📄"}</span> ${escapeHtml(it.name)}</td><td>${size}</td><td>${it.isDir ? t("fs.dir") : it.isSymlink ? t("fs.symlink") : fsFileType(it.name)}</td><td>${mtime}</td><td>${escapeHtml(it.mode)}</td><td>${escapeHtml(it.user)}/${escapeHtml(it.group)}</td></tr>`;
   }).join("");
 }
 async function fsLoadList(path) {
@@ -1510,14 +1516,14 @@ const termLogMask = document.getElementById("term-log-mask");
 document.getElementById("term-log").onclick = async () => {
   termLogMask.classList.add("show");
   const box = document.getElementById("term-log-body");
-  box.innerHTML = "<pre>加载中…</pre>";
+  box.innerHTML = `<pre>${t("fs.loading")}</pre>`;
   try {
     const res = await fetch("api/term/history");
     const data = await res.json();
     const recs = data.records || [];
-    if (!recs.length) { box.innerHTML = "<pre>（暂无记录）</pre>"; return; }
-    box.innerHTML = `<table class="svc-table"><thead><tr><th>时间</th><th>用户</th><th>命令</th></tr></thead><tbody>${recs.map((r) => `<tr><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.user)}</td><td><code>${escapeHtml(r.command)}</code></td></tr>`).join("")}</tbody></table>`;
-  } catch (e) { box.innerHTML = `<pre>加载失败：${escapeHtml(String(e))}</pre>`; }
+    if (!recs.length) { box.innerHTML = `<pre>${t("term.noHist")}</pre>`; return; }
+    box.innerHTML = `<table class="svc-table"><thead><tr><th>${t("term.time")}</th><th>${t("term.user")}</th><th>${t("term.command")}</th></tr></thead><tbody>${recs.map((r) => `<tr><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.user)}</td><td><code>${escapeHtml(r.command)}</code></td></tr>`).join("")}</tbody></table>`;
+  } catch (e) { box.innerHTML = `<pre>${t("fs.loadFail").replace("{e}", escapeHtml(String(e)))}</pre>`; }
 };
 document.getElementById("term-log-close").onclick = () => termLogMask.classList.remove("show");
 termLogMask.addEventListener("click", (e) => { if (e.target === termLogMask) termLogMask.classList.remove("show"); });
@@ -1557,38 +1563,38 @@ function connectStream() {
     }
     else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }
     else if (ev.type === "confirm") {
-      const riskLabel = { low: "低", medium: "中", high: "高" }[ev.riskLevel] || "中";
+      const riskLabel = { low: t("risk.low"), medium: t("risk.mid"), high: t("risk.high") }[ev.riskLevel] || t("risk.mid");
       const riskCls = ev.riskLevel === "high" ? "risk-high" : ev.riskLevel === "low" ? "risk-low" : "risk-mid";
       const card = document.createElement("div");
       card.className = "msg confirm";
       card.innerHTML = `
         <div class="approval-card">
-          <div class="approval-head"><b>🔒 变更审批单</b><span class="risk-badge ${riskCls}">风险 ${riskLabel}${ev.riskLevel === "high" ? " ⚠️" : ""}</span></div>
-          ${ev.reason ? `<div class="approval-row"><span class="lbl">变更理由</span><span>${escapeHtml(ev.reason)}</span></div>` : ""}
-          ${ev.impact ? `<div class="approval-row"><span class="lbl">影响范围</span><span>${escapeHtml(ev.impact)}</span></div>` : ""}
-          <div class="approval-row"><span class="lbl">变更命令</span><code>${escapeHtml(ev.command || "")}</code></div>
+          <div class="approval-head"><b>${t("risk.approval")}</b><span class="risk-badge ${riskCls}">${t("risk.label")} ${riskLabel}${ev.riskLevel === "high" ? " ⚠️" : ""}</span></div>
+          ${ev.reason ? `<div class="approval-row"><span class="lbl">${t("risk.reason")}</span><span>${escapeHtml(ev.reason)}</span></div>` : ""}
+          ${ev.impact ? `<div class="approval-row"><span class="lbl">${t("risk.impact")}</span><span>${escapeHtml(ev.impact)}</span></div>` : ""}
+          <div class="approval-row"><span class="lbl">${t("risk.command")}</span><code>${escapeHtml(ev.command || "")}</code></div>
         </div>`;
       const btnRow = document.createElement("div");
       btnRow.className = "confirm-row";
       const yes = document.createElement("button");
-      yes.className = "btn btn-yes small"; yes.textContent = "确认执行";
+      yes.className = "btn btn-yes small"; yes.textContent = t("proc.confirm");
       const no = document.createElement("button");
-      no.className = "btn btn-no small"; no.textContent = "拒绝";
+      no.className = "btn btn-no small"; no.textContent = t("risk.reject");
       const finish = (label) => {
         card.querySelector(".confirm-row")?.remove();
         const span = document.createElement("div");
         span.textContent = label;
         card.appendChild(span);
       };
-      yes.onclick = () => { finish("✅ 已确认执行，正在运行…"); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) }); };
-      no.onclick = () => { finish("❌ 已拒绝执行"); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
+      yes.onclick = () => { finish(t("risk.confirmed")); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: true }) }); };
+      no.onclick = () => { finish(t("risk.rejected")); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
       btnRow.append(yes, no);
       card.appendChild(btnRow);
       log.appendChild(card);
       scrollLog();
     } else if (ev.type === "clear") {
       clearHistory();
-      addSimpleMsg("🧹 聊天历史已清空", "system", { keepWelcome: true });
+      addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true });
     } else if (ev.type === "done") {
       finishStreaming();
       setBusy(false);
@@ -1597,7 +1603,7 @@ function connectStream() {
       finishStreaming();
       setBusy(false);
       hideTyping();
-      addSimpleMsg("⚠️ 执行已中止", "system");
+      addSimpleMsg(t("chat.aborted"), "system");
     } else if (ev.type === "error") {
       finishStreaming();
       setBusy(false);
@@ -1646,7 +1652,7 @@ async function send() {
 
 sendBtn.onclick = send;
 stopBtn.onclick = () => fetch("api/abort", { method: "POST" });
-clearBtn.onclick = () => { clearHistory(); addSimpleMsg("🧹 聊天历史已清空", "system", { keepWelcome: true }); };
+clearBtn.onclick = () => { clearHistory(); addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true }); };
 input.addEventListener("input", () => { charCount.textContent = input.value.length ? input.value.length + "/5000" : ""; });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 searchBox.addEventListener("input", () => { if (currentFilter === "systemd") renderCards(); });
@@ -1687,10 +1693,11 @@ connectStream();
     loadModelStatus();
     refreshAlerts();
     if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
-    fetch("api/config").then((r) => r.json()).then((cfg) => applyLang(cfg.lang || "zh")).catch(() => {});
+    fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); renderWelcome(); }).catch(() => {});
     document.getElementById("lang-toggle").onclick = async () => {
       const next = curLang === "zh" ? "en" : "zh";
       applyLang(next);
+      renderWelcome();
       fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
       if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
       else renderCards();
@@ -1837,7 +1844,7 @@ function setupAuth() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        showAuthErr(data.error || "操作失败");
+        showAuthErr(data.error || t("op.fail"));
         refreshCaptcha();
         return;
       }
@@ -1847,7 +1854,7 @@ function setupAuth() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        if (!loginRes.ok) { setAuthMode("login", true); showAuthErr("注册成功，请登录"); return; }
+        if (!loginRes.ok) { setAuthMode("login", true); showAuthErr(t("auth.registerOk")); return; }
       }
       authMask.style.display = "none";
       location.reload();
@@ -1871,7 +1878,7 @@ let apiKeyTouched = false;
 cfgApiKey.addEventListener("input", () => { apiKeyTouched = true; });
 
 async function loadModels() {
-  cfgModelStatus.textContent = "拉取模型中…";
+  cfgModelStatus.textContent = t("settings.loadingModels");
   cfgModelStatus.className = "model-loading";
   try {
     const params = new URLSearchParams();
@@ -1891,9 +1898,9 @@ async function loadModels() {
       cfgModel.appendChild(opt);
     }
     if (prev && data.models.includes(prev)) cfgModel.value = prev;
-    cfgModelStatus.textContent = `共 ${data.models.length} 个模型`;
+    cfgModelStatus.textContent = t("settings.modelCount").replace("{n}", data.models.length);
   } catch (e) {
-    cfgModelStatus.textContent = "拉取失败：" + e.message + "（请检查 API 地址和 Key）";
+    cfgModelStatus.textContent = t("settings.loadModelsFail").replace("{msg}", e.message);
     cfgModelStatus.className = "model-loading error";
   }
 }
@@ -1908,7 +1915,7 @@ async function openSettings() {
   cfgBaseUrl.value = cfg.baseUrl || "";
   cfgApiKey.value = "";
   apiKeyTouched = false;
-  cfgKeyHint.textContent = cfg.apiKey ? `已配置：${cfg.apiKey}` : "未配置";
+  cfgKeyHint.textContent = cfg.apiKey ? t("settings.keySet").replace("{key}", cfg.apiKey) : t("settings.keyUnset");
   currentKey = cfg.apiKey || "";
   settingsMask.classList.add("show");
   await loadModels();
@@ -1957,7 +1964,7 @@ document.querySelectorAll(".settings-menu .settings-item, .user-menu .settings-i
 });
 const userNameEl = document.getElementById("user-name");
 function setUserName(name) {
-  userNameEl.textContent = name || "账号";
+  userNameEl.textContent = name || t("tool.account");
 }
 
 document.getElementById("logout-cancel").onclick = () => logoutMask.classList.remove("show");
@@ -1977,16 +1984,16 @@ document.getElementById("restart-cancel").onclick = () => restartMask.classList.
 restartMask.addEventListener("click", (e) => { if (e.target === restartMask) restartMask.classList.remove("show"); });
 restartConfirmBtn.onclick = () => {
   restartConfirmBtn.disabled = true;
-  restartConfirmBtn.textContent = "重启中…";
+  restartConfirmBtn.textContent = t("restart.restarting");
   fetch("api/restart", { method: "POST" })
     .then(() => {
-      showSaveMsg("✅ 已触发重启，页面将自动刷新…");
+      showSaveMsg(t("restart.triggered"));
       setTimeout(() => location.reload(), 3000);
     })
     .catch(() => {
       restartConfirmBtn.disabled = false;
-      restartConfirmBtn.textContent = "确认重启";
-      showSaveMsg("❌ 重启请求失败");
+      restartConfirmBtn.textContent = t("restart.confirm");
+      showSaveMsg(t("restart.fail"));
     });
 };
 
@@ -2035,7 +2042,7 @@ document.addEventListener("click", async (e) => {
   const wantEdit = a.dataset.nginxEdit === "1";
   nginxConfPath = a.dataset.nginxConf;
   const ta = document.getElementById("nginx-conf-content");
-  ta.value = "加载中…";
+  ta.value = t("fs.loading");
   ta.readOnly = true;
   document.getElementById("nginx-conf-title").textContent = `📄 ${nginxConfPath}`;
   document.getElementById("nginx-conf-err").textContent = "";
@@ -2085,7 +2092,7 @@ procMask.addEventListener("click", (e) => { if (e.target === procMask) procMask.
 document.getElementById("proc-confirm").onclick = async () => {
   const errEl = document.getElementById("proc-err");
   const password = document.getElementById("proc-password").value.trim();
-  if (!password) { errEl.textContent = "请输入登录密码"; return; }
+  if (!password) { errEl.textContent = t("proc.pwdRequired"); return; }
   errEl.textContent = "";
   const confirmBtn = document.getElementById("proc-confirm");
   confirmBtn.disabled = true;
@@ -2118,11 +2125,11 @@ document.getElementById("proc-confirm").onclick = async () => {
     }
     data = await res.json();
     if (res.status === 403 || res.status === 400) {
-      errEl.textContent = data.error || "操作失败";
+      errEl.textContent = data.error || t("op.fail");
       if (isNginxSave) document.getElementById("nginx-conf-err").textContent = data.error || "";
       return;
     }
-    if (!data.ok) { errEl.textContent = data.stderr || data.error || "操作失败"; return; }
+    if (!data.ok) { errEl.textContent = data.stderr || data.error || t("op.fail"); return; }
     if (isNginxSave) nginxConfMask.classList.remove("show");
     if (isFs && fsOp === "write") fsEditMask.classList.remove("show");
     procMask.classList.remove("show");
@@ -2145,10 +2152,10 @@ document.getElementById("cfg-save").onclick = async () => {
   if (newKey) body.apiKey = newKey;
   const res = await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
-  if (!res.ok) { alert("保存失败：" + (data.error || res.status)); return; }
+  if (!res.ok) { alert(t("op.saveFail") + "：" + (data.error || res.status)); return; }
   cfgApiKey.value = "";
-  cfgKeyHint.textContent = `已配置：${data.apiKey}`;
-  showSaveMsg("✅ 配置成功！");
+  cfgKeyHint.textContent = t("settings.keySet").replace("{key}", data.apiKey);
+  showSaveMsg(t("settings.saved"));
   loadModelStatus();
   setTimeout(() => settingsMask.classList.remove("show"), 2000);
 };
@@ -2162,7 +2169,7 @@ let alertCache = { alerts: [], history: {}, smtp: {} };
 const ALERT_PAGE_SIZE = 10;
 
 function showLoading(text) {
-  document.getElementById("loading-text").textContent = text || "处理中…";
+  document.getElementById("loading-text").textContent = text || t("op.processing");
   document.getElementById("loading-mask").classList.add("show");
 }
 function hideLoading() {
@@ -2173,7 +2180,7 @@ function renderPager(el, total, page, onGo) {
   const pages = Math.max(1, Math.ceil(total / ALERT_PAGE_SIZE));
   const p = Math.min(Math.max(1, page), pages);
   el.innerHTML = total > ALERT_PAGE_SIZE
-    ? `<button class="btn small" data-page="${p - 1}" ${p <= 1 ? "disabled" : ""}>上一页</button><span>${p} / ${pages}</span><button class="btn small" data-page="${p + 1}" ${p >= pages ? "disabled" : ""}>下一页</button>`
+    ? `<button class="btn small" data-page="${p - 1}" ${p <= 1 ? "disabled" : ""}>${t("page.prev")}</button><span>${p} / ${pages}</span><button class="btn small" data-page="${p + 1}" ${p >= pages ? "disabled" : ""}>${t("page.next")}</button>`
     : "";
   el.querySelectorAll("button[data-page]").forEach((b) => { b.onclick = () => onGo(Number(b.dataset.page)); });
 }
@@ -2277,7 +2284,7 @@ document.getElementById("alert-smtp-save").onclick = async () => {
   };
   await fetch("api/alerts/smtp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   document.getElementById("alert-pass").value = "";
-  showSaveMsg("✅ 邮箱配置已保存");
+  showSaveMsg(t("alert.smtpSaved"));
   refreshAlerts();
 };
 
@@ -2291,10 +2298,10 @@ document.getElementById("alert-form-save").onclick = async () => {
     recipients: document.getElementById("alert-recipients").value.split(/[,，\s]+/).filter(Boolean),
   };
   const errEl = document.getElementById("alert-form-err");
-  if (!body.name || !body.time || !body.instruction || !body.recipients.length) { errEl.textContent = "名称/时间/指令/收件人必填"; return; }
+  if (!body.name || !body.time || !body.instruction || !body.recipients.length) { errEl.textContent = t("alert.required"); return; }
   errEl.textContent = "";
   const res = await fetch("api/alerts", { method: alertEditId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(alertEditId ? { ...body, id: alertEditId } : body) });
-  if (!res.ok) { errEl.textContent = ((await res.json()).error) || "保存失败"; return; }
+  if (!res.ok) { errEl.textContent = ((await res.json()).error) || t("op.saveFail"); return; }
   switchAlertTab("list");
   refreshAlerts();
 };
@@ -2304,17 +2311,17 @@ document.getElementById("alert-list").addEventListener("click", async (e) => {
   if (!a) return;
   const id = a.dataset.alertEdit || a.dataset.alertDel || a.dataset.alertRun || a.dataset.alertToggle;
   if (a.dataset.alertDel) {
-    if (!confirm("确认删除该告警？")) return;
+    if (!confirm(t("alert.delConfirm"))) return;
     await fetch("api/alerts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     refreshAlerts();
   } else if (a.dataset.alertToggle) {
     await fetch("api/alerts", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled: a.dataset.enabled === "false" }) });
     refreshAlerts();
   } else if (a.dataset.alertRun) {
-    showLoading("正在执行告警：模型生成报表并发送邮件，请稍候…");
+    showLoading(t("alert.running"));
     try {
       const res = await fetch("api/alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-      showSaveMsg(res.ok ? "✅ 已执行" : "❌ " + ((await res.json()).error || "执行失败"));
+      showSaveMsg(res.ok ? t("alert.done") : "❌ " + ((await res.json()).error || t("alert.execFail")));
     } finally {
       hideLoading();
       refreshAlerts();
@@ -2323,7 +2330,7 @@ document.getElementById("alert-list").addEventListener("click", async (e) => {
     const it = (alertCache.alerts || []).find((x) => x.id === id);
     if (!it) return;
     alertEditId = id;
-    document.getElementById("alert-form-title").textContent = "编辑告警";
+    document.getElementById("alert-form-title").textContent = t("alert.editTitle");
     document.getElementById("alert-name").value = it.name;
     document.getElementById("alert-time").value = it.time;
     document.getElementById("alert-recipients").value = (it.recipients || []).join(", ");
@@ -2429,7 +2436,7 @@ document.getElementById("ma-tabs").addEventListener("click", (e) => {
 const MA_FIELDS = ["ma-name", "ma-threshold", "ma-duration", "ma-recipients", "ma-env", "ma-service", "ma-team", "ma-owner", "ma-runbook", "ma-dashboard", "ma-log", "ma-escalate-to", "ma-escalate-after"];
 document.getElementById("ma-add").onclick = () => {
   maEditId = null;
-  document.getElementById("ma-form-title").textContent = "新增规则";
+  document.getElementById("ma-form-title").textContent = t("alert.ruleTitle");
   MA_FIELDS.forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("ma-form-err").textContent = "";
   document.getElementById("ma-form").style.display = "";
@@ -2452,16 +2459,16 @@ document.getElementById("ma-form-save").onclick = async () => {
     escalateAfter: Number(val("ma-escalate-after")) || 30,
   };
   const errEl = document.getElementById("ma-form-err");
-  if (!body.name || !Number.isFinite(body.threshold) || !body.recipients.length) { errEl.textContent = "名称/阈值/收件人必填"; return; }
+  if (!body.name || !Number.isFinite(body.threshold) || !body.recipients.length) { errEl.textContent = t("alert.ruleRequired"); return; }
   errEl.textContent = "";
   const res = await fetch("api/metric-alerts", { method: maEditId ? "PATCH" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(maEditId ? { ...body, id: maEditId } : body) });
-  if (!res.ok) { errEl.textContent = ((await res.json()).error) || "保存失败"; return; }
+  if (!res.ok) { errEl.textContent = ((await res.json()).error) || t("op.saveFail"); return; }
   document.getElementById("ma-form").style.display = "none";
   refreshMetricAlerts();
 };
 
 document.getElementById("ma-check").onclick = async () => {
-  showLoading("正在采样并检测指标…");
+  showLoading(t("alert.sampling"));
   try {
     await fetch("api/metric-alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
   } finally {
@@ -2472,7 +2479,7 @@ document.getElementById("ma-check").onclick = async () => {
 
 document.getElementById("ma-settings-save").onclick = async () => {
   await fetch("api/metric-alerts/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ panelBaseUrl: document.getElementById("ma-panel-url").value.trim(), webhook: document.getElementById("ma-webhook").value.trim() }) });
-  showSaveMsg("✅ 已保存");
+  showSaveMsg(t("op.saved"));
 };
 
 document.getElementById("ma-rules").addEventListener("click", async (e) => {
@@ -2480,7 +2487,7 @@ document.getElementById("ma-rules").addEventListener("click", async (e) => {
   if (!a) return;
   const id = a.dataset.maToggle || a.dataset.maDel || a.dataset.maEdit;
   if (a.dataset.maDel) {
-    if (!confirm("确认删除该规则？")) return;
+    if (!confirm(t("alert.delRuleConfirm"))) return;
     await fetch("api/metric-alerts", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
     refreshMetricAlerts();
   } else if (a.dataset.maToggle) {
@@ -2490,7 +2497,7 @@ document.getElementById("ma-rules").addEventListener("click", async (e) => {
     const r = (maCache.rules || []).find((x) => x.id === id);
     if (!r) return;
     maEditId = id;
-    document.getElementById("ma-form-title").textContent = "编辑规则";
+    document.getElementById("ma-form-title").textContent = t("alert.editRuleTitle");
     document.getElementById("ma-name").value = r.name;
     document.getElementById("ma-metric").value = r.metric;
     document.getElementById("ma-op").value = r.op;

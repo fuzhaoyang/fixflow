@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Fixflow 服务器运维面板</title>
+  <title data-i18n="app.title">Fixflow 服务器运维面板</title>
   <style>
     * { box-sizing: border-box; }
     :root {
@@ -22,7 +22,7 @@
     .layout { display: flex; height: 100vh; }
     /* 左侧菜单 */
     aside {
-      width: 210px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
+      width: 240px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; padding: 12px 0; overflow: hidden;
       transition: width .25s ease, padding .25s ease, border-color .25s ease;
     }
@@ -560,9 +560,9 @@
       <button class="menu-item" data-view="monitor" data-filter="system" title="系统" data-i18n="menu.system" data-i18n-attr="title"><span class="menu-icon">🖥</span><span class="dot"></span><span class="menu-label" data-i18n="menu.system">系统</span></button>
       <button class="menu-item" data-view="monitor" data-filter="network" title="网络" data-i18n="menu.network" data-i18n-attr="title"><span class="menu-icon">🌐</span><span class="dot"></span><span class="menu-label" data-i18n="menu.network">网络</span></button>
       <button class="menu-item" data-view="monitor" data-filter="nginx" title="Nginx" data-i18n="menu.nginx" data-i18n-attr="title"><span class="menu-icon">🪶</span><span class="dot"></span><span class="menu-label" data-i18n="menu.nginx">Nginx</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="firewall" title="防火墙"><span class="menu-icon">🧯</span><span class="dot"></span><span class="menu-label">防火墙</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="services" title="Python 服务"><span class="menu-icon">🐍</span><span class="dot"></span><span class="menu-label">Python 服务</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="databases" title="数据库"><span class="menu-icon">🗄</span><span class="dot"></span><span class="menu-label">数据库</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="firewall" title="防火墙" data-i18n="menu.firewall" data-i18n-attr="title"><span class="menu-icon">🧯</span><span class="dot"></span><span class="menu-label" data-i18n="menu.firewall">防火墙</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="services" title="Python 服务" data-i18n="menu.services" data-i18n-attr="title"><span class="menu-icon">🐍</span><span class="dot"></span><span class="menu-label" data-i18n="menu.services">Python 服务</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="databases" title="数据库" data-i18n="menu.databases" data-i18n-attr="title"><span class="menu-icon">🗄</span><span class="dot"></span><span class="menu-label" data-i18n="menu.databases">数据库</span></button>
       <button class="menu-item" data-view="monitor" data-filter="docker" title="Docker"><span class="menu-icon">🐳</span><span class="dot"></span><span class="menu-label">Docker</span></button>
       <button class="menu-item" data-view="monitor" data-filter="processes" title="进程" data-i18n="menu.processes" data-i18n-attr="title"><span class="menu-icon">⚙️</span><span class="dot"></span><span class="menu-label" data-i18n="menu.processes">进程</span></button>
       <button class="menu-item" data-view="monitor" data-filter="ssl" title="SSL 证书" data-i18n="menu.ssl" data-i18n-attr="title"><span class="menu-icon">🔒</span><span class="dot"></span><span class="menu-label" data-i18n="menu.ssl">SSL 证书</span></button>
@@ -576,7 +576,7 @@
         <span data-i18n="tool.settings">设置</span>
       </button>
       <div class="settings-menu" id="settings-menu">
-        <div class="settings-item" data-action="config">⚙️ 模型设置</div>
+        <div class="settings-item" data-action="config" data-i18n="settings.title">⚙️ 模型设置</div>
       </div>
     </div>
   </aside>
@@ -584,10 +584,10 @@
     <div class="toolbar"><button class="clear-btn" id="menu-toggle" title="折叠/展开菜单" data-i18n="tool.menuToggle" data-i18n-attr="title">☰</button><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" data-i18n="tool.search" data-i18n-attr="placeholder" style="display:none"><span class="model-status" id="model-status"></span><span class="conn-wrap"><button class="lang-btn" id="lang-toggle" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button><button class="bell-btn" id="bell-btn" title="告警" data-i18n="tool.bell" data-i18n-attr="title">🔔<span class="bell-dot" id="bell-dot"></span></button><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号" data-i18n="tool.account" data-i18n-attr="title"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart" data-i18n="auth.restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout" data-i18n="auth.logout">🚪 退出登录</div></div></span></span></div>
     <div class="content" id="view-monitor">
       <div id="net-tools" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
-        <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80">
-        <button class="btn small" id="port-btn">查端口</button>
-        <input id="ping-input" class="search-box" placeholder="连通性检测目标，如 1.1.1.1">
-        <button class="btn small" id="ping-btn">检测</button>
+        <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80" data-i18n="net.portPh" data-i18n-attr="placeholder">
+        <button class="btn small" id="port-btn" data-i18n="net.portBtn">查端口</button>
+        <input id="ping-input" class="search-box" placeholder="连通性检测目标，如 1.1.1.1" data-i18n="net.pingPh" data-i18n-attr="placeholder">
+        <button class="btn small" id="ping-btn" data-i18n="net.pingBtn">检测</button>
       </div>
       <div id="overview" style="display:none">
         <div class="sys-info" id="sys-info"><span class="sys-os">—</span><span class="sep"></span><span class="sys-uptime">—</span></div>
@@ -956,8 +956,8 @@
 </div>
 <div class="help-mask" id="help-mask">
   <div class="help-header">
-    <h2>📖 Fixflow 使用文档</h2>
-    <button class="btn small help-close" id="help-close">返回</button>
+    <h2 data-i18n="help.title">📖 Fixflow 使用文档</h2>
+    <button class="btn small help-close" id="help-close" data-i18n="help.back">返回</button>
   </div>
   <div class="help-body" data-i18n-html="help.body">
     <h3>一、它是什么</h3>

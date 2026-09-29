@@ -941,7 +941,7 @@ test("终端初始化防丢帧：app.js 增量写入历史并补拉二次 open",
   assert.match(js, /writeHistory/);
   assert.match(js, /h\.slice\(written\)/);
   assert.match(js, /fetch\("api\/term\/open"/);
-  const hintIdx = js.indexOf('hintTimer = setTimeout(() => termSetLoading(true, "正在启动 shell');
+  const hintIdx = js.indexOf('hintTimer = setTimeout(() => termSetLoading(true, t("term.starting"))');
   const readyWriteIdx = js.indexOf("writeHistory(r.history)");
   assert.ok(hintIdx !== -1 && readyWriteIdx !== -1 && hintIdx < readyWriteIdx, "hintTimer 必须先于可同步触发 ready 的 writeHistory 赋值");
   w.close();
