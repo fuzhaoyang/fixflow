@@ -806,6 +806,22 @@ test("/api/fs/upload multipart 上传", async () => {
   w.close();
 });
 
+test("config 接口 lang 持久化", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-web-"));
+  const cfg = join(dir, "config.json");
+  writeFileSync(cfg, "{}");
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, sslSites: [] }, deps);
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const get = await fetch(`${base}/api/config`, { headers: { Cookie: cookie } });
+  assert.equal((await get.json()).lang, "zh");
+  const post = await fetch(`${base}/api/config`, { method: "POST", headers: H, body: JSON.stringify({ lang: "en" }) });
+  assert.equal((await post.json()).lang, "en");
+  assert.equal(JSON.parse(readFileSync(cfg, "utf8")).lang, "en");
+  w.close();
+});
+
 test("/api/alerts 增删改查与鉴权", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;

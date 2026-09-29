@@ -167,6 +167,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.sslSites = normalizeSslSites(config.sslSites);
   config.sslAlerts = config.sslAlerts || { webhook: "", smtp: {} };
   config.pingTargets = config.pingTargets || [];
+  config.lang = config.lang === "en" ? "en" : "zh";
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -189,7 +190,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
   };
@@ -428,7 +429,7 @@ function formatUptime(sec) {
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/logout" && req.method === "POST") {
         sessions.revoke(authHeader(req));
-        res.writeHead(200, { "Content-Type": "application/json" });
+        res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax" });
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;
@@ -694,24 +695,25 @@ function formatUptime(sec) {
         res.end(JSON.stringify(result));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords }));
+        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang }));
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
-        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
         if (Array.isArray(sslSites)) config.sslSites = sslSites;
         if (Array.isArray(pingTargets)) config.pingTargets = pingTargets;
         if (Array.isArray(serviceKeywords)) config.serviceKeywords = serviceKeywords.map((s) => String(s).trim()).filter(Boolean);
+        if (lang === "en" || lang === "zh") config.lang = lang;
         let existing = {};
         try { existing = JSON.parse(await readFile(configPath, "utf8")); } catch {}
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords };
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords }));
+        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang }));
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ messages: await readHistoryFile(historyPath) }));
@@ -1000,6 +1002,10 @@ function formatUptime(sec) {
         res.end(html);
       } else if (url.pathname === "/app.js") {
         const js = await readFile(join(STATIC, "app.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
+      } else if (url.pathname === "/i18n.js") {
+        const js = await readFile(join(STATIC, "i18n.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
       } else if (url.pathname === "/xterm.min.js") {

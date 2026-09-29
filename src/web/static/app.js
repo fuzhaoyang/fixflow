@@ -53,7 +53,8 @@ function applyRoute() {
   if (route === "chat") {
     viewMonitor.style.display = "none";
     viewChat.style.display = "flex";
-    viewTitle.textContent = "Agent 对话";
+    viewTitle.dataset.i18nTitle = "title.chat";
+    viewTitle.textContent = t("title.chat");
     searchBox.style.display = "none";
     netTools.style.display = "none";
   } else {
@@ -62,7 +63,9 @@ function applyRoute() {
     viewMonitor.style.display = currentFilter === "all" ? "block" : "flex";
     viewChat.style.display = "none";
     viewMonitor.style.display = "block";
-    viewTitle.textContent = currentFilter === "all" ? "监控总览" : (MODULES.find(([k]) => k === currentFilter)?.[1] || "监控");
+    const titleKey = currentFilter === "all" ? "title.overview" : `menu.${currentFilter}`;
+    viewTitle.dataset.i18nTitle = titleKey;
+    viewTitle.textContent = t(titleKey);
     searchBox.style.display = currentFilter === "systemd" ? "" : "none";
     netTools.style.display = currentFilter === "network" ? "flex" : "none";
     overviewEl.style.display = currentFilter === "all" ? "flex" : "none";
@@ -128,10 +131,10 @@ function initRings() {
 
 function renderRings(status) {
   const map = {
-    load: { label: "负载状态", val: status?.load?.pct ?? 0, sub: status?.load ? `1m ${status.load.load1 ?? status.load.load} / 5m ${status.load.load5 ?? "—"} / 15m ${status.load.load15 ?? "—"} · ${status.load.ncpu} 核` : "" },
-    cpu: { label: "CPU 使用率", val: status?.cpu?.pct ?? 0, sub: "实时" },
-    mem: { label: "内存使用率", val: status?.mem?.pct ?? 0, sub: "" },
-    disk: { label: "磁盘使用率", val: status?.disk?.pct ?? 0, sub: "根分区" },
+    load: { label: t("ov.load"), val: status?.load?.pct ?? 0, sub: status?.load ? `1m ${status.load.load1 ?? status.load.load} / 5m ${status.load.load5 ?? "—"} / 15m ${status.load.load15 ?? "—"} · ${t("ov.cores").replace("{n}", status.load.ncpu)}` : "" },
+    cpu: { label: t("ov.cpu"), val: status?.cpu?.pct ?? 0, sub: t("ov.realtime") },
+    mem: { label: t("ov.mem"), val: status?.mem?.pct ?? 0, sub: "" },
+    disk: { label: t("ov.disk"), val: status?.disk?.pct ?? 0, sub: t("ov.rootFs") },
   };
   for (const key of ["load", "cpu", "mem", "disk"]) {
     const it = map[key];
@@ -236,8 +239,8 @@ function chartData(mode) {
     });
   }
   const [upName, downName, upColor, downColor] = mode === "traffic"
-    ? ["上行", "下行", "#f97316", "#3b82f6"]
-    : ["读取", "写入", "#ec4899", "#06b6d4"];
+    ? [t("ov.up"), t("ov.down"), "#f97316", "#3b82f6"]
+    : [t("io.read"), t("io.write"), "#ec4899", "#06b6d4"];
   return {
     labels,
     series: [
@@ -447,10 +450,10 @@ function switchTrafficTab(mode) {
     document.getElementById("token-today").textContent = "--";
     document.getElementById("token-total30").textContent = "--";
   } else if (isTraffic) {
-    document.getElementById("kpi-up-key").innerHTML = '<span class="dot up"></span>上行';
-    document.getElementById("kpi-down-key").innerHTML = '<span class="dot down"></span>下行';
-    document.getElementById("kpi-tx-key").textContent = "总发送";
-    document.getElementById("kpi-rx-key").textContent = "总接收";
+    document.getElementById("kpi-up-key").innerHTML = `<span class="dot up"></span>${t("ov.up")}`;
+    document.getElementById("kpi-down-key").innerHTML = `<span class="dot down"></span>${t("ov.down")}`;
+    document.getElementById("kpi-tx-key").textContent = t("ov.tx");
+    document.getElementById("kpi-rx-key").textContent = t("ov.rx");
     dots[0].style.background = "#f97316";
     dots[1].style.background = "#3b82f6";
   } else {
@@ -504,11 +507,11 @@ function renderCards() {
         const rows = health.map((h) => {
           const icon = h.status === "ok" ? "✅" : h.status === "warn" ? "⚠️" : "❌";
           const cls = h.status === "ok" ? "ok" : h.status === "warn" ? "na" : "bad";
-          return `<tr><td>${escapeHtml(h.name)}</td><td class="${cls}">${icon} ${h.status === "ok" ? "正常" : h.status === "warn" ? "警告" : "异常"}</td><td>${escapeHtml(h.detail)}</td>${h.advice ? `<td>${escapeHtml(h.advice)}</td>` : "<td>—</td>"}</tr>`;
+          return `<tr><td>${escapeHtml(h.name)}</td><td class="${cls}">${icon} ${h.status === "ok" ? t("mon.ok") : h.status === "warn" ? t("mon.warn") : t("mon.bad")}</td><td>${escapeHtml(h.detail)}</td>${h.advice ? `<td>${escapeHtml(h.advice)}</td>` : "<td>—</td>"}</tr>`;
         }).join("");
-        healthHtml = `<div style="margin-bottom:8px"><table class="svc-table"><thead><tr><th>项目</th><th>状态</th><th>数值</th><th>建议</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        healthHtml = `<div style="margin-bottom:8px"><table class="svc-table"><thead><tr><th>${t("mon.item")}</th><th>${t("mon.status")}</th><th>${t("mon.value")}</th><th>${t("mon.advice")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       }
-      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">📄 生成报告</button></h2>${healthHtml}<pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">复制</button> <button class="btn small" id="report-dl">下载 .md</button></div><pre id="report-out"></pre></div>`;
+      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">${t("mon.report")}</button></h2>${healthHtml}<pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">${t("mon.copy")}</button> <button class="btn small" id="report-dl">${t("mon.downloadMd")}</button></div><pre id="report-out"></pre></div>`;
     } else if (key === "network") {
       const scan = metrics.portScan;
       const ping = metrics.pingResult;
@@ -516,7 +519,7 @@ function renderCards() {
       let netHtml = "";
       if (items?.length) {
         const rows = items.map((i) => `<tr><td>${escapeHtml(i.proto)}</td><td>${escapeHtml(i.state)}</td><td>${escapeHtml(i.local)}</td><td>${escapeHtml(i.process || "—")}</td><td>${i.pid ? `<a href="javascript:void(0)" onclick="return false" title="${i.pid}">${i.pid}</a>` : "—"}</td></tr>`).join("");
-        netHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>协议</th><th>状态</th><th>本地地址</th><th>进程</th><th>PID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        netHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("mon.proto")}</th><th>${t("mon.state")}</th><th>${t("mon.local")}</th><th>${t("mon.proc")}</th><th>PID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       } else {
         netHtml = `<pre>${escapeHtml(detail(m))}</pre>`;
       }
@@ -579,35 +582,35 @@ function renderSystemd(m) {
   const rows = [];
   for (const s of services) {
     const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
-    rows.push(`<tr><td>服务</td><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td><td>${escapeHtml(s.mainPid || "—")}</td><td>${escapeHtml(s.started)}</td></tr>`);
+    rows.push(`<tr><td>${t("srv.svc")}</td><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td><td>${escapeHtml(s.mainPid || "—")}</td><td>${escapeHtml(s.started)}</td></tr>`);
   }
   for (const p of procs) {
-    rows.push(`<tr><td>进程</td><td>${escapeHtml(p.name)}</td><td class="ok">运行中</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td></tr>`);
+    rows.push(`<tr><td>${t("srv.proc")}</td><td>${escapeHtml(p.name)}</td><td class="ok">${t("srv.running")}</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td></tr>`);
   }
-  if (!rows.length) return `<pre>${escapeHtml(q ? `未找到匹配「${q}」的服务` : "（无匹配服务，可在设置中配置服务白名单）")}</pre>`;
+  if (!rows.length) return `<pre>${escapeHtml(q ? t("srv.noMatchQ").replace("{q}", q) : t("srv.noMatchCfg"))}</pre>`;
   const filtered = q ? rows.filter((r) => r.toLowerCase().includes(q)) : rows;
-  return `<div class="card-body"><table class="svc-table"><thead><tr><th>类型</th><th>名称</th><th>状态</th><th>占用cpu</th><th>占用内存%</th><th>内容大小</th><th>PID</th><th>启动时间</th></tr></thead><tbody>${filtered.join("")}</tbody></table></div>`;
+  return `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th>${t("srv.started")}</th></tr></thead><tbody>${filtered.join("")}</tbody></table></div>`;
 }
 
 function renderNginx(m, logs) {
   if (m?.error) return `<pre>${escapeHtml(m.error)}</pre>`;
   const info = `<div class="sys-info" style="font-size:14px">
-    <span class="${m.status?.ok ? "ok" : "bad"}">● ${escapeHtml(m.status?.detail || "未知")}</span>
-    <span class="sep"></span>版本 ${escapeHtml(m.version || "—")}
-    <span class="sep"></span>配置校验 <span class="${m.config?.ok ? "ok" : "bad"}">${m.config?.ok ? "通过" : "失败"}</span>
-    <span class="sep"></span>worker ${m.workers || 0}
-    <span class="sep"></span>运行 ${escapeHtml(m.uptime || "—")}
+    <span class="${m.status?.ok ? "ok" : "bad"}">● ${escapeHtml(m.status?.detail || t("nginx.unknown"))}</span>
+    <span class="sep"></span>${t("nginx.version")} ${escapeHtml(m.version || "—")}
+    <span class="sep"></span>${t("nginx.configCheck")} <span class="${m.config?.ok ? "ok" : "bad"}">${m.config?.ok ? t("nginx.pass") : t("nginx.fail")}</span>
+    <span class="sep"></span>${t("nginx.worker")} ${m.workers || 0}
+    <span class="sep"></span>${t("nginx.running")} ${escapeHtml(m.uptime || "—")}
   </div>`;
   const running = Boolean(m.status?.ok);
   const ops = `<div style="display:flex;gap:8px;margin:10px 0">
-    <button class="btn small" data-nginx-op="reload">重载配置</button>
-    <button class="btn small" data-nginx-op="restart">重启服务</button>
+    <button class="btn small" data-nginx-op="reload">${t("nginx.opReloadCfg")}</button>
+    <button class="btn small" data-nginx-op="restart">${t("nginx.opRestartSvc")}</button>
     ${running
-      ? `<button class="btn small" data-nginx-op="stop">停止服务</button>`
-      : `<button class="btn small" data-nginx-op="start">启动服务</button>`}
+      ? `<button class="btn small" data-nginx-op="stop">${t("nginx.opStopSvc")}</button>`
+      : `<button class="btn small" data-nginx-op="start">${t("nginx.opStartSvc")}</button>`}
   </div>`;
-  const errLog = logs?.errorLog ? `<details style="margin-top:10px"><summary style="cursor:pointer">最近错误日志</summary><pre>${escapeHtml(logs.errorLog)}</pre></details>` : "";
-  return `${info}${ops}<h3 style="font-size:14px;margin:12px 0 4px">配置文件</h3><div id="nginx-confs"><pre>加载中…</pre></div>${errLog}`;
+  const errLog = logs?.errorLog ? `<details style="margin-top:10px"><summary style="cursor:pointer">${t("nginx.errLog")}</summary><pre>${escapeHtml(logs.errorLog)}</pre></details>` : "";
+  return `${info}${ops}<h3 style="font-size:14px;margin:12px 0 4px">${t("nginx.confsTitle")}</h3><div id="nginx-confs"><pre>${t("nginx.loading")}</pre></div>${errLog}`;
 }
 
 async function loadNginxConfs() {
@@ -618,7 +621,7 @@ async function loadNginxConfs() {
     const data = await res.json();
     const confs = data.confs || [];
     const listens = metrics.nginx?.listens || [];
-    if (!confs.length && !listens.length) { box.innerHTML = `<pre>${escapeHtml(data.error || "（无配置文件）")}</pre>`; return; }
+    if (!confs.length && !listens.length) { box.innerHTML = `<pre>${escapeHtml(data.error || t("nginx.noConf"))}</pre>`; return; }
     const byFile = new Map();
     for (const l of listens) {
       if (!l.file) continue;
@@ -641,11 +644,11 @@ async function loadNginxConfs() {
       const ls = byFile.get(c.path) || [];
       const ports = [...new Set(ls.map((l) => l.port).filter(Boolean))].join(", ") || "—";
       const names = [...new Set(ls.map((l) => l.serverName).filter(Boolean))].join(", ") || "—";
-      return `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.path)}</td><td>${escapeHtml(ports)}</td><td>${escapeHtml(names)}</td><td><span class="proc-ops"><a href="javascript:void(0)" data-nginx-conf="${escapeHtml(c.path)}">查看</a><a href="javascript:void(0)" data-nginx-conf="${escapeHtml(c.path)}" data-nginx-edit="1">编辑</a></span></td></tr>`;
+      return `<tr><td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.path)}</td><td>${escapeHtml(ports)}</td><td>${escapeHtml(names)}</td><td><span class="proc-ops"><a href="javascript:void(0)" data-nginx-conf="${escapeHtml(c.path)}">${t("nginx.view")}</a><a href="javascript:void(0)" data-nginx-conf="${escapeHtml(c.path)}" data-nginx-edit="1">${t("nginx.edit")}</a></span></td></tr>`;
     }).join("");
-    box.innerHTML = `<div class="card-body"><table class="svc-table"><thead><tr><th>文件</th><th>路径</th><th>监听端口</th><th>server_name</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    box.innerHTML = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("nginx.file")}</th><th>${t("nginx.path")}</th><th>${t("nginx.listenPort")}</th><th>server_name</th><th>${t("proc.ops")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   } catch (e) {
-    box.innerHTML = `<pre>加载失败：${escapeHtml(String(e))}</pre>`;
+    box.innerHTML = `<pre>${t("nginx.loadFail").replace("{e}", escapeHtml(String(e)))}</pre>`;
   }
 }
 
@@ -653,13 +656,13 @@ let procSort = "cpu";
 
 function renderProcesses(m) {
   if (!m?.top) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
-  const anomalies = (m.anomalies || []).map((a) => `<div style="color:var(--bad);font-size:12px">⚠️ ${escapeHtml(a)}</div>`).join("");
+  const anomalies = (m.anomalies || []).map((a) => `<div style="color:var(--bad);font-size:12px">${t("proc.anomalyPrefix")}${escapeHtml(a)}</div>`).join("");
   const zombie = m.zombies > 0
-    ? `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">⚠️ 僵尸进程 ${m.zombies} 个：${escapeHtml(m.zombieDetail || "")}</div>`
+    ? `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">${t("proc.zombie").replace("{n}", m.zombies).replace("{d}", escapeHtml(m.zombieDetail || ""))}</div>`
     : "";
   const sortBtns = `<div style="margin-bottom:6px;display:flex;gap:6px">
-    <button class="btn small ${procSort === "cpu" ? "report-active" : ""}" id="sort-cpu">按 CPU</button>
-    <button class="btn small ${procSort === "mem" ? "report-active" : ""}" id="sort-mem">按内存</button></div>`;
+    <button class="btn small ${procSort === "cpu" ? "report-active" : ""}" id="sort-cpu">${t("proc.thCpu")}</button>
+    <button class="btn small ${procSort === "mem" ? "report-active" : ""}" id="sort-mem">${t("proc.thMem")}</button></div>`;
   const list = [...m.top].sort((a, b) => procSort === "mem" ? b.memKb - a.memKb : b.cpu - a.cpu);
   const rows = list.map((p) => {
     const bad = p.cpu > 100;
@@ -669,11 +672,11 @@ function renderProcesses(m) {
     const protectedProc = p.pid === 1 || /^[DZ]/.test(p.state || "") || (p.user === "root" && /(daemon|systemd|dbus)/.test(name)) || /(^dde-|kwin|Xorg|lightdm)/.test(name) || /^k/.test(name);
     const btns = protectedProc ? "—"
       : p.service
-        ? `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="restart" data-proc-pid="${p.pid}" data-proc-service="${svc}">重启</a><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="${svc}" class="danger">关闭</a></span>`
-        : `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="" class="danger">关闭</a></span>`;
+        ? `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="restart" data-proc-pid="${p.pid}" data-proc-service="${svc}">${t("proc.restart")}</a><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="${svc}" class="danger">${t("proc.close")}</a></span>`
+        : `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="" class="danger">${t("proc.close")}</a></span>`;
     return `<tr${style}><td>${p.pid}</td><td>${escapeHtml(p.user || "")}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td>${p.memKb ? Math.round(p.memKb / 1024) + "MB" : "—"}</td><td>${svc || "—"}</td><td>${escapeHtml(p.cmd || "")}</td><td>${btns}</td></tr>`;
   }).join("");
-  return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>PID</th><th>用户</th><th>CPU%</th><th>内存%</th><th>内存</th><th>systemd 服务</th><th>命令</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>${t("proc.pid")}</th><th>${t("proc.user")}</th><th>${t("proc.cpu")}</th><th>${t("proc.memPct")}</th><th>${t("proc.mem")}</th><th>${t("proc.svc")}</th><th>${t("proc.cmd")}</th><th>${t("proc.ops")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 function sslLevel(daysLeft) {
@@ -695,30 +698,30 @@ function renderSsl(m) {
   const total = list.length;
   const warn = list.filter((s) => typeof s.daysLeft === "number" && s.daysLeft > 7 && s.daysLeft <= 30).length;
   const expired = list.filter((s) => typeof s.daysLeft === "number" && s.daysLeft <= 7).length;
-  const tool = m.renewTool ? `可用（${m.renewTool}）` : "未检测到";
+  const tool = m.renewTool ? t("ssl.toolAvail").replace("{tool}", m.renewTool) : t("ssl.toolNone");
   const summary = `<div class="ssl-summary">
-    <span>共 <b>${total}</b> 张</span>
-    <span class="na">临期 ≤30 天 <b>${warn}</b></span>
-    <span class="bad">严重 ≤7 天 <b>${expired}</b></span>
-    <span>续签工具：${escapeHtml(tool)}</span>
-    <button class="btn small" id="ssl-add-btn">➕ 添加监控</button>
+    <span>${t("ssl.sumTotal").replace("{n}", total)}</span>
+    <span class="na">${t("ssl.sumWarn")} <b>${warn}</b></span>
+    <span class="bad">${t("ssl.sumBad")} <b>${expired}</b></span>
+    <span>${t("ssl.sumTool").replace("{tool}", escapeHtml(tool))}</span>
+    <button class="btn small" id="ssl-add-btn">${t("ssl.addBtn")}</button>
   </div>`;
-  if (!total) return summary + `<pre>（未发现证书，可点击「添加监控」手动添加）</pre>`;
+  if (!total) return summary + `<pre>${escapeHtml(t("ssl.empty"))}</pre>`;
   const rows = list.map((s) => {
     const cls = sslLevel(s.daysLeft);
-    const expire = typeof s.daysLeft === "number" ? (s.daysLeft > 0 ? `${s.daysLeft} 天` : "已过期") : "—";
+    const expire = typeof s.daysLeft === "number" ? (s.daysLeft > 0 ? `${s.daysLeft} ${t("ssl.days")}` : t("ssl.expired")) : "—";
     const name = s.type === "local" ? escapeHtml(s.path) : `${escapeHtml(s.host)}:${escapeHtml(s.port)}`;
-    const srcLabel = s.source === "discovered" ? `<span class="tag">自动</span>` : `<span class="tag">手动</span>`;
+    const srcLabel = s.source === "discovered" ? `<span class="tag">${t("ssl.auto")}</span>` : `<span class="tag">${t("ssl.manual")}</span>`;
     const ops = [];
-    if (s.type === "local" && s.enabled !== false && m.renewTool) ops.push(`<a href="javascript:void(0)" data-ssl-action="renew" data-ssl-id="${escapeHtml(s.id)}" data-ssl-name="${escapeHtml(s.cn || s.path)}">续签</a>`);
+    if (s.type === "local" && s.enabled !== false && m.renewTool) ops.push(`<a href="javascript:void(0)" data-ssl-action="renew" data-ssl-id="${escapeHtml(s.id)}" data-ssl-name="${escapeHtml(s.cn || s.path)}">${t("ssl.renew")}</a>`);
     if (s.source === "manual") {
-      ops.push(`<a href="javascript:void(0)" data-ssl-action="toggle" data-ssl-id="${escapeHtml(s.id)}" data-ssl-enabled="${s.enabled !== false}">${s.enabled === false ? "启用" : "停用"}</a>`);
-      ops.push(`<a href="javascript:void(0)" data-ssl-action="del" data-ssl-id="${escapeHtml(s.id)}" class="danger">删除</a>`);
+      ops.push(`<a href="javascript:void(0)" data-ssl-action="toggle" data-ssl-id="${escapeHtml(s.id)}" data-ssl-enabled="${s.enabled !== false}">${s.enabled === false ? t("ssl.enable") : t("ssl.disable")}</a>`);
+      ops.push(`<a href="javascript:void(0)" data-ssl-action="del" data-ssl-id="${escapeHtml(s.id)}" class="danger">${t("ssl.del")}</a>`);
     }
     const opsHtml = ops.length ? `<span class="proc-ops ssl-ops">${ops.join("")}</span>` : "—";
     return `<tr><td>${name} ${srcLabel}</td><td>${escapeHtml(s.cn || "—")}</td><td>${escapeHtml(s.issuer || "—")}</td><td>${escapeHtml(s.notAfter || "—")}</td><td class="${cls}">${expire}${sslBar(s.daysLeft)}</td><td>${escapeHtml((s.san || []).join(", "))}</td><td>${escapeHtml(s.label || "—")}</td><td>${opsHtml}</td></tr>`;
   }).join("");
-  return summary + `<div class="card-body"><table class="svc-table"><thead><tr><th>域名/路径</th><th>CN</th><th>签发者</th><th>到期时间</th><th>剩余</th><th>SAN</th><th>备注</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  return summary + `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("ssl.hostPath")}</th><th>${t("ssl.cn")}</th><th>${t("ssl.issuer")}</th><th>${t("ssl.expire")}</th><th>${t("ssl.left")}</th><th>${t("ssl.san")}</th><th>${t("ssl.note")}</th><th>${t("ssl.ops")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
 const sslAddMask = document.getElementById("ssl-add-mask");
@@ -737,7 +740,7 @@ cards.addEventListener("click", async (e) => {
   const id = a.dataset.sslId;
   if (action === "renew") {
     sslRenewTarget = { id, name: a.dataset.sslName };
-    document.getElementById("ssl-renew-text").textContent = `即将续签：${a.dataset.sslName}，成功后自动重载 nginx。`;
+    document.getElementById("ssl-renew-text").textContent = t("ssl.renewText").replace("{name}", a.dataset.sslName);
     document.getElementById("ssl-renew-password").value = "";
     document.getElementById("ssl-renew-err").textContent = "";
     sslRenewMask.classList.add("show");
@@ -795,11 +798,11 @@ function renderFirewall(m) {
   const dangerCount = risky.filter((p) => p.dangerous).length;
   const backend = m.backend || "ufw";
   const canClose = backend === "ufw";
-  const stateLabel = backend === "firewalld" ? "firewalld 已启用" : backend === "ufw" ? "ufw 已启用" : "未启用 / 降级";
+  const stateLabel = backend === "firewalld" ? t("fw.bkFirewalld") : backend === "ufw" ? t("fw.bkUfw") : t("fw.bkIptables");
   const summary = `<div class="fw-summary">
-    <div class="fw-stat"><span class="k">防火墙状态</span><span class="v">${stateLabel}</span></div>
-    <div class="fw-stat"><span class="k">放行规则</span><span class="v">${rules.length}</span></div>
-    <div class="fw-stat"><span class="k">对全网开放</span><span class="v ${dangerCount ? "bad" : ""}">${risky.length}${dangerCount ? `（危险 ${dangerCount}）` : ""}</span></div>
+    <div class="fw-stat"><span class="k">${t("fw.state")}</span><span class="v">${stateLabel}</span></div>
+    <div class="fw-stat"><span class="k">${t("fw.rules")}</span><span class="v">${rules.length}</span></div>
+    <div class="fw-stat"><span class="k">${t("fw.open")}</span><span class="v ${dangerCount ? "bad" : ""}">${risky.length}${dangerCount ? t("fw.danger").replace("{n}", dangerCount) : ""}</span></div>
   </div>`;
 
   let rulesHtml;
@@ -810,23 +813,23 @@ function renderFirewall(m) {
       const style = hit ? " style='background:rgba(248,113,113,0.12)'" : "";
       return `<tr${style}><td>${r.num ?? "—"}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml((r.proto || "").toUpperCase())}</td><td>${escapeHtml(r.port)}</td><td>${escapeHtml(r.from)}</td><td>${escapeHtml(r.comment || "—")}</td></tr>`;
     }).join("");
-    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>#</th><th>动作</th><th>协议</th><th>端口</th><th>来源</th><th>备注</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("fw.num")}</th><th>${t("fw.action")}</th><th>${t("fw.proto")}</th><th>${t("fw.port")}</th><th>${t("fw.from")}</th><th>${t("fw.comment")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   } else {
-    rulesHtml = `<pre>${escapeHtml(m.raw || "未检测到防火墙规则")}</pre>`;
+    rulesHtml = `<pre>${escapeHtml(m.raw || t("fw.noRules"))}</pre>`;
   }
 
   const disabled = canClose ? "" : " disabled";
-  const closeNote = canClose ? "" : `<div class="hint" style="margin-bottom:8px">当前后端为 ${escapeHtml(backend)}，暂不支持一键关闭</div>`;
+  const closeNote = canClose ? "" : `<div class="hint" style="margin-bottom:8px">${t("fw.noClose").replace("{backend}", escapeHtml(backend))}</div>`;
   const riskRows = risky.map((p) => {
-    const tag = p.dangerous ? `<span class="risk-badge risk-high">危险</span>` : `<span class="risk-badge risk-low">一般</span>`;
-    const opts = Object.entries(FIREWALL_MODES).map(([v, t]) => `<option value="${v}">${t}</option>`).join("");
+    const tag = p.dangerous ? `<span class="risk-badge risk-high">${t("fw.dangerTag")}</span>` : `<span class="risk-badge risk-low">${t("fw.normalTag")}</span>`;
+    const opts = Object.entries(FIREWALL_MODES).map(([v]) => `<option value="${v}">${t(v === "delete" ? "fw.modeDelete" : "fw.modeDeny")}</option>`).join("");
     return `<div class="fw-risk-row">${tag}<span class="fw-port">${p.port}/${p.proto}</span>
       <select class="fw-mode"${disabled}>${opts}</select>
-      <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>关闭端口</button></div>`;
+      <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>${t("fw.closeBtn")}</button></div>`;
   }).join("");
-  const riskHtml = risky.length ? `${closeNote}<div class="fw-risk">${riskRows}</div>` : `<pre>未发现对全网开放的端口 ✅</pre>`;
+  const riskHtml = risky.length ? `${closeNote}<div class="fw-risk">${riskRows}</div>` : `<pre>${t("fw.noRisk")}</pre>`;
 
-  return `${summary}<h3 class="fw-sub">放行规则</h3>${rulesHtml}<h3 class="fw-sub">对全网开放的端口</h3>${riskHtml}`;
+  return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}`;
 }
 
 function fmtVal(v) {
@@ -837,7 +840,7 @@ function fmtVal(v) {
 
 function detail(m) {
   if (Array.isArray(m)) {
-    if (!m.length) return "（未配置）";
+    if (!m.length) return t("mon.notConfigured");
     return m.map((x) => {
       if (typeof x !== "object" || x === null) return fmtVal(x);
       const status = x.ok === false ? "❌" : x.ok === true ? "✅" : "";
@@ -1017,12 +1020,12 @@ input.addEventListener("paste", (e) => {
 
 // ---------- 欢迎语 ----------
 welcome.innerHTML = `
-  <h2>👋 你好，我是 Fixflow 运维管家</h2>
-  <p>我虽然不会修空调，但服务器那点破事，交给我就行。</p>
+  <h2>${t("chat.welcomeTitle")}</h2>
+  <p>${t("chat.welcomeSub")}</p>
   <div class="tag-list">
-    <span class="tag">🖥 系统监控</span><span class="tag">🌐 网络检查</span><span class="tag">🪶 Nginx 体检</span><span class="tag">🧯 防火墙巡检</span><span class="tag">🐍 Python 服务探活</span><span class="tag">🗄 数据库连接诊断</span><span class="tag">🐳 Docker 状态</span><span class="tag">🛠 自动修复（先问过你）</span>
+    <span class="tag">${t("chat.tagSys")}</span><span class="tag">${t("chat.tagNet")}</span><span class="tag">${t("chat.tagNginx")}</span><span class="tag">${t("chat.tagFw")}</span><span class="tag">${t("chat.tagPy")}</span><span class="tag">${t("chat.tagDb")}</span><span class="tag">${t("chat.tagDocker")}</span><span class="tag">${t("chat.tagFix")}</span>
   </div>
-  <p class="tip">输入指令即可开干，比如「看看磁盘还够不够用」。放心，我不会在没得到你点头前动任何文件——毕竟我是运维，不是拆家工。</p>`;
+  <p class="tip">${t("chat.welcomeTip")}</p>`;
 
 function hideWelcome() { welcome.style.display = "none"; }
 
@@ -1153,8 +1156,10 @@ const termSplitter = document.getElementById("term-splitter");
 let termOpen = false;
 let terminal = null;
 
+let termOnOutput = null;
 function termAppend(text) {
   if (terminal) terminal.write(text);
+  if (termOnOutput) { const cb = termOnOutput; termOnOutput = null; cb(); }
 }
 
 function fitTerminal() {
@@ -1165,7 +1170,7 @@ function fitTerminal() {
   terminal.resize(80, rows);
 }
 
-function termSetLoading(show, text = "连接中…", error = false) {
+function termSetLoading(show, text = "", error = false) {
   const el = document.getElementById("term-loading");
   const tx = document.getElementById("term-loading-text");
   if (el) { el.classList.toggle("show", show); el.classList.toggle("error", error); }
@@ -1174,21 +1179,24 @@ function termSetLoading(show, text = "连接中…", error = false) {
 
 async function termConnect() {
   if (terminal) { termSetLoading(false); return; }
-  termSetLoading(true, "连接中…");
+  termSetLoading(true, t("term.connecting"));
   let r = {};
   try {
     r = await fetch("api/term/open", { method: "POST" }).then((res) => res.json());
   } catch {
-    termSetLoading(true, "连接失败", true);
+    termSetLoading(true, t("term.fail"), true);
     setTimeout(() => termSetLoading(false), 2500);
     return;
   }
   if (r.error) {
-    termSetLoading(true, `连接失败：${r.error}`, true);
+    termSetLoading(true, `${t("term.fail")}：${r.error}`, true);
     setTimeout(() => termSetLoading(false), 2500);
     return;
   }
-  termSetLoading(false);
+  let settled = false;
+  let hintTimer = null, safetyTimer = null;
+  const ready = () => { if (settled) return; settled = true; clearTimeout(hintTimer); clearTimeout(safetyTimer); termOnOutput = null; termSetLoading(false); };
+  try {
   terminal = new Terminal({
     cols: 80,
     rows: 24,
@@ -1196,11 +1204,13 @@ async function termConnect() {
     theme: { background: "#0f172a", foreground: "#e2e8f0", cursor: "#e2e8f0", selectionBackground: "#334155" },
   });
   terminal.open(document.getElementById("term-terminal"));
-  if (r.history) terminal.write(r.history);
   terminal.onTitleChange((title) => {
-    const t = String(title || "").trim();
-    if (t.startsWith("/") && t !== fsPath) fsRevealPath(t);
+    const t = String(title || "");
+    const m = t.match(/(\/[^\s:]+)/);
+    if (m) { ready(); if (m[1] !== fsPath) fsRevealPath(m[1]); }
   });
+  termOnOutput = ready;
+  if (r.history) { terminal.write(r.history); ready(); }
   let termCmdBuf = "";
   terminal.onData((data) => {
     fetch("api/term/input", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ data }) });
@@ -1218,6 +1228,11 @@ async function termConnect() {
   });
   terminal.focus();
   fitTerminal();
+  hintTimer = setTimeout(() => termSetLoading(true, "正在启动 shell（首次加载需初始化环境），请稍候…"), 5000);
+  safetyTimer = setTimeout(ready, 120000);
+  } catch (e) {
+    ready();
+  }
 }
 
 async function termDisconnect() {
@@ -1403,19 +1418,19 @@ function fsAskPassword(title, text, body, op) {
   setTimeout(() => pw.focus(), 50);
 }
 fsNewdir.onclick = () => {
-  const name = prompt("新建文件夹名称：");
+  const name = prompt(t("fs.mkdirPrompt"));
   if (!name || !name.trim()) return;
-  fsAskPassword("📁 新建文件夹", `确认在 ${fsPath} 下创建文件夹「${name.trim()}」？此操作需输入登录密码验证。`, { path: fsPath, name: name.trim() }, "mkdir");
+  fsAskPassword(t("fs.mkdirTitle"), t("fs.mkdirText").replace("{path}", fsPath).replace("{name}", name.trim()), { path: fsPath, name: name.trim() }, "mkdir");
 };
 fsRenameBtn.onclick = () => {
   if (!fsSel) return;
-  const name = prompt("新名称：", fsSel.name);
+  const name = prompt(t("fs.renamePrompt"), fsSel.name);
   if (!name || !name.trim()) return;
-  fsAskPassword("✏️ 重命名", `将「${fsSel.name}」重命名为「${name.trim()}」？此操作需输入登录密码验证。`, { path: joinPath(fsPath, fsSel.name), newName: name.trim() }, "rename");
+  fsAskPassword(t("fs.renameTitle"), t("fs.renameText").replace("{old}", fsSel.name).replace("{new}", name.trim()), { path: joinPath(fsPath, fsSel.name), newName: name.trim() }, "rename");
 };
 fsDeleteBtn.onclick = () => {
   if (!fsSel) return;
-  fsAskPassword("🗑 删除", `删除「${fsSel.name}」？${fsSel.isDir ? "目录将递归删除，" : ""}删除后不可恢复！此操作需输入登录密码验证。`, { path: joinPath(fsPath, fsSel.name) }, "delete");
+  fsAskPassword(t("fs.deleteTitle"), t("fs.deleteText").replace("{name}", fsSel.name).replace("{note}", fsSel.isDir ? t("fs.dirRecursive") : ""), { path: joinPath(fsPath, fsSel.name) }, "delete");
 };
 fsDownloadBtn.onclick = () => {
   if (!fsSel || fsSel.isDir) return;
@@ -1429,8 +1444,8 @@ fsFile.addEventListener("change", () => {
   const f = fsFile.files[0];
   fsFile.value = "";
   if (!f) return;
-  if (f.size > 50 * 1024 * 1024) { alert("文件超过 50MB"); return; }
-  fsAskPassword("⬆️ 上传文件", `上传「${f.name}」(${fsFmtSize(f.size)}) 到 ${fsPath}？此操作需输入登录密码验证。`, { path: fsPath, file: f }, "upload");
+  if (f.size > 50 * 1024 * 1024) { alert(t("fs.sizeTooBig")); return; }
+  fsAskPassword(t("fs.uploadTitle"), t("fs.uploadText").replace("{name}", f.name).replace("{size}", fsFmtSize(f.size)).replace("{path}", fsPath), { path: fsPath, file: f }, "upload");
 });
 [fsTree, document.querySelector(".fs-list-wrap")].forEach((el) => {
   el.addEventListener("dragover", (e) => e.preventDefault());
@@ -1439,11 +1454,11 @@ fsFile.addEventListener("change", () => {
     const files = [...(e.dataTransfer?.files || [])];
     if (!files.length) return;
     const f = files[0];
-    if (files.length > 1) alert("一次仅支持拖放单个文件");
-    if (f.size > 50 * 1024 * 1024) { alert("文件超过 50MB"); return; }
+    if (files.length > 1) alert(t("fs.singleOnly"));
+    if (f.size > 50 * 1024 * 1024) { alert(t("fs.sizeTooBig")); return; }
     const treeItem = e.target.closest(".fs-tree-item");
     const target = treeItem ? treeItem.dataset.path : fsPath;
-    fsAskPassword("⬆️ 拖放上传", `上传「${f.name}」(${fsFmtSize(f.size)}) 到 ${target}？此操作需输入登录密码验证。`, { path: target, file: f }, "upload");
+    fsAskPassword(t("fs.uploadTitle"), t("fs.uploadText").replace("{name}", f.name).replace("{size}", fsFmtSize(f.size)).replace("{path}", target), { path: target, file: f }, "upload");
   });
 });
 async function fsEditFile(path) {
@@ -1463,7 +1478,7 @@ async function fsEditFile(path) {
 document.getElementById("fs-edit-cancel").onclick = () => fsEditMask.classList.remove("show");
 document.getElementById("fs-edit-save").onclick = () => {
   if (!fsEditPath) return;
-  fsAskPassword("💾 保存文件", `保存修改到 ${fsEditPath}？此操作需输入登录密码验证。`, { path: fsEditPath, content: fsEditContent.value }, "write");
+  fsAskPassword(t("fs.writeTitle"), t("fs.writeText").replace("{path}", fsEditPath), { path: fsEditPath, content: fsEditContent.value }, "write");
 };
 fsEditMask.addEventListener("click", (e) => { if (e.target === fsEditMask) fsEditMask.classList.remove("show"); });
 const fsSplitter = document.getElementById("term-fs-splitter");
@@ -1662,7 +1677,15 @@ connectStream();
     loadModelStatus();
     refreshAlerts();
     if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
- }
+    fetch("api/config").then((r) => r.json()).then((cfg) => applyLang(cfg.lang || "zh")).catch(() => {});
+    document.getElementById("lang-toggle").onclick = async () => {
+      const next = curLang === "zh" ? "en" : "zh";
+      applyLang(next);
+      fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
+      if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
+      else renderCards();
+    };
+  }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopPolling();
   else { startPolling(); refreshMetrics(); }
@@ -1704,16 +1727,16 @@ async function loadModelStatus() {
     const res = await fetch("api/config");
     cfg = await res.json();
   } catch {}
-  const model = cfg.model || "未设置模型";
-  modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(model)} · 连接中…`;
+  const model = cfg.model || t("model.notSet");
+  modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(model)} · ${t("model.connecting")}`;
   modelStatus.classList.remove("on");
   try {
     const res = await fetch("api/models");
     if (!res.ok) throw new Error(res.status);
-    modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(model)} · 已连接`;
+    modelStatus.innerHTML = `<span class="dot"></span>${escapeHtml(model)} · ${t("model.connected")}`;
     modelStatus.classList.add("on");
   } catch {
-    modelStatus.innerHTML = `<span class="dot" style="background:var(--bad)"></span>${escapeHtml(model)} · 无法连接`;
+    modelStatus.innerHTML = `<span class="dot" style="background:var(--bad)"></span>${escapeHtml(model)} · ${t("model.unavailable")}`;
     modelStatus.classList.remove("on");
     modelCheckTimer = setTimeout(loadModelStatus, 5000);
   }
@@ -1757,23 +1780,23 @@ function setAuthMode(mode, registered) {
   authCaptcha.value = "";
   if (mode === "login") {
     document.getElementById("auth-logo-text").textContent = "AI";
-    authTitle.textContent = "登录 Fixflow";
-    authSub.textContent = "登录后即可使用服务器运维面板";
-    authSubmit.textContent = "登录";
+    authTitle.textContent = t("auth.loginTitle");
+    authSub.textContent = t("auth.loginSub");
+    authSubmit.textContent = t("auth.login");
     authForgot.style.display = registered ? "" : "none";
-    authTip.innerHTML = '<button type="button" id="auth-toggle">没有账号？去注册</button>';
+    authTip.innerHTML = `<button type="button" id="auth-toggle">${t("auth.noAccount")}</button>`;
   } else {
-    document.getElementById("auth-logo-text").textContent = "注册AI";
-    authTitle.textContent = "注册 Fixflow";
-    authSub.textContent = "注册登录 后即可使用服务器运维面板";
-    authSubmit.textContent = "注册并登录";
+    document.getElementById("auth-logo-text").textContent = "AI";
+    authTitle.textContent = t("auth.registerTitle");
+    authSub.textContent = t("auth.registerSub");
+    authSubmit.textContent = t("auth.register");
     authForgot.style.display = "none";
-    authTip.innerHTML = '<button type="button" id="auth-toggle">已有账号？去登录</button>';
+    authTip.innerHTML = `<button type="button" id="auth-toggle">${t("auth.hasAccount")}</button>`;
   }
   document.getElementById("auth-toggle")?.addEventListener("click", () => setAuthMode("login", true));
   document.getElementById("auth-forgot-link")?.addEventListener("click", () => {
     clearAuthErr();
-    authSub.textContent = "请在服务器上运行 fixflow reset-password 重置密码。";
+    authSub.textContent = t("auth.resetHint");
   });
   refreshCaptcha();
 }
@@ -1929,8 +1952,9 @@ function setUserName(name) {
 
 document.getElementById("logout-cancel").onclick = () => logoutMask.classList.remove("show");
 logoutMask.addEventListener("click", (e) => { if (e.target === logoutMask) logoutMask.classList.remove("show"); });
-document.getElementById("logout-confirm").onclick = () => {
-  fetch("api/logout", { method: "POST" }).finally(() => location.reload());
+document.getElementById("logout-confirm").onclick = async () => {
+  try { await fetch("api/logout", { method: "POST" }); } catch {}
+  location.href = location.pathname + "?t=" + Date.now();
 };
 
 const helpMask = document.getElementById("help-mask");
@@ -1963,10 +1987,10 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   procTarget = { action: btn.dataset.procAction, pid: Number(btn.dataset.procPid), service: btn.dataset.procService };
   const isRestart = procTarget.action === "restart";
-  document.getElementById("proc-title").textContent = isRestart ? "🔄 重启进程" : "⏹️ 关闭进程";
+  document.getElementById("proc-title").textContent = isRestart ? t("proc.restartTitle") : t("proc.killTitle");
   document.getElementById("proc-text").textContent = isRestart
-    ? `确认重启进程 ${procTarget.pid}（服务 ${procTarget.service}）吗？此操作需输入登录密码验证。`
-    : `确认关闭进程 PID ${procTarget.pid} 吗？此操作需输入登录密码验证。`;
+    ? t("proc.restartText").replace("{pid}", procTarget.pid).replace("{svc}", procTarget.service)
+    : t("proc.killText").replace("{pid}", procTarget.pid);
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
@@ -1978,8 +2002,8 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   const row = btn.closest(".fw-risk-row");
   procTarget = { kind: "firewall", port: Number(btn.dataset.fwPort), proto: btn.dataset.fwProto, mode: row.querySelector(".fw-mode").value };
-  document.getElementById("proc-title").textContent = "🛡️ 关闭端口";
-  document.getElementById("proc-text").textContent = `确认关闭端口 ${procTarget.port}/${procTarget.proto}（${FIREWALL_MODES[procTarget.mode]}）吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-title").textContent = t("fw.closeTitle");
+  document.getElementById("proc-text").textContent = t("fw.closeText").replace("{port}", procTarget.port).replace("{proto}", procTarget.proto).replace("{mode}", procTarget.mode === "delete" ? t("fw.modeDelete") : t("fw.modeDeny"));
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
@@ -2022,8 +2046,8 @@ document.getElementById("nginx-conf-close").onclick = () => nginxConfMask.classL
 nginxConfMask.addEventListener("click", (e) => { if (e.target === nginxConfMask) nginxConfMask.classList.remove("show"); });
 document.getElementById("nginx-conf-save").onclick = () => {
   procTarget = { kind: "nginx-save", path: nginxConfPath, content: document.getElementById("nginx-conf-content").value };
-  document.getElementById("proc-title").textContent = "💾 保存 Nginx 配置";
-  document.getElementById("proc-text").textContent = `确认保存 ${nginxConfPath} 并重载 nginx 吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-title").textContent = t("nginx.saveTitle");
+  document.getElementById("proc-text").textContent = t("nginx.saveText").replace("{path}", nginxConfPath);
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
@@ -2035,11 +2059,11 @@ document.addEventListener("click", (e) => {
   if (!btn) return;
   const action = btn.dataset.nginxOp;
   procTarget = { kind: "nginx-op", action };
-  const labels = { reload: "重载", restart: "重启", start: "启动", stop: "停止" };
+  const labels = { reload: t("nginx.opReload"), restart: t("nginx.opRestart"), start: t("nginx.opStart"), stop: t("nginx.opStop") };
   const icons = { reload: "♻️", restart: "🔄", start: "▶️", stop: "⏹️" };
   const label = labels[action] || action;
   document.getElementById("proc-title").textContent = `${icons[action] || "🛠️"} ${label} Nginx`;
-  document.getElementById("proc-text").textContent = `确认${label} nginx 服务吗？此操作需输入登录密码验证。`;
+  document.getElementById("proc-text").textContent = t("nginx.opText").replace("{label}", label);
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
@@ -2148,7 +2172,7 @@ function renderAlertList() {
   const alerts = alertCache.alerts || [];
   const list = document.getElementById("alert-list");
   if (!alerts.length) {
-    list.innerHTML = `<pre style="color:var(--muted)">（暂无告警）</pre>`;
+    list.innerHTML = `<pre style="color:var(--muted)">${escapeHtml(t("alert.none"))}</pre>`;
     renderPager(document.getElementById("alert-list-pager"), 0, 1, () => {});
     return;
   }
@@ -2156,16 +2180,16 @@ function renderAlertList() {
   if (alertListPage > pages) alertListPage = pages;
   const slice = alerts.slice((alertListPage - 1) * ALERT_PAGE_SIZE, alertListPage * ALERT_PAGE_SIZE);
   list.innerHTML = slice.map((a) => `<div class="alert-row">
-        <span class="tag ${a.enabled ? "ok" : ""}">${a.enabled ? "启用" : "停用"}</span>
+        <span class="tag ${a.enabled ? "ok" : ""}">${a.enabled ? t("ssl.enable") : t("ssl.disable")}</span>
         <div class="alert-main">
           <span class="alert-title">${escapeHtml(a.name)}</span>
-          <span class="alert-sub">每天 ${escapeHtml(a.time)} · ${escapeHtml((a.recipients || []).join(", "))}</span>
+          <span class="alert-sub">${t("alert.dailyFmt").replace("{t}", escapeHtml(a.time))} · ${escapeHtml((a.recipients || []).join(", "))}</span>
         </div>
         <span class="proc-ops">
-          <a href="javascript:void(0)" data-alert-run="${escapeHtml(a.id)}">立即执行</a>
-          <a href="javascript:void(0)" data-alert-toggle="${escapeHtml(a.id)}" data-enabled="${a.enabled}">${a.enabled ? "停用" : "启用"}</a>
-          <a href="javascript:void(0)" data-alert-edit="${escapeHtml(a.id)}">编辑</a>
-          <a href="javascript:void(0)" data-alert-del="${escapeHtml(a.id)}" class="danger">删除</a>
+          <a href="javascript:void(0)" data-alert-run="${escapeHtml(a.id)}">${t("alert.run")}</a>
+          <a href="javascript:void(0)" data-alert-toggle="${escapeHtml(a.id)}" data-enabled="${a.enabled}">${a.enabled ? t("ssl.disable") : t("ssl.enable")}</a>
+          <a href="javascript:void(0)" data-alert-edit="${escapeHtml(a.id)}">${t("alert.edit")}</a>
+          <a href="javascript:void(0)" data-alert-del="${escapeHtml(a.id)}" class="danger">${t("ssl.del")}</a>
         </span>
       </div>`).join("");
   renderPager(document.getElementById("alert-list-pager"), alerts.length, alertListPage, (p) => { alertListPage = p; renderAlertList(); });
@@ -2177,7 +2201,7 @@ function renderAlertHist() {
   flat.sort((x, y) => String(y.at).localeCompare(String(x.at)));
   const hist = document.getElementById("alert-hist");
   if (!flat.length) {
-    hist.innerHTML = `<pre style="color:var(--muted)">（暂无执行记录）</pre>`;
+    hist.innerHTML = `<pre style="color:var(--muted)">${escapeHtml(t("alert.noHist"))}</pre>`;
     renderPager(document.getElementById("alert-hist-pager"), 0, 1, () => {});
     return;
   }
@@ -2185,7 +2209,7 @@ function renderAlertHist() {
   if (alertHistPage > pages) alertHistPage = pages;
   const slice = flat.slice((alertHistPage - 1) * ALERT_PAGE_SIZE, alertHistPage * ALERT_PAGE_SIZE);
   hist.innerHTML = slice.map((h) => `<div class="alert-row">
-        <span class="tag ${h.ok ? "ok" : "bad"}">${h.ok ? "成功" : "失败"}</span>
+        <span class="tag ${h.ok ? "ok" : "bad"}">${h.ok ? t("alert.ok") : t("alert.fail")}</span>
         <div class="alert-main">
           <span class="alert-title">${escapeHtml(h.name)}</span>
           <span class="alert-sub">${escapeHtml(h.at)} · ${escapeHtml(h.error || h.summary)}</span>
@@ -2217,7 +2241,7 @@ function switchAlertTab(tab) {
 
 function resetAlertForm() {
   alertEditId = null;
-  document.getElementById("alert-form-title").textContent = "新增告警";
+  document.getElementById("alert-form-title").textContent = t("alert.formTitle");
   ["alert-name", "alert-time", "alert-recipients", "alert-instruction"].forEach((id) => { document.getElementById(id).value = ""; });
   document.getElementById("alert-form-err").textContent = "";
 }
@@ -2304,7 +2328,7 @@ let maCache = { rules: [], incidents: [] };
 let maRulesPage = 1;
 let maIncPage = 1;
 let maEditId = null;
-const MA_METRIC_NAME = { cpu: "CPU使用率", mem: "内存使用率", disk: "磁盘使用率", net: "网络流量", sessions: "TCP会话数" };
+const MA_METRIC_NAME = { cpu: "mCpu", mem: "mMem", disk: "mDisk", net: "mNet", sessions: "mSessions" };
 
 function updateBellDot() {
   const daily = (alertCache.alerts || []).some((a) => a.enabled);
@@ -2328,7 +2352,7 @@ function renderMaRules() {
   const rules = maCache.rules || [];
   const box = document.getElementById("ma-rules");
   if (!rules.length) {
-    box.innerHTML = `<pre style="color:var(--muted)">（暂无规则）</pre>`;
+    box.innerHTML = `<pre style="color:var(--muted)">${escapeHtml(t("alert.noRules"))}</pre>`;
     renderPager(document.getElementById("ma-rules-pager"), 0, 1, () => {});
     return;
   }
@@ -2336,15 +2360,15 @@ function renderMaRules() {
   if (maRulesPage > pages) maRulesPage = pages;
   const slice = rules.slice((maRulesPage - 1) * ALERT_PAGE_SIZE, maRulesPage * ALERT_PAGE_SIZE);
   box.innerHTML = slice.map((r) => `<div class="alert-row">
-        <span class="tag ${r.enabled ? "ok" : ""}">${r.enabled ? "启用" : "停用"}</span>
+        <span class="tag ${r.enabled ? "ok" : ""}">${r.enabled ? t("ssl.enable") : t("ssl.disable")}</span>
         <div class="alert-main">
           <span class="alert-title">${escapeHtml(r.name)}</span>
-          <span class="alert-sub">${escapeHtml(MA_METRIC_NAME[r.metric] || r.metric)} ${escapeHtml(r.op)} ${escapeHtml(r.threshold)} · 持续${escapeHtml(r.duration)}分钟 · P${escapeHtml(r.level)} · ${escapeHtml((r.recipients || []).join(", "))}</span>
+          <span class="alert-sub">${escapeHtml(t(MA_METRIC_NAME[r.metric] || "fs.file"))} ${escapeHtml(r.op)} ${escapeHtml(r.threshold)} · ${t("alert.durationFmt").replace("{t}", escapeHtml(r.duration)).replace("{l}", escapeHtml(r.level))} · ${escapeHtml((r.recipients || []).join(", "))}</span>
         </div>
         <span class="proc-ops">
-          <a href="javascript:void(0)" data-ma-toggle="${escapeHtml(r.id)}" data-enabled="${r.enabled}">${r.enabled ? "停用" : "启用"}</a>
-          <a href="javascript:void(0)" data-ma-edit="${escapeHtml(r.id)}">编辑</a>
-          <a href="javascript:void(0)" data-ma-del="${escapeHtml(r.id)}" class="danger">删除</a>
+          <a href="javascript:void(0)" data-ma-toggle="${escapeHtml(r.id)}" data-enabled="${r.enabled}">${r.enabled ? t("ssl.disable") : t("ssl.enable")}</a>
+          <a href="javascript:void(0)" data-ma-edit="${escapeHtml(r.id)}">${t("alert.edit")}</a>
+          <a href="javascript:void(0)" data-ma-del="${escapeHtml(r.id)}" class="danger">${t("ssl.del")}</a>
         </span>
       </div>`).join("");
   renderPager(document.getElementById("ma-rules-pager"), rules.length, maRulesPage, (p) => { maRulesPage = p; renderMaRules(); });
@@ -2354,7 +2378,7 @@ function renderMaIncidents() {
   const incs = maCache.incidents || [];
   const box = document.getElementById("ma-incidents");
   if (!incs.length) {
-    box.innerHTML = `<pre style="color:var(--muted)">（暂无事件）</pre>`;
+    box.innerHTML = `<pre style="color:var(--muted)">${escapeHtml(t("alert.noIncidents"))}</pre>`;
     renderPager(document.getElementById("ma-incidents-pager"), 0, 1, () => {});
     return;
   }
@@ -2363,12 +2387,12 @@ function renderMaIncidents() {
   const slice = incs.slice((maIncPage - 1) * ALERT_PAGE_SIZE, maIncPage * ALERT_PAGE_SIZE);
   const ruleName = (id) => (maCache.rules || []).find((x) => x.id === id)?.name || id;
   box.innerHTML = slice.map((i) => `<div class="alert-row">
-        <span class="tag ${i.state === "resolved" ? "ok" : i.state === "ack" ? "" : "bad"}">${i.state === "resolved" ? "已恢复" : i.state === "ack" ? "已认领" : "未认领"}</span>
+        <span class="tag ${i.state === "resolved" ? "ok" : i.state === "ack" ? "" : "bad"}">${i.state === "resolved" ? t("alert.resolved") : i.state === "ack" ? t("alert.ack") : t("alert.unack")}</span>
         <div class="alert-main">
           <span class="alert-title">P${escapeHtml(i.level)} ${escapeHtml(ruleName(i.ruleId))} · ${escapeHtml(i.id)}</span>
-          <span class="alert-sub">当前 ${escapeHtml(i.lastValue)} · 峰值 ${escapeHtml(i.peak)} · 开始 ${escapeHtml(new Date(i.startedAt).toLocaleString())}</span>
+          <span class="alert-sub">${t("alert.curFmt").replace("{v}", escapeHtml(i.lastValue)).replace("{p}", escapeHtml(i.peak)).replace("{t}", escapeHtml(new Date(i.startedAt).toLocaleString()))}</span>
         </div>
-        ${i.state === "firing" ? `<span class="proc-ops"><a href="javascript:void(0)" data-ma-ack="${escapeHtml(i.id)}">认领</a></span>` : ""}
+        ${i.state === "firing" ? `<span class="proc-ops"><a href="javascript:void(0)" data-ma-ack="${escapeHtml(i.id)}">${t("alert.claim")}</a></span>` : ""}
       </div>`).join("");
   renderPager(document.getElementById("ma-incidents-pager"), incs.length, maIncPage, (p) => { maIncPage = p; renderMaIncidents(); });
 }
