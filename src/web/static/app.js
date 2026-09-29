@@ -298,6 +298,8 @@ function attachChartTip(canvas) {
   canvas.addEventListener("mouseleave", () => { if (chartTip) chartTip.style.display = "none"; });
 }
 
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
 function drawLineChart(canvas, { labels, series, fixedMax = null }) {
   const { ctx, w, h } = setupCanvas(canvas);
   const pad = { l: 44, r: 12, t: 30, b: 22 };
@@ -309,9 +311,9 @@ function drawLineChart(canvas, { labels, series, fixedMax = null }) {
   ctx.font = "10px sans-serif";
   for (let i = 0; i <= steps; i++) {
     const y = pad.t + ph - (i / steps) * ph;
-    ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar("--grid"); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = cssVar("--muted");
     ctx.fillText(String(Math.round((niceMax * i / steps) * 100) / 100), 4, y + 3);
   }
   const n = labels.length;
@@ -376,9 +378,9 @@ function drawTokenChart(canvas, days) {
   ctx.font = "10px sans-serif";
   for (let i = 0; i <= 4; i++) {
     const y = pad.t + ph - (i / 4) * ph;
-    ctx.strokeStyle = "rgba(255,255,255,.08)"; ctx.lineWidth = 1;
+    ctx.strokeStyle = cssVar("--grid"); ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(pad.l + pw, y); ctx.stroke();
-    ctx.fillStyle = "#94a3b8";
+    ctx.fillStyle = cssVar("--muted");
     ctx.fillText(fmtNum(max * i / 4), 4, y + 3);
   }
   const n = days.length;
@@ -1683,6 +1685,13 @@ function startPolling() {
   metricsTimer = setInterval(() => { if (!chatView) refreshMetrics(); }, 10000);
   overviewTimer = setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 3000);
 }
+let curTheme = "dark";
+function applyTheme(theme) {
+  curTheme = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = curTheme;
+  const btn = document.getElementById("theme-btn");
+  if (btn) btn.textContent = curTheme === "light" ? "☀️" : "🌙";
+}
  function initPanel() {
    applyRoute();
    initOverview();
@@ -1693,12 +1702,19 @@ connectStream();
     loadModelStatus();
     refreshAlerts();
     if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
-    fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); renderWelcome(); }).catch(() => {});
+    fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); applyTheme(cfg.theme || "dark"); renderWelcome(); if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); else renderCards(); }).catch(() => {});
     document.getElementById("lang-toggle").onclick = async () => {
       const next = curLang === "zh" ? "en" : "zh";
       applyLang(next);
       renderWelcome();
       fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
+      if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
+      else renderCards();
+    };
+    document.getElementById("theme-btn").onclick = () => {
+      const next = curTheme === "dark" ? "light" : "dark";
+      applyTheme(next);
+      fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: next }) }).catch(() => {});
       if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
       else renderCards();
     };
