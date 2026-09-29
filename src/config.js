@@ -40,5 +40,6 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     sslAlerts: file.sslAlerts || { webhook: "", smtp: {} },
     panelPath: file.panelPath || "",
     lang: file.lang === "en" ? "en" : "zh",
+    theme: file.theme === "light" ? "light" : "dark",
   };
 }

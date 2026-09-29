@@ -168,6 +168,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.sslAlerts = config.sslAlerts || { webhook: "", smtp: {} };
   config.pingTargets = config.pingTargets || [];
   config.lang = config.lang === "en" ? "en" : "zh";
+  config.theme = config.theme === "light" ? "light" : "dark";
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -190,7 +191,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
   };
@@ -702,11 +703,11 @@ function formatUptime(sec) {
         res.end(JSON.stringify(result));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang }));
+        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme }));
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         let body = "";
         for await (const chunk of req) body += chunk;
-        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
@@ -714,13 +715,14 @@ function formatUptime(sec) {
         if (Array.isArray(pingTargets)) config.pingTargets = pingTargets;
         if (Array.isArray(serviceKeywords)) config.serviceKeywords = serviceKeywords.map((s) => String(s).trim()).filter(Boolean);
         if (lang === "en" || lang === "zh") config.lang = lang;
+        if (theme === "light" || theme === "dark") config.theme = theme;
         let existing = {};
         try { existing = JSON.parse(await readFile(configPath, "utf8")); } catch {}
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang };
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang }));
+        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme }));
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ messages: await readHistoryFile(historyPath) }));
