@@ -1707,6 +1707,7 @@ connectStream();
       const next = curLang === "zh" ? "en" : "zh";
       applyLang(next);
       renderWelcome();
+      loadModelStatus();
       fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
       if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
       else renderCards();
