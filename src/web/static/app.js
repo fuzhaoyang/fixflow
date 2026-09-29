@@ -72,7 +72,6 @@ function applyRoute() {
     cards.style.display = currentFilter === "all" ? "none" : "";
     if (currentFilter === "all") {
       refreshOverview();
-      [trafficChart, ioChart].filter(Boolean).forEach((c) => setTimeout(() => c.resize(), 0));
     }
     else renderCards();
     refreshMetrics();
