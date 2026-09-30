@@ -197,9 +197,9 @@
         <div class="term-head">
           <span data-i18n="term.title">终端</span>
           <div class="spacer"></div>
-          <button id="term-clear" class="clear-btn" title="清空终端输出" data-i18n="term.clear" data-i18n-attr="title">清空</button>
-          <button id="term-log" class="clear-btn" title="查看操作记录" data-i18n="term.log" data-i18n-attr="title">记录</button>
-          <button id="fs-toggle" class="clear-btn" title="文件" data-i18n="term.files" data-i18n-attr="title">文件</button>
+          <button id="term-clear" class="clear-btn" title="清空终端输出" data-i18n="term.clear" data-i18n-attr="title"><span data-i18n="term.clear">清空</span></button>
+          <button id="term-log" class="clear-btn" title="查看操作记录" data-i18n="term.log" data-i18n-attr="title"><span data-i18n="term.log">记录</span></button>
+          <button id="fs-toggle" class="clear-btn" title="文件" data-i18n="term.files" data-i18n-attr="title"><span data-i18n="term.files">文件</span></button>
           <button id="term-close" class="clear-btn" title="关闭终端" data-i18n="term.close" data-i18n-attr="title">✕</button>
         </div>
         <div id="term-terminal">
@@ -482,7 +482,11 @@
 <div class="help-mask" id="help-mask">
   <div class="help-header">
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 5v14"/></svg><span data-i18n="help.title">Fixflow 使用文档</span></h2>
-    <button class="btn small help-close" id="help-close" data-i18n="help.back">返回</button>
+    <div class="help-tools">
+      <button class="lang-btn" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button>
+      <button class="theme-btn" title="切换主题" data-i18n="tool.themeToggle" data-i18n-attr="title"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+      <button class="help-back" id="help-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span data-i18n="help.back">返回</span></button>
+    </div>
   </div>
   <div class="help-body" data-i18n-html="help.body">
     <h3>一、它是什么</h3>

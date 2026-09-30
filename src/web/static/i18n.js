@@ -285,16 +285,29 @@ I18N.zh["help.body"] = `<h3>一、它是什么</h3>
 
 <h3>二、快速开始</h3>
 <ul>
-  <li>运行 <code>fixflow</code> 进入配置向导：选择服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
-  <li>配置完成后自动自检，看到「全部正常」即成功。</li>
-  <li>浏览器访问面板：<code>http://127.0.0.1:2222</code>。</li>
+  <li>安装后运行 <code>fixflow</code> 进入配置向导：选服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
+  <li>选择启动面板时，配置完成后会自动自检，看到「全部正常」即成功。</li>
+  <li>访问面板：配置向导结束时会打印访问地址（形如 <code>http://服务器IP:端口/随机入口/</code>）；忘记入口 / 端口时在服务器运行 <code>fixflow default</code> 重新查看。</li>
   <li>随时自检：<code>fixflow doctor</code>。</li>
 </ul>
 
-<h3>三、命令行使用（CLI）</h3>
-<p>运行 <code>fixflow</code> 进入对话，直接发指令，例如：</p>
+<h3>三、命令行（CLI）</h3>
+<h4>子命令</h4>
+<table>
+  <tr><th>命令</th><th>作用</th></tr>
+  <tr><td><code>fixflow</code></td><td>未配置时进入配置向导；已配置则进入对话</td></tr>
+  <tr><td><code>fixflow web</code></td><td>启动 Web 面板</td></tr>
+  <tr><td><code>fixflow default</code></td><td>打印面板访问地址（忘记入口 / 端口时用）</td></tr>
+  <tr><td><code>fixflow doctor</code></td><td>自检：Node 版本 / 配置 / 大模型连通 / 面板服务</td></tr>
+  <tr><td><code>fixflow restart</code></td><td>重启面板服务</td></tr>
+  <tr><td><code>fixflow reset-password</code></td><td>重置面板登录密码</td></tr>
+  <tr><td><code>fixflow uninstall</code></td><td>卸载（停服务 + 卸载全局包，配置保留）</td></tr>
+  <tr><td><code>fixflow --version</code></td><td>查看版本</td></tr>
+</table>
+<h4>对话示例</h4>
 <pre>检查磁盘空间并汇报
 防火墙开了哪些端口
+Nginx 配置有问题吗，帮我看看
 帮我清理 /var/log 下 30 天前的日志</pre>
 <h4>内置命令</h4>
 <table>
@@ -308,44 +321,84 @@ I18N.zh["help.body"] = `<h3>一、它是什么</h3>
 </table>
 
 <h3>四、Web 面板</h3>
+<h4>账号</h4>
 <ul>
-  <li><b>登录</b>：首次访问需注册账号密码，之后登录使用；会话 12 小时有效，可左下角「设置」退出登录。</li>
-  <li><b>监控</b>：CPU / 内存 / 磁盘 / 网络端口 / Nginx / 防火墙 / Docker / 进程，每 5 秒刷新。</li>
-  <li><b>AI 对话</b>：直接打字让助手干活，回复逐字显示；修复操作弹「确认执行 / 拒绝」。</li>
-  <li><b>设置</b>：左下角「设置」→ 模型设置（改 API 地址 / Key / 模型）或重启服务。</li>
-  <li><b>清空历史</b>：对话输入框上方「清空历史」按钮。</li>
-  <li><b>忘记密码</b>：在服务器上运行 <code>fixflow reset-password</code> 重置。</li>
+  <li>首次访问注册账号（用户名 + 密码 + 验证码），之后登录；会话 12 小时有效。</li>
+  <li>密码要求：至少 8 位，且同时包含字母、数字和特殊字符。</li>
+  <li>点右上角账号名 → 「修改密码」（需输入当前密码，修改后需重新登录）。</li>
+  <li>忘记密码：登录页点「忘记密码？」查看说明，或在服务器运行 <code>fixflow reset-password</code>。</li>
+</ul>
+<h4>顶部栏</h4>
+<ul>
+  <li><b>帮助文档</b>：打开本说明。</li>
+  <li><b>语言</b>：中 / EN 实时切换（AI 回复语言跟随面板语言）。</li>
+  <li><b>告警</b>：铃铛打开告警管理。</li>
+  <li><b>主题</b>：亮 / 暗切换。</li>
+</ul>
+<h4>监控（自动刷新：总览约 3 秒、卡片约 10 秒）</h4>
+<table>
+  <tr><th>页面</th><th>内容</th></tr>
+  <tr><td>总览</td><td>负载 / CPU / 内存 / 磁盘环形图；流量 / 磁盘IO / Token 用量图表</td></tr>
+  <tr><td>系统</td><td>健康检查明细，可一键生成报告（复制 / 下载 .md）</td></tr>
+  <tr><td>网络</td><td>端口监听、端口占用查询、连通性检测（ping）</td></tr>
+  <tr><td>Nginx</td><td>运行状态、配置校验、错误日志、配置文件查看 / 编辑 / 保存重载、服务操作</td></tr>
+  <tr><td>防火墙</td><td>状态、放行规则、对全网开放端口风险、一键关闭端口</td></tr>
+  <tr><td>Python 服务 / 数据库</td><td>服务与数据库探活</td></tr>
+  <tr><td>Docker</td><td>容器状态</td></tr>
+  <tr><td>进程</td><td>进程列表（按 CPU / 内存排序），可重启 / 关闭进程</td></tr>
+  <tr><td>SSL 证书</td><td>自动发现 + 手动添加，到期进度与 SAN，一键续签，到期告警</td></tr>
+  <tr><td>服务</td><td>systemd 服务状态</td></tr>
+</table>
+<h4>AI 对话</h4>
+<ul>
+  <li>直接打字让助手干活，回复逐字显示；支持上传图片。</li>
+  <li>会改动系统的操作会弹「变更审批单」，确认后才执行。</li>
+  <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
+</ul>
+<h4>终端与文件管理</h4>
+<ul>
+  <li>内置 Web 终端，可直接在面板里执行命令。</li>
+  <li>下方文件管理器：浏览目录、新建文件夹、上传 / 下载 / 编辑 / 重命名 / 删除文件。</li>
+  <li>点终端栏「文件」按钮可折叠 / 展开文件模块（状态会记住）。</li>
+</ul>
+<h4>告警管理（右上角铃铛）</h4>
+<ul>
+  <li><b>日报告警</b>：配置 SMTP 邮箱，设定每日时间与指令，模型自动生成报表并发送。</li>
+  <li><b>指标告警</b>：设置面板外网地址 / Webhook；按 CPU / 内存 / 磁盘 / 网络流量 / TCP 会话数设阈值、持续时间与级别（P1–P5）；事件可认领、恢复。</li>
+</ul>
+<h4>设置</h4>
+<ul>
+  <li>左下角「设置」→ 模型设置（改 API 地址 / Key / 模型），保存即生效；也可重启服务、退出登录。</li>
 </ul>
 
 <h3>五、工具与安全</h3>
 <table>
   <tr><th>工具</th><th>用途</th><th>权限</th></tr>
-  <tr><td>run_command</td><td>执行命令检查 / 操作</td><td>只读自动执行；删除/修改/安装类需确认</td></tr>
+  <tr><td>run_command</td><td>执行命令检查 / 操作</td><td>只读自动执行；删除 / 修改 / 安装类需确认</td></tr>
   <tr><td>read_file</td><td>读取日志、配置</td><td>自动执行</td></tr>
   <tr><td>apply_fix</td><td>执行修复命令</td><td>必须确认</td></tr>
   <tr><td>clear_history</td><td>清空会话历史</td><td>自动执行</td></tr>
 </table>
-<p>所有写入 / 删除 / 修改操作执行前都会弹确认，输入 <code>y</code> 才执行。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
+<p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。面板里的敏感操作（关端口、进程操作、改配置、文件写操作、证书续签等）还需重输登录密码。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
 
-<h3>六、重置模型 / 服务商 / Key</h3>
+<h3>六、配置与进阶</h3>
 <ul>
-  <li>面板：左下角「设置」→ 模型设置，保存即生效。</li>
-  <li>命令：<code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code> 向导。</li>
-  <li>直接编辑 <code>~/.config/fixflow/config.json</code>（baseUrl / model / apiKey）。</li>
-  <li>每次重新安装后会自动要求重新配置，旧配置备份为 config.json.bak。</li>
+  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>lang</code> / <code>theme</code>。</li>
+  <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
+  <li>面板监听 <code>0.0.0.0</code>，用「随机端口 + 随机入口路径」保护（无入口前缀的请求返回 404）；启动时会尝试自动放行本机防火墙端口。可用 nginx 反代绑定域名，或启用内置 HTTPS（自签证书）。</li>
+  <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
+  <li>重置模型 / 服务商：面板「模型设置」保存即生效；或 <code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code>。</li>
 </ul>
 
-<h3>七、重启服务</h3>
-<p>遇到对话异常（如模型返回 400 报错）可一键重启服务解决：左下角「设置」→「重启服务」，或命令行 <code>fixflow restart</code>。重启会清空内存会话（异常上下文随之消失），聊天记录保留在本地。</p>
-
-<h3>八、常见问题</h3>
+<h3>七、常见问题</h3>
 <table>
   <tr><th>现象</th><th>处理</th></tr>
   <tr><td>向导提示"无法连接"</td><td>服务器访问不了该 API 地址，检查外网 / 防火墙 / 地址</td></tr>
   <tr><td>提示"API Key 无效"</td><td>重新复制粘贴 Key</td></tr>
   <tr><td>面板打不开</td><td>运行 <code>fixflow doctor</code> 检查；未运行就 <code>fixflow web</code></td></tr>
-  <tr><td>对话报 LLM API 400</td><td>多发生在会话上下文异常，点「重启服务」一键修复</td></tr>
+  <tr><td>对话报 LLM API 400</td><td>多为会话上下文异常，点「重启服务」一键修复</td></tr>
   <tr><td>监控显示 N/A</td><td>对应组件没装（如没装 Docker），不影响其他功能</td></tr>
+  <tr><td>忘记面板密码</td><td>在服务器运行 <code>fixflow reset-password</code></td></tr>
 </table>`;
 
 I18N.en["help.body"] = `<h3>1. What is it</h3>
@@ -354,21 +407,34 @@ I18N.en["help.body"] = `<h3>1. What is it</h3>
 <h3>2. Quick Start</h3>
 <ul>
   <li>Run <code>fixflow</code> to enter the setup wizard: choose provider → paste API Key → pick model → choose whether to start the panel.</li>
-  <li>After setup a self-check runs automatically; seeing "All OK" means success.</li>
-  <li>Open the panel in a browser: <code>http://127.0.0.1:2222</code>.</li>
+  <li>When you choose to start the panel, a self-check runs after setup; seeing "All OK" means success.</li>
+  <li>Open the panel: the setup wizard prints the access URL (like <code>http://SERVER_IP:PORT/RANDOM_PATH/</code>); run <code>fixflow default</code> on the server to print it again if you forget the port / entry path.</li>
   <li>Run a self-check anytime: <code>fixflow doctor</code>.</li>
 </ul>
 
 <h3>3. Command Line (CLI)</h3>
-<p>Run <code>fixflow</code> to chat, then send instructions directly, e.g.:</p>
+<h4>Subcommands</h4>
+<table>
+  <tr><th>Command</th><th>Effect</th></tr>
+  <tr><td><code>fixflow</code></td><td>Setup wizard if unconfigured; otherwise start chatting</td></tr>
+  <tr><td><code>fixflow web</code></td><td>Start the web panel</td></tr>
+  <tr><td><code>fixflow default</code></td><td>Print the panel access URL (when you forget the port / entry path)</td></tr>
+  <tr><td><code>fixflow doctor</code></td><td>Self-check: Node version / config / LLM connectivity / panel service</td></tr>
+  <tr><td><code>fixflow restart</code></td><td>Restart the panel service</td></tr>
+  <tr><td><code>fixflow reset-password</code></td><td>Reset the panel login password</td></tr>
+  <tr><td><code>fixflow uninstall</code></td><td>Uninstall (stop service + remove global package, keep config)</td></tr>
+  <tr><td><code>fixflow --version</code></td><td>Show version</td></tr>
+</table>
+<h4>Chat examples</h4>
 <pre>Check disk space and report
 Which ports are open on the firewall
+Is my Nginx config OK?
 Clean logs older than 30 days under /var/log</pre>
 <h4>Built-in commands</h4>
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
   <tr><td><code>help</code> / <code>?</code></td><td>Show help</td></tr>
-  <tr><td><code>clear</code> / clear history</td><td>Clear current session chat</td></tr>
+  <tr><td><code>clear</code></td><td>Clear current session chat</td></tr>
   <tr><td><code>exit</code> / <code>quit</code></td><td>Exit session</td></tr>
   <tr><td>↑ / ↓ arrow keys</td><td>Cycle through command history</td></tr>
   <tr><td>Ctrl+C (task running)</td><td>Abort current task (also interrupts the model request)</td></tr>
@@ -376,44 +442,84 @@ Clean logs older than 30 days under /var/log</pre>
 </table>
 
 <h3>4. Web Panel</h3>
+<h4>Account</h4>
 <ul>
-  <li><b>Login</b>: register an account on first visit, then log in; session lasts 12 hours, logout via "Settings" bottom-left.</li>
-  <li><b>Monitoring</b>: CPU / memory / disk / network ports / Nginx / firewall / Docker / processes, refreshed every 5 seconds.</li>
-  <li><b>AI Chat</b>: type directly to get the assistant working, replies stream word by word; fix operations show a "Confirm / Reject" prompt.</li>
-  <li><b>Settings</b>: bottom-left "Settings" → model settings (change API URL / Key / model) or restart service.</li>
-  <li><b>Clear history</b>: "Clear history" button above the chat input.</li>
-  <li><b>Forgot password</b>: run <code>fixflow reset-password</code> on the server.</li>
+  <li>Register on first visit (username + password + captcha), then log in; session lasts 12 hours.</li>
+  <li>Password rule: at least 8 characters with letters, digits and special characters.</li>
+  <li>Click the account name (top-right) → "Change Password" (requires the current password; you must log in again afterwards).</li>
+  <li>Forgot password: click "Forgot password?" on the login page, or run <code>fixflow reset-password</code> on the server.</li>
+</ul>
+<h4>Top bar</h4>
+<ul>
+  <li><b>Help</b>: open this document.</li>
+  <li><b>Language</b>: switch ZH / EN live (AI replies follow the panel language).</li>
+  <li><b>Alerts</b>: the bell opens alert management.</li>
+  <li><b>Theme</b>: light / dark.</li>
+</ul>
+<h4>Monitoring (auto-refresh: overview ~3s, cards ~10s)</h4>
+<table>
+  <tr><th>Page</th><th>Content</th></tr>
+  <tr><td>Overview</td><td>Load / CPU / memory / disk rings; traffic / disk IO / token charts</td></tr>
+  <tr><td>System</td><td>Health-check details, one-click report (copy / download .md)</td></tr>
+  <tr><td>Network</td><td>Listening ports, port lookup, connectivity check (ping)</td></tr>
+  <tr><td>Nginx</td><td>Status, config check, error log, view / edit / save-and-reload configs, service actions</td></tr>
+  <tr><td>Firewall</td><td>Status, allow rules, open-to-all port risks, one-click close port</td></tr>
+  <tr><td>Python Services / Databases</td><td>Service and database liveness</td></tr>
+  <tr><td>Docker</td><td>Container status</td></tr>
+  <tr><td>Processes</td><td>Process list (sort by CPU / memory), restart / kill</td></tr>
+  <tr><td>SSL Certificates</td><td>Auto-discovery + manual add, expiry bar and SAN, one-click renew, expiry alerts</td></tr>
+  <tr><td>Services</td><td>systemd service status</td></tr>
+</table>
+<h4>AI Chat</h4>
+<ul>
+  <li>Type directly; replies stream word by word; image upload supported.</li>
+  <li>Operations that change the system show a "Change Approval" card and run only after you confirm.</li>
+  <li>"Clear history" above the input clears the session; "Terminal" opens the side terminal.</li>
+</ul>
+<h4>Terminal &amp; File Manager</h4>
+<ul>
+  <li>A built-in web terminal to run commands inside the panel.</li>
+  <li>File manager below: browse, new folder, upload / download / edit / rename / delete.</li>
+  <li>The "Files" button in the terminal bar collapses / expands the file module (state is remembered).</li>
+</ul>
+<h4>Alert Management (bell, top-right)</h4>
+<ul>
+  <li><b>Daily alerts</b>: configure SMTP, set a daily time and instruction; the model generates and emails a report.</li>
+  <li><b>Metric alerts</b>: set panel URL / webhook; rules on CPU / memory / disk / network / TCP sessions with threshold, duration and level (P1–P5); incidents can be claimed / resolved.</li>
+</ul>
+<h4>Settings</h4>
+<ul>
+  <li>Bottom-left "Settings" → model settings (API URL / Key / model), takes effect on save; also restart service and log out.</li>
 </ul>
 
-<h3>5. Tools & Security</h3>
+<h3>5. Tools &amp; Security</h3>
 <table>
   <tr><th>Tool</th><th>Purpose</th><th>Permission</th></tr>
-  <tr><td>run_command</td><td>Run commands to check / operate</td><td>Read-only auto; delete/modify/install need confirmation</td></tr>
+  <tr><td>run_command</td><td>Run commands to check / operate</td><td>Read-only auto; delete / modify / install need confirmation</td></tr>
   <tr><td>read_file</td><td>Read logs, configs</td><td>Auto</td></tr>
   <tr><td>apply_fix</td><td>Apply fix commands</td><td>Always confirm</td></tr>
   <tr><td>clear_history</td><td>Clear session history</td><td>Auto</td></tr>
 </table>
-<p>Every write / delete / modify operation asks for confirmation first; type <code>y</code> to run. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
+<p>Every write / delete / modify operation asks for confirmation first: type <code>y</code> in the CLI, or click "Confirm" in the panel. Sensitive panel actions (close port, process actions, config changes, file writes, certificate renewal, etc.) also require re-entering the login password. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
 
-<h3>6. Reset Model / Provider / Key</h3>
+<h3>6. Configuration &amp; Advanced</h3>
 <ul>
-  <li>Panel: bottom-left "Settings" → model settings, saving takes effect immediately.</li>
-  <li>Command: <code>rm -rf ~/.config/fixflow</code> then re-run the <code>fixflow</code> wizard.</li>
-  <li>Edit <code>~/.config/fixflow/config.json</code> directly (baseUrl / model / apiKey).</li>
-  <li>After each reinstall you will be asked to reconfigure; old config is backed up as config.json.bak.</li>
+  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>lang</code> / <code>theme</code>.</li>
+  <li>Environment overrides: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
+  <li>The panel listens on <code>0.0.0.0</code>, protected by a random port + random entry path (requests without the entry prefix return 404); it tries to open the local firewall port on startup. Bind a domain via an nginx reverse proxy, or enable built-in HTTPS (self-signed).</li>
+  <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; log at <code>~/.config/fixflow/cli.log</code>.</li>
+  <li>Reset model / provider: save in "Model Settings", or <code>rm -rf ~/.config/fixflow</code> then re-run <code>fixflow</code>.</li>
 </ul>
 
-<h3>7. Restart Service</h3>
-<p>If chat misbehaves (e.g. LLM API 400), restart the service: bottom-left "Settings" → "Restart service", or <code>fixflow restart</code>. Restart clears in-memory session (bad context disappears); chat history stays local.</p>
-
-<h3>8. FAQ</h3>
+<h3>7. FAQ</h3>
 <table>
   <tr><th>Symptom</th><th>Fix</th></tr>
   <tr><td>Wizard says "cannot connect"</td><td>Server cannot reach the API URL; check network / firewall / address</td></tr>
   <tr><td>"API Key invalid"</td><td>Copy and paste the Key again</td></tr>
   <tr><td>Panel won't open</td><td>Run <code>fixflow doctor</code>; if not running, run <code>fixflow web</code></td></tr>
-  <tr><td>Chat gets LLM API 400</td><td>Usually a bad session context; click "Restart service" to fix in one click</td></tr>
+  <tr><td>Chat gets LLM API 400</td><td>Usually a bad session context; click "Restart service"</td></tr>
   <tr><td>Monitoring shows N/A</td><td>Component not installed (e.g. no Docker); other features unaffected</td></tr>
+  <tr><td>Forgot panel password</td><td>Run <code>fixflow reset-password</code> on the server</td></tr>
 </table>`;
 
 function t(key) {
@@ -423,8 +529,7 @@ function t(key) {
 function applyLang(lang) {
   curLang = lang === "en" ? "en" : "zh";
   document.documentElement.lang = curLang;
-  const btn = document.getElementById("lang-toggle");
-  if (btn) btn.textContent = curLang === "zh" ? "EN" : "中文";
+  document.querySelectorAll(".lang-btn").forEach((btn) => { btn.textContent = curLang === "zh" ? "EN" : "中文"; });
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     const key = el.dataset.i18n;
     const attr = el.dataset.i18nAttr;

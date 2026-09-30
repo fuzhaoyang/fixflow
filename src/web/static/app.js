@@ -84,13 +84,19 @@ const MODULES = [
 ];
 
 let currentFilter = "all";
+let lastRoute = localStorage.getItem("fixflow_route") || "all";
 let chatView = false;
 let metrics = {};
 let busy = false;
 
 // ---------- 路由（hash：#/system、#/network、#/chat） ----------
 function applyRoute() {
-  const route = (location.hash.replace(/^#\/?/, "") || "all").trim();
+  const raw = (location.hash.replace(/^#\/?/, "") || "all").trim();
+  const helpOpen = raw === "help";
+  helpMask.classList.toggle("show", helpOpen);
+  if (!helpOpen) { lastRoute = raw; localStorage.setItem("fixflow_route", raw); }
+  if (authMask.style.display === "flex") return;
+  const route = helpOpen ? lastRoute : raw;
   document.querySelectorAll(".menu-item").forEach((i) => {
     const hit = route === "chat" ? i.dataset.view === "chat" : i.dataset.view === "monitor" && i.dataset.filter === route;
     i.classList.toggle("active", hit);
@@ -1912,6 +1918,7 @@ function setupAuth() {
     authRegistered = Boolean(data.registered);
     setAuthMode(data.registered ? "login" : "register", authRegistered);
     authMask.style.display = "flex";
+    if (location.hash === "#/help") helpMask.classList.add("show");
   })();
   authForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -2097,8 +2104,8 @@ document.getElementById("logout-confirm").onclick = async () => {
 };
 
 const helpMask = document.getElementById("help-mask");
-document.querySelectorAll(".doc-btn").forEach((b) => b.addEventListener("click", () => helpMask.classList.add("show")));
-document.getElementById("help-close").onclick = () => helpMask.classList.remove("show");
+document.querySelectorAll(".doc-btn").forEach((b) => b.addEventListener("click", () => { location.hash = "/help"; }));
+document.getElementById("help-close").onclick = () => { location.hash = "/" + lastRoute; };
 
 const restartMask = document.getElementById("restart-mask");
 const restartConfirmBtn = document.getElementById("restart-confirm");
