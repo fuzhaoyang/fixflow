@@ -46,6 +46,16 @@
     </form>
   </div>
 </div>
+<div class="modal-mask" id="forgot-mask" style="z-index:450">
+  <div class="modal">
+    <button class="modal-close" id="forgot-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span data-i18n="auth.forgotTitle">重置密码</span></h2>
+    <p class="modal-text" data-i18n="auth.resetHint">请在服务器上运行 fixflow reset-password 重置密码。</p>
+    <div class="modal-actions">
+      <button class="btn" id="forgot-ok" data-i18n="modal.ok">知道了</button>
+    </div>
+  </div>
+</div>
 <div class="layout">
   <aside>
     <div class="brand" title="Fixflow 运维管家" data-i18n="brand.name" data-i18n-attr="title">

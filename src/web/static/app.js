@@ -1855,9 +1855,12 @@ const authPassword = document.getElementById("auth-password");
 const authCaptcha = document.getElementById("auth-captcha");
 const authCaptchaImg = document.getElementById("auth-captcha-img");
 const authSubmit = document.getElementById("auth-submit");
-const authForgot = document.getElementById("auth-forgot");
 const authForgotLink = document.getElementById("auth-forgot-link");
 const authTip = document.getElementById("auth-tip");
+const forgotMask = document.getElementById("forgot-mask");
+authForgotLink.onclick = () => forgotMask.classList.add("show");
+document.getElementById("forgot-close").onclick = () => forgotMask.classList.remove("show");
+document.getElementById("forgot-ok").onclick = () => forgotMask.classList.remove("show");
 
 let authMode = "login";
 let authRegistered = false;
@@ -1886,21 +1889,15 @@ function setAuthMode(mode, registered) {
     authTitle.textContent = t("auth.loginTitle");
     authSub.textContent = t("auth.loginSub");
     authSubmit.textContent = t("auth.login");
-    authForgot.style.display = registered ? "" : "none";
     authTip.innerHTML = `<button type="button" id="auth-toggle">${t("auth.noAccount")}</button>`;
   } else {
     document.getElementById("auth-logo-text").textContent = "AI";
     authTitle.textContent = t("auth.registerTitle");
     authSub.textContent = t("auth.registerSub");
     authSubmit.textContent = t("auth.register");
-    authForgot.style.display = "none";
     authTip.innerHTML = `<button type="button" id="auth-toggle">${t("auth.hasAccount")}</button>`;
   }
-  document.getElementById("auth-toggle")?.addEventListener("click", () => setAuthMode("login", true));
-  document.getElementById("auth-forgot-link")?.addEventListener("click", () => {
-    clearAuthErr();
-    authSub.textContent = t("auth.resetHint");
-  });
+  document.getElementById("auth-toggle")?.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login", true));
   refreshCaptcha();
 }
 
