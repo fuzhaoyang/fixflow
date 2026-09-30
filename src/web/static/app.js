@@ -2097,7 +2097,7 @@ document.getElementById("logout-confirm").onclick = async () => {
 };
 
 const helpMask = document.getElementById("help-mask");
-document.getElementById("help-btn").onclick = () => helpMask.classList.add("show");
+document.querySelectorAll(".doc-btn").forEach((b) => b.addEventListener("click", () => helpMask.classList.add("show")));
 document.getElementById("help-close").onclick = () => helpMask.classList.remove("show");
 
 const restartMask = document.getElementById("restart-mask");
