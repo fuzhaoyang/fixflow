@@ -1184,9 +1184,26 @@ function termSetLoading(show, text = "", error = false) {
   if (tx && text) tx.textContent = text;
 }
 
+let xtermLoaded = null;
+function loadXterm() {
+  if (xtermLoaded) return xtermLoaded;
+  xtermLoaded = new Promise((resolve, reject) => {
+    const css = document.createElement("link");
+    css.rel = "stylesheet"; css.href = "xterm.css";
+    document.head.appendChild(css);
+    const s = document.createElement("script");
+    s.src = "xterm.min.js";
+    s.onload = () => resolve();
+    s.onerror = () => { xtermLoaded = null; reject(new Error("xterm load failed")); };
+    document.head.appendChild(s);
+  });
+  return xtermLoaded;
+}
+
 async function termConnect() {
   if (terminal) { termSetLoading(false); return; }
   termSetLoading(true, t("term.connecting"));
+  try { await loadXterm(); } catch { termSetLoading(true, t("term.fail"), true); setTimeout(() => termSetLoading(false), 2500); return; }
   let r = {};
   try {
     r = await fetch("api/term/open", { method: "POST" }).then((res) => res.json());
