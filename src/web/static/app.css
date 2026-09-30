@@ -1,4 +1,6 @@
 * { box-sizing: border-box; }
+    /* 表单控件默认不继承字体/行高，显式固定行高，避免中英文切换时行盒高度不一致 */
+    button, input, select, textarea { font-family: inherit; line-height: 1.4; }
     :root {
       --bg: #0a0f1a; --panel: #121a29; --panel2: #1b2537;
       --text: #e7edf6; --muted: #8797b2; --accent: #4c8dff;
@@ -226,7 +228,7 @@
     .card h2 { font-size: 13px; margin: 0 0 8px; color: var(--accent); flex-shrink: 0; }
     .card > pre, .card > div { min-height: 0; }
     .card-body { flex: 1 1 0; min-height: 0; overflow: auto; }
-    pre { white-space: pre-wrap; word-break: break-all; margin: 0; font-size: 12px; max-height: 220px; overflow: auto; color: var(--text); flex: 1 1 auto; font-family: var(--font-mono); }
+    pre { white-space: pre-wrap; word-break: break-all; margin: 0; font-size: 12px; line-height: 1.4; max-height: 220px; overflow: auto; color: var(--text); flex: 1 1 auto; font-family: var(--font-mono); }
     .svc-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .svc-table th, .svc-table td { border-bottom: 1px solid var(--border); padding: 7px 10px; text-align: left; word-break: break-all; min-width: 120px; }
     .svc-table thead th { background: var(--panel2); color: var(--muted); font-weight: 600; }
@@ -237,7 +239,7 @@
     .fw-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
     .fw-stat { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
     .fw-stat .k { font-size: 12px; color: var(--muted); }
-    .fw-stat .v { font-size: 18px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .fw-stat .v { font-size: 18px; font-weight: 700; line-height: 1.4; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
     .fw-stat .v.bad { color: var(--bad); }
     .fw-sub { font-size: 13px; color: var(--accent); margin: 14px 0 8px; }
     .fw-risk { display: flex; flex-direction: column; gap: 8px; }
@@ -262,7 +264,7 @@
     .traffic-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; }
     .traffic-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
     .seg-tabs { display: flex; gap: 2px; border-bottom: 2px solid var(--border); }
-    .seg-tab { padding: 8px 16px; font-size: 14px; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; background: none; border-top: none; border-left: none; border-right: none; font-weight: 400; }
+    .seg-tab { padding: 8px 16px; font-size: 14px; line-height: 1.4; color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; background: none; border-top: none; border-left: none; border-right: none; font-weight: 400; }
     .seg-tab.active { color: var(--text); font-weight: 700; border-bottom-color: var(--accent); }
     .traffic-head .spacer { flex: 1; }
     .traffic-head select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none; }
@@ -386,7 +388,7 @@
     .dot:nth-child(6) { animation-delay: .6s; }
     @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: .6; } 30% { transform: translateY(-5px); opacity: 1; } }
     /* 工具/确认/系统消息保持简单块样式 */
-    .msg { align-self: stretch; background: var(--code-bg); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 8px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+    .msg { align-self: stretch; background: var(--code-bg); border-left: 3px solid var(--accent); padding: 8px 12px; border-radius: 8px; font-family: var(--font-mono); font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-all; }
     .msg.confirm { align-self: flex-start; background: var(--warn-bg); border-left-color: var(--warn); }
     .msg.error { align-self: flex-start; background: var(--bad-bg); border-left-color: var(--bad); color: var(--bad-fg); }
     .msg.system { align-self: center; background: none; border: none; color: var(--muted); font-size: 12px; font-family: inherit; }
