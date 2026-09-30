@@ -592,3 +592,58 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
     }
+    /* 登录页背景场景：服务器机柜 + AI 神经网络 + 数据流（新增图层，叠加在现有柔光/网格之上） */
+    .auth-scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+    .auth-scene .rack-body { fill: color-mix(in srgb, var(--panel) 62%, transparent); stroke: color-mix(in srgb, var(--accent) 28%, transparent); stroke-width: 1.5; }
+    .auth-scene .rack-slot { fill: color-mix(in srgb, var(--accent) 20%, transparent); }
+    .auth-scene .rack-led { fill: var(--ok); opacity: .25; animation: auth-led 3.6s ease-in-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .nn-edge { stroke: color-mix(in srgb, var(--accent) 24%, transparent); stroke-width: 1; }
+    .auth-scene .nn-node { fill: var(--accent); opacity: .35; transform-box: fill-box; transform-origin: center; animation: auth-node 4.2s ease-in-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .nn-core { transform-box: fill-box; transform-origin: center; animation: auth-core 6s ease-in-out infinite; }
+    .auth-scene .flow { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 6 14; opacity: .5; animation: auth-flow 3s linear infinite; animation-delay: var(--d, 0s); }
+    .auth-scene #authCore .core-a { stop-color: var(--accent); stop-opacity: .5; }
+    .auth-scene #authCore .core-b { stop-color: var(--accent); stop-opacity: 0; }
+    @keyframes auth-led { 0%, 100% { opacity: .2; } 50% { opacity: .95; } }
+    @keyframes auth-node { 0%, 100% { opacity: .3; transform: scale(.85); } 50% { opacity: .9; transform: scale(1.12); } }
+    @keyframes auth-core { 0%, 100% { opacity: .5; transform: scale(.95); } 50% { opacity: .9; transform: scale(1.06); } }
+    @keyframes auth-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -100; } }
+    html[data-theme="light"] .auth-scene { opacity: .5; }
+    @media (max-width: 900px) { .auth-scene { display: none; } }
+    /* 全屏科技氛围：极光 + 粒子星域 */
+    .auth-aurora { position: absolute; inset: -30%; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(42% 34% at 72% 22%, color-mix(in srgb, #7c5cff 26%, transparent), transparent 70%),
+        radial-gradient(38% 30% at 24% 76%, color-mix(in srgb, #22d3ee 20%, transparent), transparent 72%),
+        radial-gradient(50% 42% at 52% 52%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 75%);
+      filter: blur(42px);
+      animation: auth-aurora 34s ease-in-out infinite alternate;
+    }
+    .auth-stars { position: absolute; inset: -50%; z-index: 0; pointer-events: none; opacity: .55;
+      background-image:
+        radial-gradient(1.6px 1.6px at 20% 30%, color-mix(in srgb, var(--text) 65%, transparent), transparent),
+        radial-gradient(1.2px 1.2px at 70% 65%, color-mix(in srgb, var(--accent) 75%, transparent), transparent),
+        radial-gradient(1.4px 1.4px at 45% 85%, color-mix(in srgb, var(--text) 55%, transparent), transparent),
+        radial-gradient(1px 1px at 85% 15%, color-mix(in srgb, var(--text) 50%, transparent), transparent);
+      background-size: 260px 260px, 200px 200px, 320px 320px, 180px 180px;
+      animation: auth-stars 70s linear infinite, auth-twinkle 5s ease-in-out infinite;
+    }
+    @keyframes auth-aurora { 0% { transform: translate(-3%, -2%) scale(1); } 100% { transform: translate(3%, 2%) scale(1.12); } }
+    @keyframes auth-stars { from { background-position: 0 0, 0 0, 0 0, 0 0; } to { background-position: 0 -260px, 0 -200px, 0 -320px, 0 -180px; } }
+    @keyframes auth-twinkle { 0%, 100% { opacity: .4; } 50% { opacity: .7; } }
+    /* 场景补充：机柜扫描光带 / 人脑轮廓 / 手指轻触 */
+    .auth-scene .rack-scan { animation: auth-scan 4.5s ease-in-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .brain-outline { fill: color-mix(in srgb, var(--accent) 6%, transparent); stroke: color-mix(in srgb, var(--accent) 34%, transparent); stroke-width: 1.5; }
+    .auth-scene .brain-fold { fill: none; stroke: color-mix(in srgb, var(--accent) 24%, transparent); stroke-width: 1.2; }
+    .auth-scene .finger { fill: color-mix(in srgb, var(--text) 10%, transparent); stroke: color-mix(in srgb, var(--accent) 32%, transparent); stroke-width: 1.5; }
+    .auth-scene .finger-nail { fill: none; stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 1.4; stroke-linecap: round; }
+    .auth-scene .finger-tip { fill: var(--accent); opacity: .7; animation: auth-node 3.4s ease-in-out infinite; }
+    .auth-scene .auth-ripple { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; animation: auth-ripple 2.8s ease-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .auth-finger { animation: auth-finger 5s ease-in-out infinite; }
+    .auth-scene #authScan .scan-a { stop-color: var(--accent); stop-opacity: 0; }
+    .auth-scene #authScan .scan-b { stop-color: var(--accent); stop-opacity: .55; }
+    .auth-scene #authScan .scan-c { stop-color: var(--accent); stop-opacity: 0; }
+    @keyframes auth-scan { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .9; } 88% { opacity: .9; } 100% { transform: translateY(380px); opacity: 0; } }
+    @keyframes auth-ripple { 0% { transform: scale(.35); opacity: .7; } 75%, 100% { transform: scale(3.4); opacity: 0; } }
+    @keyframes auth-finger { 0%, 100% { transform: translateY(6px); } 50% { transform: translateY(-6px); } }
+    html[data-theme="light"] .auth-aurora { opacity: .55; }
+    html[data-theme="light"] .auth-stars { opacity: .3; }

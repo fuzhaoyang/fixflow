@@ -10,6 +10,100 @@
 <script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
 <div id="boot-mask"><div class="spinner-lg"></div></div>
 <div id="auth-mask">
+  <div class="auth-aurora" aria-hidden="true"></div>
+  <div class="auth-stars" aria-hidden="true"></div>
+  <svg class="auth-scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+    <defs>
+      <pattern id="authSlots" width="120" height="26" patternUnits="userSpaceOnUse">
+        <rect class="rack-slot" x="10" y="6" width="100" height="14" rx="3"/>
+      </pattern>
+      <radialGradient id="authCore" cx="50%" cy="50%" r="50%">
+        <stop class="core-a" offset="0%"/>
+        <stop class="core-b" offset="100%"/>
+      </radialGradient>
+      <linearGradient id="authScan" x1="0" y1="0" x2="0" y2="1">
+        <stop class="scan-a" offset="0%"/>
+        <stop class="scan-b" offset="50%"/>
+        <stop class="scan-c" offset="100%"/>
+      </linearGradient>
+    </defs>
+
+    <!-- 左侧：服务器机柜阵列 -->
+    <g class="auth-racks">
+      <g transform="translate(80 300)">
+        <rect class="rack-body" x="0" y="0" width="130" height="350" rx="12"/>
+        <rect class="rack-face" x="0" y="0" width="130" height="350" rx="12" fill="url(#authSlots)"/>
+        <rect class="rack-scan" style="--d:0s" x="6" y="-30" width="118" height="26" rx="6" fill="url(#authScan)"/>
+        <circle class="rack-led" style="--d:0s" cx="118" cy="19" r="3"/>
+        <circle class="rack-led" style="--d:.4s" cx="118" cy="71" r="3"/>
+        <circle class="rack-led" style="--d:.9s" cx="118" cy="123" r="3"/>
+        <circle class="rack-led" style="--d:1.3s" cx="118" cy="175" r="3"/>
+        <circle class="rack-led" style="--d:.2s" cx="118" cy="227" r="3"/>
+        <circle class="rack-led" style="--d:1.6s" cx="118" cy="279" r="3"/>
+      </g>
+      <g transform="translate(240 360)">
+        <rect class="rack-body" x="0" y="0" width="130" height="350" rx="12"/>
+        <rect class="rack-face" x="0" y="0" width="130" height="350" rx="12" fill="url(#authSlots)"/>
+        <rect class="rack-scan" style="--d:2.2s" x="6" y="-30" width="118" height="26" rx="6" fill="url(#authScan)"/>
+        <circle class="rack-led" style="--d:.6s" cx="118" cy="19" r="3"/>
+        <circle class="rack-led" style="--d:1.1s" cx="118" cy="71" r="3"/>
+        <circle class="rack-led" style="--d:.3s" cx="118" cy="123" r="3"/>
+        <circle class="rack-led" style="--d:1.8s" cx="118" cy="175" r="3"/>
+        <circle class="rack-led" style="--d:.8s" cx="118" cy="227" r="3"/>
+        <circle class="rack-led" style="--d:1.4s" cx="118" cy="279" r="3"/>
+      </g>
+    </g>
+
+    <!-- 中间：数据流 -->
+    <g class="auth-flows">
+      <path class="flow" pathLength="100" d="M 380 420 C 600 420 760 400 1000 410"/>
+      <path class="flow" style="--d:.8s" pathLength="100" d="M 380 480 C 620 480 760 430 1000 430"/>
+      <path class="flow" style="--d:1.6s" pathLength="100" d="M 380 540 C 640 540 780 470 1000 455"/>
+    </g>
+
+    <!-- 右侧：AI 大模型神经网络 -->
+    <g class="auth-nn">
+      <circle class="nn-core" cx="1160" cy="440" r="180" fill="url(#authCore)"/>
+      <g class="brain">
+        <path class="brain-outline" d="M 1000 430 C 990 360 1040 320 1100 320 C 1120 290 1170 285 1200 315 C 1250 300 1310 330 1310 390 C 1345 410 1350 470 1320 510 C 1330 560 1290 600 1240 600 C 1230 630 1180 635 1150 610 C 1100 625 1040 600 1030 550 C 990 530 985 470 1000 430 Z"/>
+        <path class="brain-fold" d="M 1050 360 C 1085 385 1085 425 1055 455"/>
+        <path class="brain-fold" d="M 1120 335 C 1150 375 1150 435 1120 480"/>
+        <path class="brain-fold" d="M 1200 345 C 1230 385 1230 445 1200 485"/>
+        <path class="brain-fold" d="M 1260 380 C 1280 420 1280 460 1258 500"/>
+      </g>
+      <g class="nn-edges">
+        <line class="nn-edge" x1="1010" y1="320" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="320" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="320" x2="1120" y2="515"/>
+        <line class="nn-edge" x1="1010" y1="390" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="390" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="390" x2="1120" y2="515"/>
+        <line class="nn-edge" x1="1010" y1="460" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="460" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="460" x2="1120" y2="515"/>
+        <line class="nn-edge" x1="1010" y1="530" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="530" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="530" x2="1120" y2="515"/>
+        <line class="nn-edge" x1="1120" y1="365" x2="1230" y2="400"/><line class="nn-edge" x1="1120" y1="365" x2="1230" y2="480"/>
+        <line class="nn-edge" x1="1120" y1="440" x2="1230" y2="400"/><line class="nn-edge" x1="1120" y1="440" x2="1230" y2="480"/>
+        <line class="nn-edge" x1="1120" y1="515" x2="1230" y2="400"/><line class="nn-edge" x1="1120" y1="515" x2="1230" y2="480"/>
+      </g>
+      <g class="nn-nodes">
+        <circle class="nn-node" style="--d:0s" cx="1010" cy="320" r="8"/>
+        <circle class="nn-node" style="--d:.5s" cx="1010" cy="390" r="8"/>
+        <circle class="nn-node" style="--d:1s" cx="1010" cy="460" r="8"/>
+        <circle class="nn-node" style="--d:1.5s" cx="1010" cy="530" r="8"/>
+        <circle class="nn-node" style="--d:.3s" cx="1120" cy="365" r="9"/>
+        <circle class="nn-node" style="--d:.8s" cx="1120" cy="440" r="9"/>
+        <circle class="nn-node" style="--d:1.3s" cx="1120" cy="515" r="9"/>
+        <circle class="nn-node" style="--d:.6s" cx="1230" cy="400" r="8"/>
+        <circle class="nn-node" style="--d:1.1s" cx="1230" cy="480" r="8"/>
+      </g>
+    </g>
+
+    <!-- 下方：手指轻触（人机交互） -->
+    <g class="auth-ripples">
+      <circle class="auth-ripple" cx="1120" cy="624" r="10"/>
+      <circle class="auth-ripple" style="--d:1.4s" cx="1120" cy="624" r="10"/>
+    </g>
+    <g class="auth-finger">
+      <path class="finger" d="M 1076 940 L 1072 730 C 1068 668 1090 628 1120 626 C 1150 628 1172 668 1168 730 L 1164 940 Z"/>
+      <path class="finger-nail" d="M 1098 648 C 1106 638 1134 638 1142 648"/>
+      <circle class="finger-tip" cx="1120" cy="624" r="6"/>
+    </g>
+  </svg>
   <div class="auth-brand"><span class="brand-logo"><span class="ai-logo">AI</span></span><span data-i18n="brand.name">Fixflow 运维管家</span></div>
   <div class="auth-top">
     <button class="lang-btn" id="auth-lang-btn" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button>
