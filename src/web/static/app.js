@@ -24,6 +24,52 @@ const overviewEl = document.getElementById("overview");
 let pendingImages = [];
 let chatHistory = [];
 
+// ---------- 内联图标（统一 SVG，替代 emoji） ----------
+const ICON_PATHS = {
+  check: '<path d="M4 12.5l5 5 11-11"/>',
+  warn: '<path d="M12 3l9 16H3z"/><path d="M12 9.5v4.5M12 17h.01"/>',
+  x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  xCircle: '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/>',
+  wrench: '<path d="M15 6a4 4 0 00-5.2 5.2L4 17v3h3l5.8-5.8A4 4 0 0018 9l-2.4 2.4-1.8-1.8L15 6z"/>',
+  folder: '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>',
+  file: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',
+  pencil: '<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/>',
+  trash: '<path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/>',
+  upload: '<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
+  save: '<path d="M5 3h11l3 3v15H5z"/><path d="M8 3v6h7V3M8 21v-6h8v6"/>',
+  copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h8"/>',
+  download: '<path d="M12 4v12M7 11l5 5 5-5M4 20h16"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  bell: '<path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/>',
+  refresh: '<path d="M21 12a9 9 0 11-2.6-6.3"/><path d="M21 3v5h-5"/>',
+  door: '<path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 12H3M6 8l-3 4 3 4"/>',
+  lock: '<rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/>',
+  shield: '<path d="M12 3l7 3v5c0 4.6-3 7.6-7 9-4-1.4-7-4.4-7-9V6l7-3z"/>',
+  terminal: '<path d="M5 6h14v12H5z"/><path d="M8 10l2.5 2.5L8 15M13 15h3"/>',
+  fileCode: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9.5 13l-2 2 2 2M14.5 13l2 2-2 2"/>',
+  book: '<path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 5v14"/>',
+  gear: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.1-1.55 1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.88 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1.1 1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.88.34h.01a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.88-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.88v.01a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z"/>',
+  robot: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4M9 19v2M15 19v2"/><circle cx="9" cy="13.5" r="1.3"/><circle cx="15" cy="13.5" r="1.3"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6"/>',
+  play: '<path d="M7 5l12 7-12 7z"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  zap: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+  monitor: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 2.6 15.2 0 18M12 3c-2.6 2.8-2.6 15.2 0 18"/>',
+  server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  code: '<path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/>',
+  database: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/>',
+  box: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/>',
+  activity: '<path d="M3 12h4l2.5-7 4 14 2.5-7H21"/>',
+  layers: '<rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="10" width="18" height="5" rx="1.5"/><rect x="3" y="16" width="18" height="4" rx="1.5"/>',
+  message: '<path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/>',
+  sparkles: '<path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/>',
+  bolt: '<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
+};
+function icon(name) {
+  return `<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICON_PATHS[name] || ""}</svg>`;
+}
+
 const MODULES = [
   ["system", "menu.system"],
   ["network", "menu.network"],
@@ -106,9 +152,9 @@ function fmtBytes(b, dec = 2) {
 }
 
 function ringColor(pct) {
-  if (pct >= 90) return "#ef4444";
-  if (pct >= 80) return "#f59e0b";
-  return "#22c55e";
+  if (pct >= 90) return "#fb7185";
+  if (pct >= 80) return "#f5b942";
+  return "#34d399";
 }
 
 function renderSysInfo(sys) {
@@ -502,13 +548,13 @@ function renderCards() {
       let healthHtml = "";
       if (health?.length) {
         const rows = health.map((h) => {
-          const icon = h.status === "ok" ? "✅" : h.status === "warn" ? "⚠️" : "❌";
+          const stIcon = icon(h.status === "ok" ? "check" : h.status === "warn" ? "warn" : "x");
           const cls = h.status === "ok" ? "ok" : h.status === "warn" ? "na" : "bad";
-          return `<tr><td>${escapeHtml(h.name)}</td><td class="${cls}">${icon} ${h.status === "ok" ? t("mon.ok") : h.status === "warn" ? t("mon.warn") : t("mon.bad")}</td><td>${escapeHtml(h.detail)}</td>${h.advice ? `<td>${escapeHtml(h.advice)}</td>` : "<td>—</td>"}</tr>`;
+          return `<tr><td>${escapeHtml(h.name)}</td><td class="${cls}">${stIcon} ${h.status === "ok" ? t("mon.ok") : h.status === "warn" ? t("mon.warn") : t("mon.bad")}</td><td>${escapeHtml(h.detail)}</td>${h.advice ? `<td>${escapeHtml(h.advice)}</td>` : "<td>—</td>"}</tr>`;
         }).join("");
         healthHtml = `<div style="margin-bottom:8px"><table class="svc-table"><thead><tr><th>${t("mon.item")}</th><th>${t("mon.status")}</th><th>${t("mon.value")}</th><th>${t("mon.advice")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       }
-      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">${t("mon.report")}</button></h2>${healthHtml}<pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">${t("mon.copy")}</button> <button class="btn small" id="report-dl">${t("mon.downloadMd")}</button></div><pre id="report-out"></pre></div>`;
+      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">${icon("file")} ${t("mon.report")}</button></h2>${healthHtml}<pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">${t("mon.copy")}</button> <button class="btn small" id="report-dl">${t("mon.downloadMd")}</button></div><pre id="report-out"></pre></div>`;
     } else if (key === "network") {
       const scan = metrics.portScan;
       const ping = metrics.pingResult;
@@ -840,7 +886,7 @@ function detail(m) {
     if (!m.length) return t("mon.notConfigured");
     return m.map((x) => {
       if (typeof x !== "object" || x === null) return fmtVal(x);
-      const status = x.ok === false ? "❌" : x.ok === true ? "✅" : "";
+      const status = x.ok === false ? icon("x") : x.ok === true ? icon("check") : "";
       const rest = Object.entries(x).filter(([k]) => !["ok"].includes(k))
         .map(([k, v]) => `${k}: ${fmtVal(v)}`).join(", ");
       return `${status} ${rest}`;
@@ -1015,7 +1061,7 @@ function renderWelcome() {
   <h2>${t("chat.welcomeTitle")}</h2>
   <p>${t("chat.welcomeSub")}</p>
   <div class="tag-list">
-    <span class="tag">${t("chat.tagSys")}</span><span class="tag">${t("chat.tagNet")}</span><span class="tag">${t("chat.tagNginx")}</span><span class="tag">${t("chat.tagFw")}</span><span class="tag">${t("chat.tagPy")}</span><span class="tag">${t("chat.tagDb")}</span><span class="tag">${t("chat.tagDocker")}</span><span class="tag">${t("chat.tagFix")}</span>
+    <span class="tag">${icon("monitor")} ${t("chat.tagSys")}</span><span class="tag">${icon("globe")} ${t("chat.tagNet")}</span><span class="tag">${icon("server")} ${t("chat.tagNginx")}</span><span class="tag">${icon("shield")} ${t("chat.tagFw")}</span><span class="tag">${icon("code")} ${t("chat.tagPy")}</span><span class="tag">${icon("database")} ${t("chat.tagDb")}</span><span class="tag">${icon("box")} ${t("chat.tagDocker")}</span><span class="tag">${icon("sparkles")} ${t("chat.tagFix")}</span>
   </div>
   <p class="tip">${t("chat.welcomeTip")}</p>`;
 }
@@ -1050,7 +1096,7 @@ function renderMsg(text, cls, images) {
   item.className = "message-item " + (cls === "user" ? "user" : "bot");
   item.innerHTML = `
     <div class="msg-header">
-      <span class="avatar ${cls === "user" ? "user" : "bot"}">${cls === "user" ? "🧑‍💻" : "🤖"}</span>
+      <span class="avatar ${cls === "user" ? "user" : "bot"}">${cls === "user" ? icon("user") : icon("robot")}</span>
       <span class="msg-name">${cls === "user" ? t("chat.me") : "Fixflow"}</span>
       <span class="msg-time">${now()}</span>
     </div>
@@ -1142,7 +1188,7 @@ function toolSummary(ev) {
       if (r.error) out += "\n[error] " + r.error;
     }
   }
-  return `🔧 ${ev.name}${cmd ? "  " + cmd : ""}` + out;
+  return `${icon("wrench")} ${ev.name}${cmd ? "  " + cmd : ""}` + out;
 }
 
 const termPane = document.getElementById("term-pane");
@@ -1322,10 +1368,10 @@ function fsRenderNode(path, depth, nameHint) {
   const st = fsTreeState[path];
   const name = nameHint || (path === "/" ? "/" : path.split("/").pop() || path);
   if (!st) {
-    return `<div class="fs-tree-item" data-path="${escapeHtml(path)}" style="padding-left:${depth * 14 + 6}px"><span class="arrow"></span><span>📁</span><span>${escapeHtml(name)}</span></div>`;
+    return `<div class="fs-tree-item" data-path="${escapeHtml(path)}" style="padding-left:${depth * 14 + 6}px"><span class="arrow"></span>${icon("folder")}<span>${escapeHtml(name)}</span></div>`;
   }
   const arrow = st.dirs.length ? (st.expanded ? "▼" : "▶") : "";
-  let html = `<div class="fs-tree-item${path === fsPath ? " sel" : ""}" data-path="${escapeHtml(path)}" style="padding-left:${depth * 14 + 6}px"><span class="arrow">${arrow}</span><span>📁</span><span>${escapeHtml(name)}</span></div>`;
+  let html = `<div class="fs-tree-item${path === fsPath ? " sel" : ""}" data-path="${escapeHtml(path)}" style="padding-left:${depth * 14 + 6}px"><span class="arrow">${arrow}</span>${icon("folder")}<span>${escapeHtml(name)}</span></div>`;
   if (st.expanded) for (const d of st.dirs) html += fsRenderNode(joinPath(path, d), depth + 1, d);
   return html;
 }
@@ -1362,10 +1408,10 @@ function fsRenderList() {
     return cmp * dir;
   });
   fsTbody.innerHTML = sorted.map((it) => {
-    const sel = fsSel && fsSel.name === it.name ? " class='sel'" : "";
+    const sel = fsSel && fsSel.name === it.name ? " sel" : "";
     const size = it.isDir ? "—" : fsFmtSize(it.size);
     const mtime = (it.mtime || "").replace("T", " ").slice(0, 16);
-    return `<tr class="fs-row"${sel} data-name="${escapeHtml(it.name)}"><td><span>${it.isDir ? "📁" : "📄"}</span> ${escapeHtml(it.name)}</td><td>${size}</td><td>${it.isDir ? t("fs.dir") : it.isSymlink ? t("fs.symlink") : fsFileType(it.name)}</td><td>${mtime}</td><td>${escapeHtml(it.mode)}</td><td>${escapeHtml(it.user)}/${escapeHtml(it.group)}</td></tr>`;
+    return `<tr class="fs-row${sel}" data-name="${escapeHtml(it.name)}"><td>${it.isDir ? icon("folder") : icon("file")} ${escapeHtml(it.name)}</td><td>${size}</td><td>${it.isDir ? t("fs.dir") : it.isSymlink ? t("fs.symlink") : fsFileType(it.name)}</td><td>${mtime}</td><td>${escapeHtml(it.mode)}</td><td>${escapeHtml(it.user)}/${escapeHtml(it.group)}</td></tr>`;
   }).join("");
 }
 async function fsLoadList(path) {
@@ -1492,7 +1538,7 @@ async function fsEditFile(path) {
   else {
     fsEditPath = path;
     fsEditContent.value = data.content ?? "";
-    document.getElementById("fs-edit-title").textContent = `📝 ${path}`;
+    document.getElementById("fs-edit-title").innerHTML = `${icon("pencil")} ${escapeHtml(path)}`;
   }
   fsEditMask.classList.add("show");
 }
@@ -1516,6 +1562,18 @@ document.addEventListener("mouseup", () => { fsDrag = false; });
 document.getElementById("term-toggle").onclick = () => setTermOpen(!termOpen);
 document.getElementById("term-close").onclick = () => setTermOpen(false);
 document.getElementById("term-clear").onclick = () => { if (terminal) terminal.clear(); };
+let fsCollapsed = false;
+function applyFsCollapsed(collapsed) {
+  fsCollapsed = !!collapsed;
+  termPane.classList.toggle("fs-collapsed", fsCollapsed);
+  const btn = document.getElementById("fs-toggle");
+  if (btn) btn.classList.toggle("active", !fsCollapsed);
+  if (termOpen) setTimeout(fitTerminal, 60);
+}
+document.getElementById("fs-toggle").onclick = () => {
+  applyFsCollapsed(!fsCollapsed);
+  fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fsCollapsed }) }).catch(() => {});
+};
 window.addEventListener("resize", () => { if (termOpen) fitTerminal(); });
 const termLogMask = document.getElementById("term-log-mask");
 document.getElementById("term-log").onclick = async () => {
@@ -1574,7 +1632,7 @@ function connectStream() {
       card.className = "msg confirm";
       card.innerHTML = `
         <div class="approval-card">
-          <div class="approval-head"><b>${t("risk.approval")}</b><span class="risk-badge ${riskCls}">${t("risk.label")} ${riskLabel}${ev.riskLevel === "high" ? " ⚠️" : ""}</span></div>
+          <div class="approval-head"><b>${t("risk.approval")}</b><span class="risk-badge ${riskCls}">${t("risk.label")} ${riskLabel}${ev.riskLevel === "high" ? " " + icon("warn") : ""}</span></div>
           ${ev.reason ? `<div class="approval-row"><span class="lbl">${t("risk.reason")}</span><span>${escapeHtml(ev.reason)}</span></div>` : ""}
           ${ev.impact ? `<div class="approval-row"><span class="lbl">${t("risk.impact")}</span><span>${escapeHtml(ev.impact)}</span></div>` : ""}
           <div class="approval-row"><span class="lbl">${t("risk.command")}</span><code>${escapeHtml(ev.command || "")}</code></div>
@@ -1613,7 +1671,7 @@ function connectStream() {
       finishStreaming();
       setBusy(false);
       hideTyping();
-      addSimpleMsg(`❌ ${ev.text}`, "error");
+      addSimpleMsg(ev.text, "error");
     }
   };
 }
@@ -1622,7 +1680,8 @@ function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
   if (!keepWelcome) hideWelcome();
   const div = document.createElement("div");
   div.className = "msg " + cls;
-  div.textContent = text;
+  if (cls === "error") div.innerHTML = icon("xCircle") + "<span>" + escapeHtml(text) + "</span>";
+  else div.textContent = text;
   log.appendChild(div);
   scrollLog();
 }
@@ -1692,9 +1751,30 @@ let curTheme = "dark";
 function applyTheme(theme) {
   curTheme = theme === "light" ? "light" : "dark";
   document.documentElement.dataset.theme = curTheme;
-  const btn = document.getElementById("theme-btn");
-  if (btn) btn.textContent = curTheme === "light" ? "☀️" : "🌙";
 }
+function toggleLang() {
+  const next = curLang === "zh" ? "en" : "zh";
+  applyLang(next);
+  localStorage.setItem("fixflow_lang", next);
+  if (authMask.style.display === "flex") setAuthMode(authMode, authRegistered);
+  renderWelcome();
+  loadModelStatus();
+  fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
+  if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
+  else renderCards();
+}
+function toggleTheme() {
+  const next = curTheme === "dark" ? "light" : "dark";
+  applyTheme(next);
+  localStorage.setItem("fixflow_theme", next);
+  fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: next }) }).catch(() => {});
+  if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
+  else renderCards();
+}
+document.querySelectorAll(".lang-btn").forEach((b) => b.addEventListener("click", toggleLang));
+document.querySelectorAll(".theme-btn").forEach((b) => b.addEventListener("click", toggleTheme));
+applyLang(localStorage.getItem("fixflow_lang") === "en" ? "en" : "zh");
+applyTheme(localStorage.getItem("fixflow_theme") === "light" ? "light" : "dark");
  function initPanel() {
    applyRoute();
    initOverview();
@@ -1702,27 +1782,11 @@ function applyTheme(theme) {
    startPolling();
    (async () => { await loadHistory(); restoreHistory(); })();
 connectStream();
-    loadModelStatus();
-    refreshAlerts();
-    if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
-    fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); applyTheme(cfg.theme || "dark"); renderWelcome(); if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); else renderCards(); }).catch(() => {});
-    document.getElementById("lang-toggle").onclick = async () => {
-      const next = curLang === "zh" ? "en" : "zh";
-      applyLang(next);
-      renderWelcome();
-      loadModelStatus();
-      fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
-      if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
-      else renderCards();
-    };
-    document.getElementById("theme-btn").onclick = () => {
-      const next = curTheme === "dark" ? "light" : "dark";
-      applyTheme(next);
-      fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: next }) }).catch(() => {});
-      if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
-      else renderCards();
-    };
-  }
+   loadModelStatus();
+   refreshAlerts();
+   if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
+   fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); applyTheme(cfg.theme || "dark"); applyFsCollapsed(cfg.fsCollapsed === true); localStorage.setItem("fixflow_lang", cfg.lang || "zh"); localStorage.setItem("fixflow_theme", cfg.theme || "dark"); renderWelcome(); if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); else renderCards(); }).catch(() => {});
+ }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopPolling();
   else { startPolling(); refreshMetrics(); }
@@ -1796,6 +1860,7 @@ const authForgotLink = document.getElementById("auth-forgot-link");
 const authTip = document.getElementById("auth-tip");
 
 let authMode = "login";
+let authRegistered = false;
 
 function showAuthErr(msg) {
   authErr.textContent = msg;
@@ -1815,6 +1880,7 @@ function setAuthMode(mode, registered) {
   authMode = mode;
   clearAuthErr();
   authCaptcha.value = "";
+  authCaptchaImg.title = t("auth.captchaTip");
   if (mode === "login") {
     document.getElementById("auth-logo-text").textContent = "AI";
     authTitle.textContent = t("auth.loginTitle");
@@ -1844,7 +1910,8 @@ function setupAuth() {
     const data = await res.json();
     document.getElementById("boot-mask").style.display = "none";
     if (data.loggedIn) { setUserName(data.username); authMask.style.display = "none"; initPanel(); return; }
-    setAuthMode(data.registered ? "login" : "register", Boolean(data.registered));
+    authRegistered = Boolean(data.registered);
+    setAuthMode(data.registered ? "login" : "register", authRegistered);
     authMask.style.display = "flex";
   })();
   authForm.addEventListener("submit", async (e) => {
@@ -1946,11 +2013,11 @@ settingsMask.querySelector("#cfg-cancel").onclick = () => settingsMask.classList
 settingsMask.querySelector("#cfg-close").onclick = () => settingsMask.classList.remove("show");
 
 let saveMsgEl = null;
-function showSaveMsg(text) {
+function showSaveMsg(text, type) {
   if (saveMsgEl) saveMsgEl.remove();
   saveMsgEl = document.createElement("div");
-  saveMsgEl.className = "save-msg";
-  saveMsgEl.textContent = text;
+  saveMsgEl.className = "save-msg" + (type === "bad" ? " bad" : "");
+  saveMsgEl.innerHTML = (type ? icon(type === "bad" ? "xCircle" : "check") : "") + "<span>" + escapeHtml(text) + "</span>";
   document.body.appendChild(saveMsgEl);
   const el = saveMsgEl;
   setTimeout(() => { if (saveMsgEl === el) { el.remove(); saveMsgEl = null; } }, 2500);
@@ -2007,13 +2074,13 @@ restartConfirmBtn.onclick = () => {
   restartConfirmBtn.textContent = t("restart.restarting");
   fetch("api/restart", { method: "POST" })
     .then(() => {
-      showSaveMsg(t("restart.triggered"));
+      showSaveMsg(t("restart.triggered"), "ok");
       setTimeout(() => location.reload(), 3000);
     })
     .catch(() => {
       restartConfirmBtn.disabled = false;
       restartConfirmBtn.textContent = t("restart.confirm");
-      showSaveMsg(t("restart.fail"));
+      showSaveMsg(t("restart.fail"), "bad");
     });
 };
 
@@ -2064,7 +2131,7 @@ document.addEventListener("click", async (e) => {
   const ta = document.getElementById("nginx-conf-content");
   ta.value = t("fs.loading");
   ta.readOnly = true;
-  document.getElementById("nginx-conf-title").textContent = `📄 ${nginxConfPath}`;
+  document.getElementById("nginx-conf-title").innerHTML = `${icon("fileCode")} ${escapeHtml(nginxConfPath)}`;
   document.getElementById("nginx-conf-err").textContent = "";
   document.getElementById("nginx-conf-edit").style.display = "";
   document.getElementById("nginx-conf-save").style.display = "none";
@@ -2097,9 +2164,9 @@ document.addEventListener("click", (e) => {
   const action = btn.dataset.nginxOp;
   procTarget = { kind: "nginx-op", action };
   const labels = { reload: t("nginx.opReload"), restart: t("nginx.opRestart"), start: t("nginx.opStart"), stop: t("nginx.opStop") };
-  const icons = { reload: "♻️", restart: "🔄", start: "▶️", stop: "⏹️" };
+  const icons = { reload: "refresh", restart: "refresh", start: "play", stop: "stop" };
   const label = labels[action] || action;
-  document.getElementById("proc-title").textContent = `${icons[action] || "🛠️"} ${label} Nginx`;
+  document.getElementById("proc-title").innerHTML = `${icon(icons[action] || "wrench")} ${label} Nginx`;
   document.getElementById("proc-text").textContent = t("nginx.opText").replace("{label}", label);
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
@@ -2175,7 +2242,7 @@ document.getElementById("cfg-save").onclick = async () => {
   if (!res.ok) { alert(t("op.saveFail") + "：" + (data.error || res.status)); return; }
   cfgApiKey.value = "";
   cfgKeyHint.textContent = t("settings.keySet").replace("{key}", data.apiKey);
-  showSaveMsg(t("settings.saved"));
+  showSaveMsg(t("settings.saved"), "ok");
   loadModelStatus();
   setTimeout(() => settingsMask.classList.remove("show"), 2000);
 };
@@ -2304,7 +2371,7 @@ document.getElementById("alert-smtp-save").onclick = async () => {
   };
   await fetch("api/alerts/smtp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   document.getElementById("alert-pass").value = "";
-  showSaveMsg(t("alert.smtpSaved"));
+  showSaveMsg(t("alert.smtpSaved"), "ok");
   refreshAlerts();
 };
 
@@ -2341,7 +2408,7 @@ document.getElementById("alert-list").addEventListener("click", async (e) => {
     showLoading(t("alert.running"));
     try {
       const res = await fetch("api/alerts/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
-      showSaveMsg(res.ok ? t("alert.done") : "❌ " + ((await res.json()).error || t("alert.execFail")));
+      showSaveMsg(res.ok ? t("alert.done") : ((await res.json()).error || t("alert.execFail")), res.ok ? "ok" : "bad");
     } finally {
       hideLoading();
       refreshAlerts();
@@ -2499,7 +2566,7 @@ document.getElementById("ma-check").onclick = async () => {
 
 document.getElementById("ma-settings-save").onclick = async () => {
   await fetch("api/metric-alerts/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ panelBaseUrl: document.getElementById("ma-panel-url").value.trim(), webhook: document.getElementById("ma-webhook").value.trim() }) });
-  showSaveMsg(t("op.saved"));
+  showSaveMsg(t("op.saved"), "ok");
 };
 
 document.getElementById("ma-rules").addEventListener("click", async (e) => {

@@ -181,6 +181,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.pingTargets = config.pingTargets || [];
   config.lang = config.lang === "en" ? "en" : "zh";
   config.theme = config.theme === "light" ? "light" : "dark";
+  config.fsCollapsed = config.fsCollapsed === true;
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -201,7 +202,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
   };
@@ -654,10 +655,10 @@ export async function startWeb(config = {}, deps = {}) {
         const result = await renewCert({ ...entry, cn: live.cn });
         sendJson(res, result);
       } else if (url.pathname === "/api/config" && req.method === "GET") {
-        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme });
+        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed });
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         const body = await readBody(req);
-        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme, fsCollapsed } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
@@ -666,12 +667,13 @@ export async function startWeb(config = {}, deps = {}) {
         if (Array.isArray(serviceKeywords)) config.serviceKeywords = serviceKeywords.map((s) => String(s).trim()).filter(Boolean);
         if (lang === "en" || lang === "zh") config.lang = lang;
         if (theme === "light" || theme === "dark") config.theme = theme;
+        if (typeof fsCollapsed === "boolean") config.fsCollapsed = fsCollapsed;
         let existing = {};
         existing = await readJsonFile(configPath);
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme };
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
-        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme });
+        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed });
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         sendJson(res, { messages: await readHistoryFile(historyPath) });
       } else if (url.pathname === "/api/history" && req.method === "POST") {

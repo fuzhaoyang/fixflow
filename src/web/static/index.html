@@ -10,12 +10,17 @@
 <script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
 <div id="boot-mask"><div class="spinner-lg"></div></div>
 <div id="auth-mask">
+  <div class="auth-brand"><span class="brand-logo"><span class="ai-logo">AI</span></span><span data-i18n="brand.name">Fixflow 运维管家</span></div>
+  <div class="auth-top">
+    <button class="lang-btn" id="auth-lang-btn" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button>
+    <button class="theme-btn" id="auth-theme-btn" title="切换主题" data-i18n="tool.themeToggle" data-i18n-attr="title"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+  </div>
   <div class="auth-card">
     <div class="auth-logo">
       <div class="brand-logo"><span class="ai-logo" id="auth-logo-text">AI</span></div>
       <div>
-        <h2 id="auth-title">登录 Fixflow</h2>
-        <p class="sub" id="auth-sub">登录后即可使用服务器运维面板</p>
+        <h2 id="auth-title" data-i18n="auth.loginTitle">登录 Fixflow</h2>
+        <p class="sub" id="auth-sub" data-i18n="auth.loginSub">登录后即可使用服务器运维面板</p>
       </div>
     </div>
     <div class="auth-err" id="auth-err"></div>
@@ -36,8 +41,8 @@
         </div>
       </div>
       <div class="forgot" id="auth-forgot"><a id="auth-forgot-link" data-i18n="auth.forgot">忘记密码？</a></div>
-      <button class="btn" style="width:100%;padding:10px" id="auth-submit">登录</button>
-      <div class="auth-tip" id="auth-tip"><button type="button" id="auth-toggle">没有账号？去注册</button></div>
+      <button class="btn" style="width:100%;padding:10px" id="auth-submit" data-i18n="auth.login">登录</button>
+      <div class="auth-tip" id="auth-tip"><button type="button" id="auth-toggle" data-i18n="auth.noAccount">没有账号？去注册</button></div>
     </form>
   </div>
 </div>
@@ -51,19 +56,19 @@
     </div>
     <nav>
       <div class="group" data-i18n="group.monitor">监控</div>
-      <button class="menu-item" data-view="monitor" data-filter="all" title="总览" data-i18n="menu.overview" data-i18n-attr="title"><span class="menu-icon">📊</span><span class="dot ok"></span><span class="menu-label" data-i18n="menu.overview">总览</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="system" title="系统" data-i18n="menu.system" data-i18n-attr="title"><span class="menu-icon">🖥</span><span class="dot"></span><span class="menu-label" data-i18n="menu.system">系统</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="network" title="网络" data-i18n="menu.network" data-i18n-attr="title"><span class="menu-icon">🌐</span><span class="dot"></span><span class="menu-label" data-i18n="menu.network">网络</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="nginx" title="Nginx" data-i18n="menu.nginx" data-i18n-attr="title"><span class="menu-icon">🪶</span><span class="dot"></span><span class="menu-label" data-i18n="menu.nginx">Nginx</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="firewall" title="防火墙" data-i18n="menu.firewall" data-i18n-attr="title"><span class="menu-icon">🧯</span><span class="dot"></span><span class="menu-label" data-i18n="menu.firewall">防火墙</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="services" title="Python 服务" data-i18n="menu.services" data-i18n-attr="title"><span class="menu-icon">🐍</span><span class="dot"></span><span class="menu-label" data-i18n="menu.services">Python 服务</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="databases" title="数据库" data-i18n="menu.databases" data-i18n-attr="title"><span class="menu-icon">🗄</span><span class="dot"></span><span class="menu-label" data-i18n="menu.databases">数据库</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="docker" title="Docker"><span class="menu-icon">🐳</span><span class="dot"></span><span class="menu-label">Docker</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="processes" title="进程" data-i18n="menu.processes" data-i18n-attr="title"><span class="menu-icon">⚙️</span><span class="dot"></span><span class="menu-label" data-i18n="menu.processes">进程</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="ssl" title="SSL 证书" data-i18n="menu.ssl" data-i18n-attr="title"><span class="menu-icon">🔒</span><span class="dot"></span><span class="menu-label" data-i18n="menu.ssl">SSL 证书</span></button>
-      <button class="menu-item" data-view="monitor" data-filter="systemd" title="服务" data-i18n="menu.systemd" data-i18n-attr="title"><span class="menu-icon">📦</span><span class="dot"></span><span class="menu-label" data-i18n="menu.systemd">服务</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="all" title="总览" data-i18n="menu.overview" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/></svg></span><span class="dot ok"></span><span class="menu-label" data-i18n="menu.overview">总览</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="system" title="系统" data-i18n="menu.system" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.system">系统</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="network" title="网络" data-i18n="menu.network" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.8 2.6 15.2 0 18M12 3c-2.6 2.8-2.6 15.2 0 18"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.network">网络</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="nginx" title="Nginx" data-i18n="menu.nginx" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.nginx">Nginx</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="firewall" title="防火墙" data-i18n="menu.firewall" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.6-3 7.6-7 9-4-1.4-7-4.4-7-9V6l7-3z"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.firewall">防火墙</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="services" title="Python 服务" data-i18n="menu.services" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 6l-3 12"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.services">Python 服务</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="databases" title="数据库" data-i18n="menu.databases" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.databases">数据库</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="docker" title="Docker"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg></span><span class="dot"></span><span class="menu-label">Docker</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="processes" title="进程" data-i18n="menu.processes" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2.5-7 4 14 2.5-7H21"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.processes">进程</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="ssl" title="SSL 证书" data-i18n="menu.ssl" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.ssl">SSL 证书</span></button>
+      <button class="menu-item" data-view="monitor" data-filter="systemd" title="服务" data-i18n="menu.systemd" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="10" width="18" height="5" rx="1.5"/><rect x="3" y="16" width="18" height="4" rx="1.5"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.systemd">服务</span></button>
       <div class="group" data-i18n="group.actions">操作</div>
-      <button class="menu-item" data-view="chat" title="Agent 对话" data-i18n="menu.chat" data-i18n-attr="title"><span class="menu-icon">💬</span><span class="menu-label" data-i18n="menu.chat">Agent 对话</span></button>
+      <button class="menu-item" data-view="chat" title="Agent 对话" data-i18n="menu.chat" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/></svg></span><span class="menu-label" data-i18n="menu.chat">Agent 对话</span></button>
     </nav>
     <div class="settings-wrap">
       <button class="settings-btn" id="open-settings" title="设置" data-i18n="tool.settings" data-i18n-attr="title">
@@ -71,12 +76,12 @@
         <span data-i18n="tool.settings">设置</span>
       </button>
       <div class="settings-menu" id="settings-menu">
-        <div class="settings-item" data-action="config" data-i18n="settings.title">⚙️ 模型设置</div>
+        <div class="settings-item" data-action="config"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.1-1.55 1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.88 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1.1 1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.88.34h.01a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.88-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.88v.01a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z"/></svg><span data-i18n="settings.title">模型设置</span></div>
       </div>
     </div>
   </aside>
   <main>
-    <div class="toolbar"><button class="clear-btn" id="menu-toggle" title="折叠/展开菜单" data-i18n="tool.menuToggle" data-i18n-attr="title">☰</button><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" data-i18n="tool.search" data-i18n-attr="placeholder" style="display:none"><span class="model-status" id="model-status" title="点击设置模型" data-i18n="tool.modelTip" data-i18n-attr="title"></span><span class="conn-wrap"><button class="lang-btn" id="lang-toggle" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button><button class="bell-btn" id="bell-btn" title="告警" data-i18n="tool.bell" data-i18n-attr="title">🔔<span class="bell-dot" id="bell-dot"></span></button><button class="theme-btn" id="theme-btn" title="切换主题" data-i18n="tool.themeToggle" data-i18n-attr="title">🌙</button><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号" data-i18n="tool.account" data-i18n-attr="title"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart" data-i18n="auth.restart">🔄 重启服务</div><div class="settings-item danger" data-action="logout" data-i18n="auth.logout">🚪 退出登录</div></div></span></span></div>
+    <div class="toolbar"><button class="clear-btn" id="menu-toggle" title="折叠/展开菜单" data-i18n="tool.menuToggle" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" style="width:18px;height:18px"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><h1 id="view-title">监控总览</h1><input id="search" class="search-box" type="text" placeholder="搜索服务…" data-i18n="tool.search" data-i18n-attr="placeholder" style="display:none"><span class="model-status" id="model-status" title="点击设置模型" data-i18n="tool.modelTip" data-i18n-attr="title"></span><span class="conn-wrap"><button class="lang-btn" id="lang-toggle" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button><button class="bell-btn" id="bell-btn" title="告警" data-i18n="tool.bell" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span class="bell-dot" id="bell-dot"></span></button><button class="theme-btn" id="theme-btn" title="切换主题" data-i18n="tool.themeToggle" data-i18n-attr="title"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button><span class="user-wrap"><button class="user-btn" id="user-btn" title="账号" data-i18n="tool.account" data-i18n-attr="title"><span class="user-icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.6"/><path d="M4 20c0-3.5 3.6-6 8-6s8 2.5 8 6" stroke="currentColor" stroke-width="1.6"/></svg></span><span class="user-name" id="user-name">…</span></button><div class="user-menu" id="user-menu"><div class="settings-item" data-action="restart"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.3"/><path d="M21 3v5h-5"/></svg><span data-i18n="auth.restart">重启服务</span></div><div class="settings-item danger" data-action="logout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 12H3M6 8l-3 4 3 4"/></svg><span data-i18n="auth.logout">退出登录</span></div></div></span></span></div>
     <div class="content" id="view-monitor">
       <div id="net-tools" style="display:none;margin-bottom:12px;gap:8px;align-items:center">
         <input id="port-input" class="search-box" placeholder="查端口占用，如 22,3306,80" data-i18n="net.portPh" data-i18n-attr="placeholder">
@@ -169,6 +174,7 @@
           <div class="spacer"></div>
           <button id="term-clear" class="clear-btn" title="清空终端输出" data-i18n="term.clear" data-i18n-attr="title">清空</button>
           <button id="term-log" class="clear-btn" title="查看操作记录" data-i18n="term.log" data-i18n-attr="title">记录</button>
+          <button id="fs-toggle" class="clear-btn" title="文件" data-i18n="term.files" data-i18n-attr="title">文件</button>
           <button id="term-close" class="clear-btn" title="关闭终端" data-i18n="term.close" data-i18n-attr="title">✕</button>
         </div>
         <div id="term-terminal">
@@ -207,13 +213,13 @@
  <div class="modal-mask" id="term-log-mask">
   <div class="modal">
     <button class="modal-close" id="term-log-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
-    <h2 data-i18n="term.logTitle">🖥 终端操作记录</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14v12H5z"/><path d="M8 10l2.5 2.5L8 15M13 15h3"/></svg><span data-i18n="term.logTitle">终端操作记录</span></h2>
     <div id="term-log-body" style="max-height:420px;overflow:auto"></div>
   </div>
 </div>
 <div class="modal-mask" id="fs-edit-mask">
   <div class="modal" style="width:640px;max-width:94vw">
-    <h2 id="fs-edit-title" data-i18n="fs.editTitle">📝 编辑文件</h2>
+    <h2 id="fs-edit-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg><span data-i18n="fs.editTitle">编辑文件</span></h2>
     <textarea id="fs-edit-content" class="field-textarea" style="height:320px;font-family:ui-monospace,monospace;font-size:12px"></textarea>
     <div class="hint" id="fs-edit-err" style="color:var(--bad)"></div>
     <div class="modal-actions">
@@ -229,7 +235,7 @@
 <div class="modal-mask" id="alert-mask">
   <div class="modal modal-wide">
     <button class="modal-close" id="alert-close" title="关闭" data-i18n="alert.close" data-i18n-attr="title">✕</button>
-    <h2 data-i18n="alert.title">🔔 告警管理</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 10-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 01-3.4 0"/></svg><span data-i18n="alert.title">告警管理</span></h2>
     <div class="seg-tabs" id="alert-top-tabs" style="margin-top:14px">
       <button class="seg-tab active" data-alert-top="daily" data-i18n="alert.daily">日报告警</button>
       <button class="seg-tab" data-alert-top="metric" data-i18n="alert.metric">指标告警</button>
@@ -237,12 +243,12 @@
     <div id="alert-daily">
     <div class="alert-section">
       <h3 data-i18n="alert.smtpTitle">邮箱配置（SMTP，发送走系统 sendmail）</h3>
-      <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <input id="alert-host" class="field-textarea" style="width:160px" placeholder="SMTP 主机" data-i18n="alert.smtpHost" data-i18n-attr="placeholder">
-        <input id="alert-port" class="field-textarea" style="width:70px" placeholder="端口" data-i18n="alert.smtpPort" data-i18n-attr="placeholder">
-        <input id="alert-user" class="field-textarea" style="width:140px" placeholder="用户名" data-i18n="alert.smtpUser" data-i18n-attr="placeholder">
-        <input id="alert-pass" class="field-textarea" style="width:140px" type="password" placeholder="密码(留空不改)" data-i18n="alert.smtpPass" data-i18n-attr="placeholder">
-        <input id="alert-from" class="field-textarea" style="width:160px" placeholder="发件人" data-i18n="alert.smtpFrom" data-i18n-attr="placeholder">
+      <div class="alert-form-grid">
+        <input id="alert-host" class="field-textarea" placeholder="SMTP 主机" data-i18n="alert.smtpHost" data-i18n-attr="placeholder">
+        <input id="alert-port" class="field-textarea" placeholder="端口" data-i18n="alert.smtpPort" data-i18n-attr="placeholder">
+        <input id="alert-user" class="field-textarea" placeholder="用户名" data-i18n="alert.smtpUser" data-i18n-attr="placeholder">
+        <input id="alert-pass" class="field-textarea" type="password" placeholder="密码(留空不改)" data-i18n="alert.smtpPass" data-i18n-attr="placeholder">
+        <input id="alert-from" class="field-textarea" placeholder="发件人" data-i18n="alert.smtpFrom" data-i18n-attr="placeholder">
         <button class="btn small" id="alert-smtp-save" data-i18n="alert.saveSmtp">保存邮箱配置</button>
       </div>
     </div>
@@ -275,9 +281,9 @@
     <div id="alert-metric" style="display:none;margin-top:12px">
       <div class="alert-section" style="border-top:none;margin-top:0;padding-top:0">
         <h3 data-i18n="alert.notifyTitle">通知设置</h3>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <input id="ma-panel-url" class="field-textarea" style="width:260px" placeholder="面板外网地址（邮件按钮链接）" data-i18n="alert.panelUrl" data-i18n-attr="placeholder">
-          <input id="ma-webhook" class="field-textarea" style="width:260px" placeholder="Webhook URL（留空复用 SSL 告警）" data-i18n="alert.webhook" data-i18n-attr="placeholder">
+        <div class="alert-form-grid">
+          <input id="ma-panel-url" class="field-textarea" placeholder="面板外网地址（邮件按钮链接）" data-i18n="alert.panelUrl" data-i18n-attr="placeholder">
+          <input id="ma-webhook" class="field-textarea" placeholder="Webhook URL（留空复用 SSL 告警）" data-i18n="alert.webhook" data-i18n-attr="placeholder">
           <button class="btn small" id="ma-settings-save" data-i18n="settings.save">保存</button>
         </div>
       </div>
@@ -286,7 +292,7 @@
         <button class="seg-tab" data-ma-tab="incidents" data-i18n="alert.tabIncidents">事件</button>
       </div>
       <div id="ma-rules-wrap" class="alert-tab-panel" style="margin-top:12px">
-        <div style="margin-bottom:8px"><button class="btn small" id="ma-add" data-i18n="alert.addRule">➕ 新增规则</button> <button class="btn small" id="ma-check" data-i18n="alert.checkNow">立即检测</button></div>
+        <div style="margin-bottom:8px"><button class="btn small" id="ma-add"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="alert.addRule">新增规则</span></button> <button class="btn small" id="ma-check" data-i18n="alert.checkNow">立即检测</button></div>
         <div id="ma-rules"></div>
         <div class="alert-pager" id="ma-rules-pager"></div>
       </div>
@@ -294,32 +300,32 @@
         <div id="ma-incidents"></div>
         <div class="alert-pager" id="ma-incidents-pager"></div>
       </div>
-      <div id="ma-form" style="display:none;margin-top:12px">
+      <div id="ma-form" class="alert-rule-form" style="display:none;margin-top:12px">
         <h3 id="ma-form-title" style="font-size:13px;color:var(--accent);margin:0 0 8px" data-i18n="alert.ruleTitle">新增规则</h3>
-        <div style="display:flex;gap:6px;flex-wrap:wrap">
-          <input id="ma-name" class="field-textarea" style="width:200px" placeholder="名称" data-i18n="alert.name" data-i18n-attr="placeholder">
-          <select id="ma-metric" class="field-textarea" style="width:130px"><option value="cpu" data-i18n="alert.mCpu">CPU使用率</option><option value="mem" data-i18n="alert.mMem">内存使用率</option><option value="disk" data-i18n="alert.mDisk">磁盘使用率</option><option value="net" data-i18n="alert.mNet">网络流量</option><option value="sessions" data-i18n="alert.mSessions">TCP会话数</option></select>
-          <select id="ma-op" class="field-textarea" style="width:80px"><option value=">=">≥</option><option value="<=">≤</option></select>
-          <input id="ma-threshold" class="field-textarea" style="width:90px" placeholder="阈值" data-i18n="alert.threshold" data-i18n-attr="placeholder">
-          <input id="ma-duration" class="field-textarea" style="width:90px" placeholder="持续(分钟)" data-i18n="alert.duration" data-i18n-attr="placeholder">
-          <select id="ma-level" class="field-textarea" style="width:110px"><option value="1" data-i18n="alert.l1">P1 紧急</option><option value="2" data-i18n="alert.l2">P2 严重</option><option value="3" selected data-i18n="alert.l3">P3 重要</option><option value="4" data-i18n="alert.l4">P4 一般</option><option value="5" data-i18n="alert.l5">P5 提示</option></select>
+        <div class="alert-form-grid">
+          <input id="ma-name" class="field-textarea" placeholder="名称" data-i18n="alert.name" data-i18n-attr="placeholder">
+          <select id="ma-metric" class="field-textarea"><option value="cpu" data-i18n="alert.mCpu">CPU使用率</option><option value="mem" data-i18n="alert.mMem">内存使用率</option><option value="disk" data-i18n="alert.mDisk">磁盘使用率</option><option value="net" data-i18n="alert.mNet">网络流量</option><option value="sessions" data-i18n="alert.mSessions">TCP会话数</option></select>
+          <select id="ma-op" class="field-textarea"><option value=">=">≥</option><option value="<=">≤</option></select>
+          <input id="ma-threshold" class="field-textarea" placeholder="阈值" data-i18n="alert.threshold" data-i18n-attr="placeholder">
+          <input id="ma-duration" class="field-textarea" placeholder="持续(分钟)" data-i18n="alert.duration" data-i18n-attr="placeholder">
+          <select id="ma-level" class="field-textarea"><option value="1" data-i18n="alert.l1">P1 紧急</option><option value="2" data-i18n="alert.l2">P2 严重</option><option value="3" selected data-i18n="alert.l3">P3 重要</option><option value="4" data-i18n="alert.l4">P4 一般</option><option value="5" data-i18n="alert.l5">P5 提示</option></select>
         </div>
         <div class="field" style="margin-top:8px"><label data-i18n="alert.recipients">收件邮箱（逗号分隔）</label><input class="field-textarea" id="ma-recipients"></div>
         <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)" data-i18n="alert.extra">选填：标签 / 负责人 / 链接 / 升级</summary>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
-            <input id="ma-env" class="field-textarea" style="width:120px" placeholder="环境" data-i18n="alert.env" data-i18n-attr="placeholder">
-            <input id="ma-service" class="field-textarea" style="width:120px" placeholder="服务" data-i18n="alert.service" data-i18n-attr="placeholder">
-            <input id="ma-team" class="field-textarea" style="width:120px" placeholder="团队" data-i18n="alert.team" data-i18n-attr="placeholder">
-            <input id="ma-owner" class="field-textarea" style="width:120px" placeholder="负责人" data-i18n="alert.owner" data-i18n-attr="placeholder">
+          <div class="alert-form-grid" style="margin-top:8px">
+            <input id="ma-env" class="field-textarea" placeholder="环境" data-i18n="alert.env" data-i18n-attr="placeholder">
+            <input id="ma-service" class="field-textarea" placeholder="服务" data-i18n="alert.service" data-i18n-attr="placeholder">
+            <input id="ma-team" class="field-textarea" placeholder="团队" data-i18n="alert.team" data-i18n-attr="placeholder">
+            <input id="ma-owner" class="field-textarea" placeholder="负责人" data-i18n="alert.owner" data-i18n-attr="placeholder">
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            <input id="ma-runbook" class="field-textarea" style="width:180px" placeholder="Runbook 链接" data-i18n="alert.runbook" data-i18n-attr="placeholder">
-            <input id="ma-dashboard" class="field-textarea" style="width:180px" placeholder="监控面板链接" data-i18n="alert.dashboard" data-i18n-attr="placeholder">
-            <input id="ma-log" class="field-textarea" style="width:180px" placeholder="日志查询链接" data-i18n="alert.log" data-i18n-attr="placeholder">
+          <div class="alert-form-grid" style="margin-top:6px">
+            <input id="ma-runbook" class="field-textarea" placeholder="Runbook 链接" data-i18n="alert.runbook" data-i18n-attr="placeholder">
+            <input id="ma-dashboard" class="field-textarea" placeholder="监控面板链接" data-i18n="alert.dashboard" data-i18n-attr="placeholder">
+            <input id="ma-log" class="field-textarea" placeholder="日志查询链接" data-i18n="alert.log" data-i18n-attr="placeholder">
           </div>
-          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-            <input id="ma-escalate-to" class="field-textarea" style="width:220px" placeholder="升级收件人（逗号分隔）" data-i18n="alert.escalateTo" data-i18n-attr="placeholder">
-            <input id="ma-escalate-after" class="field-textarea" style="width:120px" placeholder="升级时长(分钟)" data-i18n="alert.escalateAfter" data-i18n-attr="placeholder">
+          <div class="alert-form-grid" style="margin-top:6px">
+            <input id="ma-escalate-to" class="field-textarea" placeholder="升级收件人（逗号分隔）" data-i18n="alert.escalateTo" data-i18n-attr="placeholder">
+            <input id="ma-escalate-after" class="field-textarea" placeholder="升级时长(分钟)" data-i18n="alert.escalateAfter" data-i18n-attr="placeholder">
           </div>
         </details>
         <div class="hint" id="ma-form-err" style="color:var(--bad)"></div>
@@ -331,7 +337,7 @@
  <div class="modal-mask" id="settings-mask">
   <div class="modal">
     <button class="modal-close" id="cfg-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
-    <h2 data-i18n="settings.title">⚙️ 模型设置</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 00.34 1.88l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.7 1.7 0 00-1.88-.34 1.7 1.7 0 00-1 1.55V21a2 2 0 11-4 0v-.09a1.7 1.7 0 00-1.1-1.55 1.7 1.7 0 00-1.88.34l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.7 1.7 0 00.34-1.88 1.7 1.7 0 00-1.55-1H3a2 2 0 110-4h.09a1.7 1.7 0 001.55-1.1 1.7 1.7 0 00-.34-1.88l-.06-.06a2 2 0 112.83-2.83l.06.06a1.7 1.7 0 001.88.34h.01a1.7 1.7 0 001-1.55V3a2 2 0 114 0v.09a1.7 1.7 0 001 1.55 1.7 1.7 0 001.88-.34l.06-.06a2 2 0 112.83 2.83l-.06.06a1.7 1.7 0 00-.34 1.88v.01a1.7 1.7 0 001.55 1H21a2 2 0 110 4h-.09a1.7 1.7 0 00-1.51 1z"/></svg><span data-i18n="settings.title">模型设置</span></h2>
     <div class="field">
       <label data-i18n="settings.apiUrl">API 地址（Base URL）</label>
       <input id="cfg-base-url" type="text" placeholder="https://api.moonshot.cn/v1">
@@ -354,7 +360,7 @@
 </div>
 <div class="modal-mask" id="restart-mask">
   <div class="modal">
-    <h2 data-i18n="restart.title">🔄 重启服务</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.3"/><path d="M21 3v5h-5"/></svg><span data-i18n="restart.title">重启服务</span></h2>
     <p class="modal-text" data-i18n="restart.text">重启后当前会话会重新开始（聊天记录保留在本地），页面将自动刷新。<br>确认重启 fixflow 服务吗？</p>
     <div class="modal-actions">
       <button class="btn" id="restart-cancel" data-i18n="restart.cancel">取消</button>
@@ -364,7 +370,7 @@
 </div>
 <div class="modal-mask" id="ssl-add-mask">
   <div class="modal">
-    <h2 data-i18n="ssl.addTitle">➕ 添加监控</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="ssl.addTitle">添加监控</span></h2>
     <div class="field">
       <label data-i18n="ssl.type">类型</label>
       <select id="ssl-add-type">
@@ -376,7 +382,7 @@
       <label data-i18n="ssl.hostPort">域名与端口</label>
       <div style="display:flex;gap:6px">
         <input id="ssl-add-host" type="text" placeholder="example.com">
-        <input id="ssl-add-port" type="text" placeholder="443" style="width:80px">
+        <input id="ssl-add-port" type="text" placeholder="443">
       </div>
     </div>
     <div class="field" id="ssl-add-local-fields" style="display:none">
@@ -396,7 +402,7 @@
 </div>
 <div class="modal-mask" id="ssl-renew-mask">
   <div class="modal">
-    <h2 data-i18n="ssl.renewTitle">🔄 续签证书</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span data-i18n="ssl.renewTitle">续签证书</span></h2>
     <p class="modal-text" id="ssl-renew-text"></p>
     <div class="field">
       <label data-i18n="proc.pwdLabel">登录密码</label>
@@ -411,7 +417,7 @@
 </div>
 <div class="modal-mask" id="proc-mask">
   <div class="modal">
-    <h2 id="proc-title">⚙️ 进程操作</h2>
+    <h2 id="proc-title">进程操作</h2>
     <p class="modal-text" id="proc-text"></p>
     <div class="field">
       <label data-i18n="proc.pwdLabel">登录密码</label>
@@ -427,7 +433,7 @@
 <div class="modal-mask" id="nginx-conf-mask">
   <div class="modal" style="max-width:840px;width:90%">
     <button class="modal-close" id="nginx-conf-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
-    <h2 id="nginx-conf-title">📄 Nginx 配置</h2>
+    <h2 id="nginx-conf-title">Nginx 配置</h2>
     <textarea id="nginx-conf-content" class="field-textarea" spellcheck="false" style="min-height:420px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px" readonly></textarea>
     <div class="hint" id="nginx-conf-err" style="color:var(--bad)"></div>
     <div class="modal-actions">
@@ -439,7 +445,7 @@
 </div>
 <div class="modal-mask" id="logout-mask">
   <div class="modal">
-    <h2 data-i18n="logout.title">🚪 退出登录</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 12H3M6 8l-3 4 3 4"/></svg><span data-i18n="logout.title">退出登录</span></h2>
     <p class="modal-text" data-i18n="logout.text">退出后需要重新输入账号密码才能使用面板。<br>确认退出登录吗？</p>
     <div class="modal-actions">
       <button class="btn" id="logout-cancel" data-i18n="logout.cancel">取消</button>
@@ -451,7 +457,7 @@
 </div>
 <div class="help-mask" id="help-mask">
   <div class="help-header">
-    <h2 data-i18n="help.title">📖 Fixflow 使用文档</h2>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 5v14"/></svg><span data-i18n="help.title">Fixflow 使用文档</span></h2>
     <button class="btn small help-close" id="help-close" data-i18n="help.back">返回</button>
   </div>
   <div class="help-body" data-i18n-html="help.body">
@@ -461,7 +467,7 @@
     <h3>二、快速开始</h3>
     <ul>
       <li>运行 <code>fixflow</code> 进入配置向导：选择服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
-      <li>配置完成后自动自检，看到「✅ 全部正常」即成功。</li>
+      <li>配置完成后自动自检，看到「全部正常」即成功。</li>
       <li>浏览器访问面板：<code>http://127.0.0.1:2222</code>。</li>
       <li>随时自检：<code>fixflow doctor</code>。</li>
     </ul>
@@ -484,10 +490,10 @@
 
     <h3>四、Web 面板</h3>
     <ul>
-      <li><b>登录</b>：首次访问需注册账号密码，之后登录使用；会话 12 小时有效，可左下角「⚙️」退出登录。</li>
+      <li><b>登录</b>：首次访问需注册账号密码，之后登录使用；会话 12 小时有效，可左下角「设置」退出登录。</li>
       <li><b>监控</b>：CPU / 内存 / 磁盘 / 网络端口 / Nginx / 防火墙 / Docker / 进程，每 5 秒刷新。</li>
       <li><b>AI 对话</b>：直接打字让助手干活，回复逐字显示；修复操作弹「确认执行 / 拒绝」。</li>
-      <li><b>设置</b>：左下角「⚙️」→ 模型设置（改 API 地址 / Key / 模型）或重启服务。</li>
+      <li><b>设置</b>：左下角「设置」→ 模型设置（改 API 地址 / Key / 模型）或重启服务。</li>
       <li><b>清空历史</b>：对话输入框上方「清空历史」按钮。</li>
       <li><b>忘记密码</b>：在服务器上运行 <code>fixflow reset-password</code> 重置。</li>
     </ul>
@@ -504,14 +510,14 @@
 
     <h3>六、重置模型 / 服务商 / Key</h3>
     <ul>
-      <li>面板：左下角「⚙️ 设置」→ 模型设置，保存即生效。</li>
+      <li>面板：左下角「设置」→ 模型设置，保存即生效。</li>
       <li>命令：<code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code> 向导。</li>
       <li>直接编辑 <code>~/.config/fixflow/config.json</code>（baseUrl / model / apiKey）。</li>
       <li>每次重新安装后会自动要求重新配置，旧配置备份为 config.json.bak。</li>
     </ul>
 
     <h3>七、重启服务</h3>
-    <p>遇到对话异常（如模型返回 400 报错）可一键重启服务解决：左下角「⚙️ 设置」→「重启服务」，或命令行 <code>fixflow restart</code>。重启会清空内存会话（异常上下文随之消失），聊天记录保留在本地。</p>
+    <p>遇到对话异常（如模型返回 400 报错）可一键重启服务解决：左下角「设置」→「重启服务」，或命令行 <code>fixflow restart</code>。重启会清空内存会话（异常上下文随之消失），聊天记录保留在本地。</p>
 
     <h3>八、常见问题</h3>
     <table>
