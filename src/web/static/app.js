@@ -2064,7 +2064,7 @@ document.querySelectorAll(".settings-menu .settings-item, .user-menu .settings-i
   });
 });
 const pwdMask = document.getElementById("pwd-mask");
-const strongPwd = (p) => p.length >= 8 && /[A-Za-z]/.test(p) && /[0-9]/.test(p) && /[^A-Za-z0-9\s]/.test(p);
+const strongPwd = (p) => p.length >= 8 && p.length <= 128 && /[a-z]/.test(p) && /[A-Z]/.test(p) && /[0-9]/.test(p) && /[^A-Za-z0-9\s]/.test(p);
 function openPwd() {
   for (const id of ["pwd-current", "pwd-new", "pwd-confirm"]) document.getElementById(id).value = "";
   document.getElementById("pwd-err").textContent = "";

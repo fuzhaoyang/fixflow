@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { pathToFileURL } from "node:url";
-import { mkdirSync, writeFileSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
 import { DEFAULT_BASE_URL, setReconfigureFlag, RECONFIGURE_FLAG } from "../src/setup.js";
 import { install as installService, restartIfActive } from "../src/service.js";
 import { ensurePanelAccess, buildUrls } from "../src/panel-access.js";
@@ -37,6 +37,7 @@ function persistPanel(configPath, panelEnabled, write) {
   let cur = {};
   try { cur = JSON.parse(readFileSync(configPath, "utf8")); } catch {}
   write(configPath, JSON.stringify({ ...cur, panel: false }, null, 2));
+  try { chmodSync(configPath, 0o600); } catch {}
 }
 
 async function printPanelAddress(config, configPath, { log, lanIPs, publicIP }) {
@@ -97,6 +98,7 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
   if (!panelEnabled) config.panel = false;
   mkdirSync(dirname(configPath), { recursive: true });
   write(configPath, JSON.stringify(config, null, 2));
+  try { chmodSync(configPath, 0o600); } catch {}
   setReconfigureFlag(markerPath);
   log(`✓ 已自动保存配置到 ${configPath}`);
   log(`  Base URL: ${config.baseUrl}`);

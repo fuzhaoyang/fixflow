@@ -1,8 +1,9 @@
 import { createServer } from "node:http";
 import { createServer as createHttpsServer } from "node:https";
 import { spawn, spawnSync } from "node:child_process";
-import { readFile, writeFile, mkdir, readdir, lstat, rm, rename as fsRename } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir, lstat, rm, rename as fsRename, chmod } from "node:fs/promises";
 import { createReadStream, readFileSync } from "node:fs";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
@@ -16,7 +17,7 @@ import { lanIPs, publicIP } from "../netip.js";
 import { buildUrls } from "../panel-access.js";
 import { createMetricAlerts, buildAlertEmail, METRICS, metricLabel } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
-import { hashPassword, verifyPassword, isStrongPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
+import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
@@ -194,10 +195,12 @@ export async function startWeb(config = {}, deps = {}) {
   const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
   const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
   const readConfigFile = () => readJsonFile(configPath);
+  await chmod(configPath, 0o600).catch(() => {});
   const writeAuth = async (auth) => {
     const existing = await readConfigFile();
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify({ ...existing, auth }, null, 2));
+    await chmod(configPath, 0o600).catch(() => {});
   };
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
@@ -205,6 +208,7 @@ export async function startWeb(config = {}, deps = {}) {
     const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
+    await chmod(configPath, 0o600).catch(() => {});
   };
   const execCmd = deps.runCommand || runCommand;
 
@@ -231,6 +235,29 @@ export async function startWeb(config = {}, deps = {}) {
     const cookie = parseCookie(req.headers.cookie || "");
     const token = cookie.fixflow_token || "";
     return sessions.valid(token) ? token : "";
+  };
+
+  const LOGIN_MAX_FAILS = 5;
+  const LOGIN_LOCK_MS = 15 * 60 * 1000;
+  const loginFails = new Map();
+  const clientIp = (req) => (config.trustProxy
+    ? ((req.headers["x-forwarded-for"] || "").split(",")[0].trim() || req.socket.remoteAddress || "unknown")
+    : (req.socket.remoteAddress || "unknown"));
+  const loginLockedFor = (req) => {
+    const a = loginFails.get(clientIp(req));
+    return a && a.until > Date.now() ? Math.ceil((a.until - Date.now()) / 1000) : 0;
+  };
+  const recordLoginFail = (req) => {
+    const ip = clientIp(req);
+    const a = loginFails.get(ip) || { n: 0, until: 0 };
+    if (a.until > Date.now()) return;
+    if (++a.n >= LOGIN_MAX_FAILS) { a.n = 0; a.until = Date.now() + LOGIN_LOCK_MS; }
+    loginFails.set(ip, a);
+  };
+  const safeEqualStr = (a, b) => {
+    const ba = Buffer.from(String(a ?? ""));
+    const bb = Buffer.from(String(b ?? ""));
+    return ba.length === bb.length && timingSafeEqual(ba, bb);
   };
 
   const sendJson = (res, obj, code = 200) => {
@@ -276,7 +303,14 @@ export async function startWeb(config = {}, deps = {}) {
   const sseGuard = setInterval(() => {
     for (const res of clients) if (res.writableNeedDrain) res.destroy();
   }, 15000);
-  const readBody = async (req) => { let b = ""; for await (const c of req) b += c; return b; };
+  const readBody = async (req, max = 10 * 1024 * 1024) => {
+    let b = "";
+    for await (const c of req) {
+      b += c;
+      if (b.length > max) { const e = new Error("请求体过大"); e.statusCode = 413; throw e; }
+    }
+    return b;
+  };
   const fsWriteGuard = async (body, res) => {
     const auth = await readAuth();
     if (!auth || !verifyPassword(body.password || "", auth)) {
@@ -373,7 +407,7 @@ export async function startWeb(config = {}, deps = {}) {
 
   const handler = async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
-    const sc = req.socket.encrypted ? "; Secure" : "";
+    const sc = (req.socket.encrypted || (config.trustProxy && req.headers["x-forwarded-proto"] === "https")) ? "; Secure" : "";
     try {
       const base = config.panelPath ? "/" + config.panelPath : "";
       if (base) {
@@ -398,33 +432,43 @@ export async function startWeb(config = {}, deps = {}) {
         const auth = await readAuth();
         sendJson(res, { registered: Boolean(auth), loggedIn: Boolean(authHeader(req)), username: authHeader(req) ? (auth?.username || "") : "" });
       } else if (url.pathname === "/api/register" && req.method === "POST") {
+        const wait = loginLockedFor(req);
+        if (wait) { sendJson(res, { error: `尝试过于频繁，请 ${wait} 秒后再试` }, 429); return; }
         const existing = await readAuth();
         if (existing) { sendJson(res, { error: "已注册账号，请直接登录" }, 409); return; }
-        const body = await readBody(req);
+        const body = await readBody(req, 64 * 1024);
         const { username, password, captchaCode } = JSON.parse(body || "{}");
         if (!captchas.verify(captchaIdFromCookie(req), captchaCode)) {
+          recordLoginFail(req);
           sendJson(res, { error: "验证码错误或已过期" }, 400);
           return;
         }
         if (!username || !isStrongPassword(password)) {
-          sendJson(res, { error: "密码至少 8 位，且需包含字母、数字和特殊字符" }, 400);
+          recordLoginFail(req);
+          sendJson(res, { error: "密码需 8-128 位，且包含大小写字母、数字和特殊字符" }, 400);
           return;
         }
-        const { salt, hash } = hashPassword(password);
+        const { salt, hash } = await hashPasswordAsync(password);
         await writeAuth({ username, salt, hash });
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/login" && req.method === "POST") {
-        const body = await readBody(req);
+        const wait = loginLockedFor(req);
+        if (wait) { sendJson(res, { error: `尝试过于频繁，请 ${wait} 秒后再试` }, 429); return; }
+        const body = await readBody(req, 64 * 1024);
         const { username, password, captchaCode } = JSON.parse(body || "{}");
         if (!captchas.verify(captchaIdFromCookie(req), captchaCode)) {
+          recordLoginFail(req);
           sendJson(res, { error: "验证码错误或已过期" }, 400);
           return;
         }
         const auth = await readAuth();
-        if (!auth || auth.username !== username || !verifyPassword(password, auth)) {
+        if (!auth || !safeEqualStr(auth.username, username) || !(await verifyPasswordAsync(password, auth))) {
+          recordLoginFail(req);
+          console.warn(`[fixflow] 登录失败 ip=${clientIp(req)} user=${String(username || "").slice(0, 32)}`);
           sendJson(res, { error: "用户名或密码错误" }, 401);
           return;
         }
+        loginFails.delete(clientIp(req));
         const token = sessions.create();
         res.writeHead(200, {
           "Content-Type": "application/json",
@@ -436,13 +480,13 @@ export async function startWeb(config = {}, deps = {}) {
           res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": `fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${sc}` });
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/password" && req.method === "POST") {
-        const body = await readBody(req);
+        const body = await readBody(req, 64 * 1024);
         const { currentPassword, newPassword } = JSON.parse(body || "{}");
         const auth = await readAuth();
-        if (!auth || !verifyPassword(currentPassword || "", auth)) { sendJson(res, { error: "当前密码错误" }, 403); return; }
-        if (!isStrongPassword(newPassword)) { sendJson(res, { error: "新密码至少 8 位，且需包含字母、数字和特殊字符" }, 400); return; }
+        if (!auth || !(await verifyPasswordAsync(currentPassword || "", auth))) { sendJson(res, { error: "当前密码错误" }, 403); return; }
+        if (!isStrongPassword(newPassword)) { sendJson(res, { error: "新密码需 8-128 位，且包含大小写字母、数字和特殊字符" }, 400); return; }
         if (newPassword === currentPassword) { sendJson(res, { error: "新密码不能与当前密码相同" }, 400); return; }
-        const { salt, hash } = hashPassword(newPassword);
+        const { salt, hash } = await hashPasswordAsync(newPassword);
         await writeAuth({ username: auth.username, salt, hash });
         sessions.revokeAll();
         res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": `fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${sc}` });
@@ -961,7 +1005,7 @@ export async function startWeb(config = {}, deps = {}) {
     } catch (e) {
       console.error("请求处理失败:", e);
       try {
-        if (!res.headersSent) sendJson(res, { error: String(e) }, 500);
+        if (!res.headersSent) sendJson(res, { error: String(e?.message || e) }, e?.statusCode || 500);
       } catch {}
     }
   };

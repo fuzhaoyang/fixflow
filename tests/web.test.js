@@ -251,6 +251,19 @@ test("重复注册返回 409，错误密码返回 401，登出后 401", async ()
   w.close();
 });
 
+test("登录失败多次触发限流返回 429", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  await registerAndLogin(base);
+  const tryLogin = (password) => fetch(`${base}/api/login`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: "admin", password, captchaCode: "0000" }),
+  });
+  for (let i = 0; i < 5; i++) assert.equal((await tryLogin("wrongpass")).status, 401);
+  assert.equal((await tryLogin("Secret123!")).status, 429);
+  w.close();
+});
+
 test("注册密码过短返回 400", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;

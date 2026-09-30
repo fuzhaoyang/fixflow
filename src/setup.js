@@ -1,6 +1,6 @@
 import readline from "node:readline";
 import { stdin, stdout } from "node:process";
-import { mkdirSync, writeFileSync, existsSync, unlinkSync, copyFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, existsSync, unlinkSync, copyFileSync, chmodSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { homedir } from "node:os";
 import { lanIPs } from "./netip.js";
@@ -42,6 +42,7 @@ export function mergeConfig(existing, updates) {
 export function writeConfig(path, config) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(config, null, 2));
+  try { chmodSync(path, 0o600); } catch {}
 }
 
 export async function verifyApiKey({ baseUrl, apiKey, fetchFn = fetch }) {

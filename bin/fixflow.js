@@ -10,7 +10,7 @@ import { lanIPs, publicIP } from "../src/netip.js";
 import { openFirewallPort } from "../src/firewall.js";
 import { runUninstall } from "../scripts/uninstall.js";
 import { runDoctor } from "../src/doctor.js";
-import { hashPassword } from "../src/auth.js";
+import { hashPassword, isStrongPassword } from "../src/auth.js";
 import readline from "node:readline/promises";
 
 // 兜底：记录崩溃堆栈，避免偶发的未处理异常/拒绝直接终止面板
@@ -36,7 +36,7 @@ if (cmd === "uninstall") {
 }
 
 if (cmd === "reset-password") {
-  const { writeFile, mkdir } = await import("node:fs/promises");
+  const { writeFile, mkdir, chmod } = await import("node:fs/promises");
   const { dirname } = await import("node:path");
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   let current = {};
@@ -46,12 +46,13 @@ if (cmd === "reset-password") {
     process.exit(1);
   }
   console.log(`当前账号：${current.auth.username}`);
-  const pwd = await rl.question("请输入新密码（至少 6 位）: ");
-  if (!pwd || pwd.length < 6) { console.log("密码过短，未修改。"); process.exit(1); }
-  const { salt, hash } = hashPassword(pwd);
+  const pwd = await rl.question("请输入新密码（至少 8 位，含大小写字母、数字和特殊字符）: ");
+  if (!isStrongPassword((pwd || "").trim())) { console.log("密码强度不足（需 8-128 位，且包含大小写字母、数字和特殊字符），未修改。"); process.exit(1); }
+  const { salt, hash } = hashPassword(pwd.trim());
   current.auth = { ...current.auth, salt, hash };
   await mkdir(dirname(DEFAULT_CONFIG_PATH), { recursive: true });
   await writeFile(DEFAULT_CONFIG_PATH, JSON.stringify(current, null, 2));
+  await chmod(DEFAULT_CONFIG_PATH, 0o600).catch(() => {});
   console.log("✓ 密码已重置，请用新密码登录面板。");
   process.exit(0);
 }

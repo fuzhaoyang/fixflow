@@ -52,5 +52,6 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     fsCollapsed: file.fsCollapsed === true,
     tls: file.tls !== false,
     httpsPort: file.httpsPort || 8443,
+    trustProxy: file.trustProxy === true,
   };
 }
