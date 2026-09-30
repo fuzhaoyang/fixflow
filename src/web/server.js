@@ -16,7 +16,7 @@ import { lanIPs, publicIP } from "../netip.js";
 import { buildUrls } from "../panel-access.js";
 import { createMetricAlerts, buildAlertEmail, METRICS, metricLabel } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
-import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
+import { hashPassword, verifyPassword, isStrongPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
@@ -406,8 +406,8 @@ export async function startWeb(config = {}, deps = {}) {
           sendJson(res, { error: "验证码错误或已过期" }, 400);
           return;
         }
-        if (!username || !password || password.length < 6) {
-          sendJson(res, { error: "用户名和至少 6 位密码必填" }, 400);
+        if (!username || !isStrongPassword(password)) {
+          sendJson(res, { error: "密码至少 8 位，且需包含字母、数字和特殊字符" }, 400);
           return;
         }
         const { salt, hash } = hashPassword(password);
@@ -434,6 +434,18 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/logout" && req.method === "POST") {
         sessions.revoke(authHeader(req));
           res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": `fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${sc}` });
+        res.end(JSON.stringify({ ok: true }));
+      } else if (url.pathname === "/api/password" && req.method === "POST") {
+        const body = await readBody(req);
+        const { currentPassword, newPassword } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(currentPassword || "", auth)) { sendJson(res, { error: "当前密码错误" }, 403); return; }
+        if (!isStrongPassword(newPassword)) { sendJson(res, { error: "新密码至少 8 位，且需包含字母、数字和特殊字符" }, 400); return; }
+        if (newPassword === currentPassword) { sendJson(res, { error: "新密码不能与当前密码相同" }, 400); return; }
+        const { salt, hash } = hashPassword(newPassword);
+        await writeAuth({ username: auth.username, salt, hash });
+        sessions.revokeAll();
+        res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": `fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${sc}` });
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;

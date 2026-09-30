@@ -1889,12 +1889,14 @@ function setAuthMode(mode, registered) {
     authTitle.textContent = t("auth.loginTitle");
     authSub.textContent = t("auth.loginSub");
     authSubmit.textContent = t("auth.login");
+    authPassword.placeholder = t("auth.pwdPh");
     authTip.innerHTML = `<button type="button" id="auth-toggle">${t("auth.noAccount")}</button>`;
   } else {
     document.getElementById("auth-logo-text").textContent = "AI";
     authTitle.textContent = t("auth.registerTitle");
     authSub.textContent = t("auth.registerSub");
     authSubmit.textContent = t("auth.register");
+    authPassword.placeholder = t("auth.pwdRule");
     authTip.innerHTML = `<button type="button" id="auth-toggle">${t("auth.hasAccount")}</button>`;
   }
   document.getElementById("auth-toggle")?.addEventListener("click", () => setAuthMode(authMode === "login" ? "register" : "login", true));
@@ -1919,6 +1921,10 @@ function setupAuth() {
       password: authPassword.value,
       captchaCode: authCaptcha.value.trim(),
     };
+    if (authMode === "register" && !strongPwd(authPassword.value)) {
+      showAuthErr(t("auth.pwdWeak"));
+      return;
+    }
     authSubmit.disabled = true;
     try {
       const res = await fetch("api/" + authMode, {
@@ -2044,8 +2050,40 @@ document.querySelectorAll(".settings-menu .settings-item, .user-menu .settings-i
     if (item.dataset.action === "config") openSettings();
     else if (item.dataset.action === "restart") restartMask.classList.add("show");
     else if (item.dataset.action === "logout") logoutMask.classList.add("show");
+    else if (item.dataset.action === "password") openPwd();
   });
 });
+const pwdMask = document.getElementById("pwd-mask");
+const strongPwd = (p) => p.length >= 8 && /[A-Za-z]/.test(p) && /[0-9]/.test(p) && /[^A-Za-z0-9\s]/.test(p);
+function openPwd() {
+  for (const id of ["pwd-current", "pwd-new", "pwd-confirm"]) document.getElementById(id).value = "";
+  document.getElementById("pwd-err").textContent = "";
+  pwdMask.classList.add("show");
+}
+document.getElementById("pwd-close").onclick = () => pwdMask.classList.remove("show");
+document.getElementById("pwd-cancel").onclick = () => pwdMask.classList.remove("show");
+document.getElementById("pwd-save").onclick = async () => {
+  const cur = document.getElementById("pwd-current").value;
+  const np = document.getElementById("pwd-new").value;
+  const cf = document.getElementById("pwd-confirm").value;
+  const err = document.getElementById("pwd-err");
+  err.textContent = "";
+  if (!strongPwd(np)) { err.textContent = t("pwd.weak"); return; }
+  if (np !== cf) { err.textContent = t("pwd.mismatch"); return; }
+  if (np === cur) { err.textContent = t("pwd.same"); return; }
+  const btn = document.getElementById("pwd-save");
+  btn.disabled = true;
+  try {
+    const res = await fetch("api/password", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ currentPassword: cur, newPassword: np }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { err.textContent = data.error || t("pwd.fail"); return; }
+    pwdMask.classList.remove("show");
+    showSaveMsg(t("pwd.done"), "ok");
+    setTimeout(() => location.reload(), 1200);
+  } finally {
+    btn.disabled = false;
+  }
+};
 const userNameEl = document.getElementById("user-name");
 function setUserName(name) {
   userNameEl.textContent = name || t("tool.account");

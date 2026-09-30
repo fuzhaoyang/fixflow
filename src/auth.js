@@ -50,6 +50,11 @@ export function verifyPassword(password, { salt, hash }) {
   return timingSafeEqual(candidate, Buffer.from(hash, "hex"));
 }
 
+export function isStrongPassword(password) {
+  return typeof password === "string" && password.length >= 8
+    && /[A-Za-z]/.test(password) && /[0-9]/.test(password) && /[^A-Za-z0-9\s]/.test(password);
+}
+
 export function createSessionStore({ ttlMs = SESSION_TTL_MS } = {}) {
   const sessions = new Map();
   return {
@@ -65,6 +70,7 @@ export function createSessionStore({ ttlMs = SESSION_TTL_MS } = {}) {
       return true;
     },
     revoke(token) { sessions.delete(token); },
+    revokeAll() { sessions.clear(); },
   };
 }
 

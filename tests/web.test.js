@@ -24,12 +24,12 @@ function makeServer(extra = {}, extraDeps = {}) {
 async function registerAndLogin(base) {
   const reg = await fetch(`${base}/api/register`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "admin", password: "secret123", captchaCode: "0000" }),
+    body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }),
   });
   assert.equal(reg.status, 200);
   const login = await fetch(`${base}/api/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "admin", password: "secret123", captchaCode: "0000" }),
+    body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }),
   });
   assert.equal(login.status, 200);
   const cookie = login.headers.get("set-cookie").split(";")[0];
@@ -67,7 +67,7 @@ test("未带验证码登录返回 400", async () => {
   await registerAndLogin(base);
   const res = await fetch(`${base}/api/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "admin", password: "secret123" }),
+    body: JSON.stringify({ username: "admin", password: "Secret123!" }),
   });
   assert.equal(res.status, 400);
   w.close();
@@ -235,7 +235,7 @@ test("重复注册返回 409，错误密码返回 401，登出后 401", async ()
 
   const dup = await fetch(`${base}/api/register`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "admin2", password: "secret123", captchaCode: "0000" }),
+    body: JSON.stringify({ username: "admin2", password: "Secret123!", captchaCode: "0000" }),
   });
   assert.equal(dup.status, 409);
 
@@ -340,14 +340,14 @@ test("/api/process 正确密码执行 kill 与 restart", async () => {
   const headers = { "Content-Type": "application/json", Cookie: cookie };
   const kill = await fetch(`${base}/api/process`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: process.pid, service: "", password: "secret123" }),
+    body: JSON.stringify({ action: "kill", pid: process.pid, service: "", password: "Secret123!" }),
   });
   assert.equal(kill.status, 200);
   assert.equal((await kill.json()).ok, true);
   assert.equal(calls[0], `kill ${process.pid}`);
   const restart = await fetch(`${base}/api/process`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "restart", pid: 42, service: "nginx.service", password: "secret123" }),
+    body: JSON.stringify({ action: "restart", pid: 42, service: "nginx.service", password: "Secret123!" }),
   });
   assert.equal(restart.status, 200);
   assert.equal(calls[1], "systemctl restart nginx.service");
@@ -362,12 +362,12 @@ test("/api/process 禁止操作系统级与受保护进程", async () => {
   const headers = { "Content-Type": "application/json", Cookie: cookie };
   const pid1 = await fetch(`${base}/api/process`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "secret123" }),
+    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "Secret123!" }),
   });
   assert.equal(pid1.status, 403);
   const missing = await fetch(`${base}/api/process`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: 999999999, service: "", password: "secret123" }),
+    body: JSON.stringify({ action: "kill", pid: 999999999, service: "", password: "Secret123!" }),
   });
   assert.equal(missing.status, 403);
   assert.match((await missing.json()).error, /不存在|不可访问/);
@@ -383,12 +383,12 @@ test("/api/process 无效参数返回 400", async () => {
   const headers = { "Content-Type": "application/json", Cookie: cookie };
   const badPid = await fetch(`${base}/api/process`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: -5, service: "", password: "secret123" }),
+    body: JSON.stringify({ action: "kill", pid: -5, service: "", password: "Secret123!" }),
   });
   assert.equal(badPid.status, 400);
   const noSvc = await fetch(`${base}/api/process`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "restart", pid: 1, service: "", password: "secret123" }),
+    body: JSON.stringify({ action: "restart", pid: 1, service: "", password: "Secret123!" }),
   });
   assert.equal(noSvc.status, 400);
   assert.equal(calls.length, 0);
@@ -429,14 +429,14 @@ test("/api/firewall/close 正确密码执行 deny 与 delete", async () => {
   const headers = { "Content-Type": "application/json", Cookie: cookie };
   const deny = await fetch(`${base}/api/firewall/close`, {
     method: "POST", headers,
-    body: JSON.stringify({ port: 3306, proto: "tcp", mode: "deny", password: "secret123" }),
+    body: JSON.stringify({ port: 3306, proto: "tcp", mode: "deny", password: "Secret123!" }),
   });
   assert.equal(deny.status, 200);
   assert.equal((await deny.json()).ok, true);
   assert.equal(calls[0], "ufw deny 3306/tcp");
   const del = await fetch(`${base}/api/firewall/close`, {
     method: "POST", headers,
-    body: JSON.stringify({ port: 80, proto: "tcp", mode: "delete", password: "secret123" }),
+    body: JSON.stringify({ port: 80, proto: "tcp", mode: "delete", password: "Secret123!" }),
   });
   assert.equal(del.status, 200);
   assert.equal(calls[1], "ufw delete allow 80/tcp");
@@ -451,12 +451,12 @@ test("/api/firewall/close 无效参数返回 400", async () => {
   const headers = { "Content-Type": "application/json", Cookie: cookie };
   const badPort = await fetch(`${base}/api/firewall/close`, {
     method: "POST", headers,
-    body: JSON.stringify({ port: 70000, proto: "tcp", mode: "deny", password: "secret123" }),
+    body: JSON.stringify({ port: 70000, proto: "tcp", mode: "deny", password: "Secret123!" }),
   });
   assert.equal(badPort.status, 400);
   const badMode = await fetch(`${base}/api/firewall/close`, {
     method: "POST", headers,
-    body: JSON.stringify({ port: 22, proto: "tcp", mode: "open", password: "secret123" }),
+    body: JSON.stringify({ port: 22, proto: "tcp", mode: "open", password: "Secret123!" }),
   });
   assert.equal(badMode.status, 400);
   assert.equal(calls.length, 0);
@@ -506,7 +506,7 @@ test("SSL 续签：密码错误 403，非 local 400", async () => {
 
   const remote = await fetch(`${base}/api/ssl`, { method: "POST", headers: H, body: JSON.stringify({ type: "remote", host: "a.com" }) });
   const remoteEntry = (await remote.json()).entry;
-  const notLocal = await fetch(`${base}/api/ssl/renew`, { method: "POST", headers: H, body: JSON.stringify({ id: remoteEntry.id, password: "secret123" }) });
+  const notLocal = await fetch(`${base}/api/ssl/renew`, { method: "POST", headers: H, body: JSON.stringify({ id: remoteEntry.id, password: "Secret123!" }) });
   assert.equal(notLocal.status, 400);
 
   w.close();
@@ -595,7 +595,7 @@ test("/api/nginx 接口鉴权与重载", async () => {
   assert.equal(calls.length, 0);
   const okReload = await fetch(`${base}/api/nginx/reload`, {
     method: "POST", headers,
-    body: JSON.stringify({ action: "restart", password: "secret123" }),
+    body: JSON.stringify({ action: "restart", password: "Secret123!" }),
   });
   assert.equal(okReload.status, 200);
   assert.ok(calls.some((c) => c.includes("systemctl restart nginx")));
@@ -609,7 +609,7 @@ test("/api/nginx/reload 支持 start/stop/restart/reload", async () => {
   const cookie = await registerAndLogin(base);
   const headers = { "Content-Type": "application/json", Cookie: cookie };
   for (const action of ["start", "stop", "restart", "reload"]) {
-    const res = await fetch(`${base}/api/nginx/reload`, { method: "POST", headers, body: JSON.stringify({ action, password: "secret123" }) });
+    const res = await fetch(`${base}/api/nginx/reload`, { method: "POST", headers, body: JSON.stringify({ action, password: "Secret123!" }) });
     assert.equal(res.status, 200);
     assert.equal((await res.json()).ok, true);
   }
@@ -771,18 +771,18 @@ test("/api/fs 写操作鉴权与执行", async () => {
   const badPw = await fetch(`${base}/api/fs/mkdir`, { method: "POST", headers: H, body: JSON.stringify({ path: dir, name: "x", password: "wrong" }) });
   assert.equal(badPw.status, 403);
   assert.ok(!existsSync(join(dir, "x")));
-  const mk = await fetch(`${base}/api/fs/mkdir`, { method: "POST", headers: H, body: JSON.stringify({ path: dir, name: "sub", password: "secret123" }) });
+  const mk = await fetch(`${base}/api/fs/mkdir`, { method: "POST", headers: H, body: JSON.stringify({ path: dir, name: "sub", password: "Secret123!" }) });
   assert.equal(mk.status, 200);
   assert.ok(existsSync(join(dir, "sub")));
-  const wr = await fetch(`${base}/api/fs/write`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt"), content: "hi", password: "secret123" }) });
+  const wr = await fetch(`${base}/api/fs/write`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt"), content: "hi", password: "Secret123!" }) });
   assert.equal(wr.status, 200);
   assert.equal(readFileSync(join(dir, "a.txt"), "utf8"), "hi");
   const rd = await fetch(`${base}/api/fs/read`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt") }) });
   assert.equal((await rd.json()).content, "hi");
-  const rn = await fetch(`${base}/api/fs/rename`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt"), newName: "b.txt", password: "secret123" }) });
+  const rn = await fetch(`${base}/api/fs/rename`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "a.txt"), newName: "b.txt", password: "Secret123!" }) });
   assert.equal(rn.status, 200);
   assert.ok(existsSync(join(dir, "b.txt")));
-  const del = await fetch(`${base}/api/fs/delete`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "sub"), password: "secret123" }) });
+  const del = await fetch(`${base}/api/fs/delete`, { method: "POST", headers: H, body: JSON.stringify({ path: join(dir, "sub"), password: "Secret123!" }) });
   assert.equal(del.status, 200);
   assert.ok(!existsSync(join(dir, "sub")));
   w.close();
@@ -798,7 +798,7 @@ test("/api/fs/upload multipart 上传", async () => {
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="path"\r\n\r\n${dir}\r\n` +
     `--${boundary}\r\n` +
-    `Content-Disposition: form-data; name="password"\r\n\r\nsecret123\r\n` +
+    `Content-Disposition: form-data; name="password"\r\n\r\nSecret123!\r\n` +
     `--${boundary}\r\n` +
     `Content-Disposition: form-data; name="file"; filename="up.txt"\r\nContent-Type: text/plain\r\n\r\nhello-up\r\n` +
     `--${boundary}--\r\n`,
@@ -858,13 +858,13 @@ test("HTTPS：自签证书启动，TLS 登录 cookie 带 Secure", async (t) => {
   });
   const status = await req("/api/status");
   assert.equal(status.code, 200);
-  assert.equal((await req("/api/register", { username: "admin", password: "secret123", captchaCode: "0000" })).code, 200);
-  const login = await req("/api/login", { username: "admin", password: "secret123", captchaCode: "0000" });
+  assert.equal((await req("/api/register", { username: "admin", password: "Secret123!", captchaCode: "0000" })).code, 200);
+  const login = await req("/api/login", { username: "admin", password: "Secret123!", captchaCode: "0000" });
   assert.equal(login.code, 200);
   assert.match(login.cookie[0], /Secure/);
   // 同一实例的 HTTP 明文登录 cookie 不带 Secure
   const httpBase = `http://127.0.0.1:${w.server.address().port}`;
-  const httpLogin = await fetch(`${httpBase}/api/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "admin", password: "secret123", captchaCode: "0000" }) });
+  const httpLogin = await fetch(`${httpBase}/api/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }) });
   assert.equal(httpLogin.status, 200);
   assert.doesNotMatch(httpLogin.headers.get("set-cookie"), /Secure/);
   await w.close();

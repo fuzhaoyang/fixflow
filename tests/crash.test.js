@@ -20,11 +20,11 @@ let cookie = "";
 async function login(b) {
   await fetch(`${b}/api/register`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "admin", password: "secret123", captchaCode: "0000" }),
+    body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }),
   }).catch(() => {});
   const r = await fetch(`${b}/api/login`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: "admin", password: "secret123", captchaCode: "0000" }),
+    body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }),
   });
   return r.headers.get("set-cookie").split(";")[0];
 }
@@ -65,8 +65,8 @@ test("畸形输入与超限请求不导致崩溃", async () => {
   await fetch(`${base}/api/metrics?x=${"a".repeat(8000)}`, { headers: { Cookie: cookie } }).catch(() => {});
   await post(`${base}/api/chat`, "x".repeat(5 * 1024 * 1024), cookie);
   await fetch(`${base}/api/nginx/conf?path=${encodeURIComponent("/etc/passwd")}`, { headers: { Cookie: cookie } }).catch(() => {});
-  await post(`${base}/api/nginx/conf`, JSON.stringify({ path: "/etc/passwd", content: "x", password: "secret123" }), cookie);
-  await post(`${base}/api/firewall/close`, JSON.stringify({ port: 99999, mode: "x", proto: "tcp", password: "secret123" }), cookie);
+  await post(`${base}/api/nginx/conf`, JSON.stringify({ path: "/etc/passwd", content: "x", password: "Secret123!" }), cookie);
+  await post(`${base}/api/firewall/close`, JSON.stringify({ port: 99999, mode: "x", proto: "tcp", password: "Secret123!" }), cookie);
   await new Promise((r) => setTimeout(r, 300));
   assert.equal(await aliveOk(), true);
 });

@@ -97,7 +97,7 @@ test("6. TLS 登录 cookie 带 Secure", async (t) => {
   const dir = newDir();
   const w = await mkServer(dir);
   const sp = w.httpsServer.address().port;
-  const creds = { username: "admin", password: "secret123", captchaCode: "0000" };
+  const creds = { username: "admin", password: "Secret123!", captchaCode: "0000" };
   assert.equal((await httpsReq(sp, "/api/register", { method: "POST", body: creds })).code, 200);
   const login = await httpsReq(sp, "/api/login", { method: "POST", body: creds });
   assert.equal(login.code, 200);
@@ -110,7 +110,7 @@ test("7. HTTP 登录 cookie 不带 Secure", async (t) => {
   const dir = newDir();
   const w = await mkServer(dir);
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const creds = { username: "admin", password: "secret123", captchaCode: "0000" };
+  const creds = { username: "admin", password: "Secret123!", captchaCode: "0000" };
   const H = { "Content-Type": "application/json" };
   assert.equal((await fetch(`${base}/api/register`, { method: "POST", headers: H, body: JSON.stringify(creds) })).status, 200);
   const login = await fetch(`${base}/api/login`, { method: "POST", headers: H, body: JSON.stringify(creds) });
