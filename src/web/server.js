@@ -1,5 +1,6 @@
 import { createServer } from "node:http";
-import { spawn } from "node:child_process";
+import { createServer as createHttpsServer } from "node:https";
+import { spawn, spawnSync } from "node:child_process";
 import { readFile, writeFile, mkdir, readdir, lstat, rm, rename as fsRename } from "node:fs/promises";
 import { createReadStream, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -21,13 +22,29 @@ import { runCommand } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
-async function printAccess(port, panelPath) {
+const TLS_CERT_DIR = join(homedir(), ".config", "fixflow", "certs");
+async function ensureTlsCert(dir = TLS_CERT_DIR) {
+  const keyPath = join(dir, "key.pem");
+  const certPath = join(dir, "cert.pem");
+  try { return { key: await readFile(keyPath), cert: await readFile(certPath) }; } catch {}
+  await mkdir(dir, { recursive: true });
+  const r = spawnSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", keyPath, "-out", certPath, "-days", "3650", "-subj", "/CN=fixflow"], { stdio: "ignore" });
+  if (r.status !== 0) return null;
+  try { return { key: await readFile(keyPath), cert: await readFile(certPath) }; } catch { return null; }
+}
+
+async function printAccess(port, panelPath, httpsPort) {
   const suffix = `/${panelPath}/`;
-  console.log("fixflow 面板已启动，访问地址：");
-  for (const ip of lanIPs()) console.log(`  内网：http://${ip}:${port}${suffix}`);
+  console.log("fixflow 面板已启动，访问地址（HTTPS 为自签证书，浏览器需手动信任一次）:");
+  for (const ip of lanIPs()) {
+    console.log(`  内网：http://${ip}:${port}${suffix}`);
+    if (httpsPort) console.log(`  内网：https://${ip}:${httpsPort}${suffix}`);
+  }
   const pub = await publicIP();
-  if (pub) console.log(`  公网：http://${pub}:${port}${suffix}`);
-  else console.log(`  公网：获取失败（可能无外网），请在云安全组/防火墙放行端口 ${port}`);
+  if (pub) {
+    console.log(`  公网：http://${pub}:${port}${suffix}`);
+    if (httpsPort) console.log(`  公网：https://${pub}:${httpsPort}${suffix}`);
+  } else console.log(`  公网：获取失败（可能无外网），请在云安全组/防火墙放行端口 ${port}${httpsPort ? ` / ${httpsPort}` : ""}`);
 }
 
 function safeFsPath(p) {
@@ -368,8 +385,9 @@ function formatUptime(sec) {
 
   const captchaIdFromCookie = (req) => parseCookie(req.headers.cookie || "").fixflow_captcha || "";
 
-  const server = createServer(async (req, res) => {
+  const handler = async (req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
+    const sc = req.socket.encrypted ? "; Secure" : "";
     try {
       const base = config.panelPath ? "/" + config.panelPath : "";
       if (base) {
@@ -432,12 +450,12 @@ function formatUptime(sec) {
         const token = sessions.create();
         res.writeHead(200, {
           "Content-Type": "application/json",
-          "Set-Cookie": `fixflow_token=${token}; HttpOnly; Path=/; Max-Age=43200; SameSite=Lax`,
+          "Set-Cookie": `fixflow_token=${token}; HttpOnly; Path=/; Max-Age=43200; SameSite=Lax${sc}`,
         });
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/logout" && req.method === "POST") {
         sessions.revoke(authHeader(req));
-        res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": "fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax" });
+          res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": `fixflow_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${sc}` });
         res.end(JSON.stringify({ ok: true }));
       } else if (url.pathname === "/api/metrics") {
         const q = url.searchParams;
@@ -1036,33 +1054,56 @@ function formatUptime(sec) {
         res.end(JSON.stringify({ error: String(e) }));
       } catch {}
     }
-  });
+  };
 
-  const listenPort = config.port ?? 8080;
-  await new Promise((resolve, reject) => {
+  const server = createServer(handler);
+  let httpsServer = null;
+  if (config.tls) {
+    const tlsOpts = await ensureTlsCert(config.tlsCertDir);
+    if (tlsOpts) httpsServer = createHttpsServer(tlsOpts, handler);
+    else console.error("⚠ 未能生成自签证书（需系统安装 openssl），HTTPS 未启用，仅 HTTP 可用。");
+  }
+
+  const listenRetry = (srv, port, onBusy) => new Promise((resolve, reject) => {
     let attempts = 0;
     const tryListen = () => {
-      const srv = server.listen(listenPort, "0.0.0.0", resolve);
-      srv.once("error", (e) => {
-        if (e.code === "EADDRINUSE" && attempts < 5) {
-          attempts++;
-          setTimeout(tryListen, 400);
-        } else if (e.code === "EADDRINUSE") {
-          console.error(`\n⚠ 端口 ${listenPort} 已被占用（面板可能已在运行）。`);
-          console.error(`  直接访问 http://127.0.0.1:${listenPort}，或先停止旧进程再启动。`);
-          process.exit(1);
-        } else {
-          reject(e);
-        }
+      const s = srv.listen(port, "0.0.0.0", () => resolve(s));
+      s.once("error", (e) => {
+        if (e.code === "EADDRINUSE" && attempts < 5) { attempts++; setTimeout(tryListen, 400); }
+        else if (e.code === "EADDRINUSE") { onBusy?.(port); reject(e); }
+        else reject(e);
       });
     };
     tryListen();
   });
+
+  const listenPort = config.port ?? 8080;
+  await listenRetry(server, listenPort, () => {
+    console.error(`\n⚠ 端口 ${listenPort} 已被占用（面板可能已在运行）。`);
+    console.error(`  直接访问 http://127.0.0.1:${listenPort}，或先停止旧进程再启动。`);
+    process.exit(1);
+  });
+
+  let httpsAddress = null;
+  if (httpsServer) {
+    const httpsPort = config.httpsPort ?? 8443;
+    try {
+      await listenRetry(httpsServer, httpsPort);
+      httpsAddress = httpsServer.address();
+    } catch {
+      console.error(`⚠ HTTPS 启动失败（端口 ${httpsPort} 可能被占用），仅 HTTP 可用。`);
+      try { httpsServer.close(); } catch {}
+      httpsServer = null;
+    }
+  }
+
   const address = server.address();
-  if (config.panelPath) printAccess(address.port, config.panelPath);
-  else console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}`);
+  if (config.panelPath) printAccess(address.port, config.panelPath, httpsAddress?.port || null);
+  else console.log(`fixflow 面板已启动：http://127.0.0.1:${address.port}${httpsAddress ? ` · https://127.0.0.1:${httpsAddress.port}` : ""}`);
+  const closeSrv = (s) => new Promise((r) => s.close(r));
   return {
     server,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); server.close(resolve); }),
+    httpsServer,
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

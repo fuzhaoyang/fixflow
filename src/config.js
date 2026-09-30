@@ -41,5 +41,7 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     panelPath: file.panelPath || "",
     lang: file.lang === "en" ? "en" : "zh",
     theme: file.theme === "light" ? "light" : "dark",
+    tls: file.tls !== false,
+    httpsPort: file.httpsPort || 8443,
   };
 }

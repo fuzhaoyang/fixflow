@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import https from "node:https";
+import { spawnSync } from "node:child_process";
 import { startWeb } from "../src/web/server.js";
 
 const testCaptchas = {
@@ -838,6 +840,33 @@ test("config 接口 theme 持久化", async () => {
   const bad = await fetch(`${base}/api/config`, { method: "POST", headers: H, body: JSON.stringify({ theme: "rainbow" }) });
   assert.equal((await bad.json()).theme, "light");
   w.close();
+});
+
+test("HTTPS：自签证书启动，TLS 登录 cookie 带 Secure", async (t) => {
+  if (spawnSync("openssl", ["version"]).status !== 0) return t.skip("系统无 openssl");
+  const dir = mkdtempSync(join(tmpdir(), "ff-tls-"));
+  const w = await makeServer({ tls: true, httpsPort: 0, tlsCertDir: join(dir, "certs") });
+  assert.ok(w.httpsServer, "应启动 HTTPS 服务");
+  const port = w.httpsServer.address().port;
+  const req = (path, body) => new Promise((resolve, reject) => {
+    const data = body ? JSON.stringify(body) : null;
+    const r = https.request({ host: "127.0.0.1", port, path, method: body ? "POST" : "GET", rejectUnauthorized: false, headers: data ? { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data) } : {} }, (res) => {
+      let b = ""; res.on("data", (c) => (b += c)); res.on("end", () => resolve({ code: res.statusCode, cookie: res.headers["set-cookie"], body: b }));
+    });
+    r.on("error", reject); if (data) r.write(data); r.end();
+  });
+  const status = await req("/api/status");
+  assert.equal(status.code, 200);
+  assert.equal((await req("/api/register", { username: "admin", password: "secret123", captchaCode: "0000" })).code, 200);
+  const login = await req("/api/login", { username: "admin", password: "secret123", captchaCode: "0000" });
+  assert.equal(login.code, 200);
+  assert.match(login.cookie[0], /Secure/);
+  // 同一实例的 HTTP 明文登录 cookie 不带 Secure
+  const httpBase = `http://127.0.0.1:${w.server.address().port}`;
+  const httpLogin = await fetch(`${httpBase}/api/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: "admin", password: "secret123", captchaCode: "0000" }) });
+  assert.equal(httpLogin.status, 200);
+  assert.doesNotMatch(httpLogin.headers.get("set-cookie"), /Secure/);
+  await w.close();
 });
 
 test("/api/alerts 增删改查与鉴权", async () => {

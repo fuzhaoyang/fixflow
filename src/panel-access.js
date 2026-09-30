@@ -29,12 +29,19 @@ export async function ensurePanelAccess(config = {}, { configPath } = {}) {
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify({ ...cur, port: config.port, panelPath: config.panelPath }, null, 2));
   }
-  return { port: config.port, panelPath: config.panelPath };
+  return { port: config.port, panelPath: config.panelPath, httpsPort: config.httpsPort };
 }
 
-export function buildUrls({ port, panelPath, lan = [], pub = null }) {
+export function buildUrls({ port, httpsPort, panelPath, lan = [], pub = null }) {
   const suffix = panelPath ? `/${panelPath}/` : "/";
-  const urls = lan.map((ip) => `http://${ip}:${port}${suffix}`);
-  if (pub) urls.push(`http://${pub}:${port}${suffix}`);
+  const urls = [];
+  for (const ip of lan) {
+    urls.push(`http://${ip}:${port}${suffix}`);
+    if (httpsPort) urls.push(`https://${ip}:${httpsPort}${suffix}`);
+  }
+  if (pub) {
+    urls.push(`http://${pub}:${port}${suffix}`);
+    if (httpsPort) urls.push(`https://${pub}:${httpsPort}${suffix}`);
+  }
   return urls;
 }

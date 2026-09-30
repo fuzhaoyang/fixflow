@@ -78,7 +78,7 @@ if (cmd === "default") {
   const access = await ensurePanelAccess(config, { configPath: DEFAULT_CONFIG_PATH });
   const lan = lanIPs();
   const pub = await publicIP();
-  const urls = buildUrls({ port: access.port, panelPath: access.panelPath, lan, pub });
+  const urls = buildUrls({ port: access.port, httpsPort: access.httpsPort, panelPath: access.panelPath, lan, pub });
   console.log("Fixflow 面板访问地址：");
   for (const u of urls) console.log("  " + u);
   if (!pub) console.log("  （公网 IP 获取失败，可能无外网）");
@@ -88,18 +88,21 @@ if (cmd === "default") {
 
 if (cmd === "web") {
   await ensurePanelAccess(config, { configPath: DEFAULT_CONFIG_PATH });
-  try {
-    const fw = await openFirewallPort(config.port);
-    if (fw.ok) {
-      console.log(`✓ 已放行本机防火墙端口 ${config.port}（${fw.method}）`);
-    } else {
-      console.log(`\n⚠ 未能自动放行端口 ${config.port}：${fw.reason || "未知原因"}`);
-      console.log("  请手动确保端口可被外部访问，否则无法打开面板：");
-      console.log(`   · 本机防火墙：ufw allow ${config.port}/tcp`);
-      console.log(`                 或 firewall-cmd --permanent --add-port=${config.port}/tcp && firewall-cmd --reload`);
-      console.log(`   · 云服务器（阿里云/腾讯云等）：到控制台「安全组」入方向放行 TCP ${config.port}`);
-    }
-  } catch {}
+  const ports = [config.port, config.tls !== false ? config.httpsPort : null].filter(Boolean);
+  for (const port of ports) {
+    try {
+      const fw = await openFirewallPort(port);
+      if (fw.ok) {
+        console.log(`✓ 已放行本机防火墙端口 ${port}（${fw.method}）`);
+      } else {
+        console.log(`\n⚠ 未能自动放行端口 ${port}：${fw.reason || "未知原因"}`);
+        console.log("  请手动确保端口可被外部访问，否则无法打开面板：");
+        console.log(`   · 本机防火墙：ufw allow ${port}/tcp`);
+        console.log(`                 或 firewall-cmd --permanent --add-port=${port}/tcp && firewall-cmd --reload`);
+        console.log(`   · 云服务器（阿里云/腾讯云等）：到控制台「安全组」入方向放行 TCP ${port}`);
+      }
+    } catch {}
+  }
   await startWeb(config);
 } else if (!config.apiKey || !config.baseUrl || !config.model || needsReconfigure()) {
   console.log(needsReconfigure() ? "检测到重新安装，需重新配置（模型 / 地址 / Key）...\n" : "检测到尚未配置完整（模型 / 地址 / Key），进入配置向导...\n");

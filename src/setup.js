@@ -187,9 +187,16 @@ export function printSuccess(config, { configPath = DEFAULT_CONFIG_PATH, service
     else console.log(`  启动面板: fixflow web`);
     const suffix = config.panelPath ? `/${config.panelPath}/` : "/";
     const port = config.port || 2222;
+    const httpsPort = config.tls !== false ? (config.httpsPort || 8443) : null;
     const ips = lanIPs();
-    for (const ip of ips) console.log(`  访问地址: http://${ip}:${port}${suffix}`);
-    if (!ips.length) console.log(`  访问地址: http://<服务器IP>:${port}${suffix}`);
+    for (const ip of ips) {
+      console.log(`  访问地址: http://${ip}:${port}${suffix}`);
+      if (httpsPort) console.log(`  访问地址: https://${ip}:${httpsPort}${suffix}`);
+    }
+    if (!ips.length) {
+      console.log(`  访问地址: http://<服务器IP>:${port}${suffix}`);
+      if (httpsPort) console.log(`  访问地址: https://<服务器IP>:${httpsPort}${suffix}`);
+    }
     console.log(`  查看/重查访问地址: fixflow default`);
   } else {
     console.log(`  本次未启动面板。想用时运行: fixflow web`);
