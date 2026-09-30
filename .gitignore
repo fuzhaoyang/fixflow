@@ -3,3 +3,6 @@ npm-debug.log*
 
 # npm pack 产物
 *.tgz
+
+# opencode 技能/工具目录
+.opencode/

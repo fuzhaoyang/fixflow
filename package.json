@@ -3,8 +3,24 @@
   "version": "0.1.0",
   "type": "module",
   "description": "服务器运维 AI Agent CLI + Web 面板",
-  "bin": { "fixflow": "bin/fixflow.js" },
-  "files": ["bin", "src", "scripts", "README.md"],
-  "scripts": { "test": "node --test tests/", "postinstall": "node scripts/postinstall.js", "uninstall": "node scripts/uninstall.js" },
-  "engines": { "node": ">=18" }
+  "bin": {
+    "fixflow": "bin/fixflow.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "scripts",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/",
+    "postinstall": "node scripts/postinstall.js",
+    "uninstall": "node scripts/uninstall.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "uipro-cli": "^2.2.3"
+  }
 }
