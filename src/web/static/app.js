@@ -1765,7 +1765,7 @@ function toggleLang() {
   if (authMask.style.display === "flex") setAuthMode(authMode, authRegistered);
   renderWelcome();
   loadModelStatus();
-  fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
+  if (authMask.style.display !== "flex") fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: next }) }).catch(() => {});
   if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
   else renderCards();
 }
@@ -1773,7 +1773,7 @@ function toggleTheme() {
   const next = curTheme === "dark" ? "light" : "dark";
   applyTheme(next);
   localStorage.setItem("fixflow_theme", next);
-  fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: next }) }).catch(() => {});
+  if (authMask.style.display !== "flex") fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ theme: next }) }).catch(() => {});
   if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview();
   else renderCards();
 }
@@ -1954,6 +1954,9 @@ function setupAuth() {
         if (!loginRes.ok) { setAuthMode("login", true); showAuthErr(t("auth.registerOk")); return; }
       }
       authMask.style.display = "none";
+      try {
+        await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: localStorage.getItem("fixflow_lang") || "zh", theme: localStorage.getItem("fixflow_theme") || "dark" }) });
+      } catch {}
       location.reload();
     } finally {
       authSubmit.disabled = false;
