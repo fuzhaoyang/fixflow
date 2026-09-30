@@ -98,11 +98,11 @@ function fmtRate(v) {
   return x >= 100 ? Math.round(x) + (unitDivider >= 1024 * 1024 ? " MB/s" : " KB/s") : (x >= 10 ? x.toFixed(1) : x.toFixed(2)) + (unitDivider >= 1024 * 1024 ? " MB/s" : " KB/s");
 }
 
-function fmtTotal(bytes) {
-  const b = bytes || 0;
-  if (b >= 1024 * 1024) return (b / 1024 / 1024).toFixed(2) + " MB";
-  if (b >= 1024) return (b / 1024).toFixed(1) + " KB";
-  return b + " B";
+function fmtBytes(b, dec = 2) {
+  const v = b || 0;
+  if (v >= 1024 * 1024) return (v / 1024 / 1024).toFixed(dec) + " MB";
+  if (v >= 1024) return (v / 1024).toFixed(dec) + " KB";
+  return v + " B";
 }
 
 function ringColor(pct) {
@@ -195,16 +195,9 @@ function renderKpi() {
   const k = kpiOf(nicFilter);
   document.getElementById("kpi-up").textContent = fmtRate(k.up);
   document.getElementById("kpi-down").textContent = fmtRate(k.down);
-  document.getElementById("kpi-tx").textContent = fmtTotal(k.tx);
-  document.getElementById("kpi-rx").textContent = fmtTotal(k.rx);
+  document.getElementById("kpi-tx").textContent = fmtBytes(k.tx, 1);
+  document.getElementById("kpi-rx").textContent = fmtBytes(k.rx, 1);
   document.getElementById("kpi-rx").style.color = "";
-}
-
-function fmtBytes(b) {
-  const v = b || 0;
-  if (v >= 1024 * 1024) return (v / 1024 / 1024).toFixed(2) + " MB";
-  if (v >= 1024) return (v / 1024).toFixed(2) + " KB";
-  return v + " B";
 }
 
 function chartData(mode) {
@@ -969,12 +962,6 @@ function inline(text) {
 // ---------- 图片上传 ----------
 attachBtn.onclick = () => fileInput.click();
 
-function fmtSize(bytes) {
-  if (bytes < 1024) return bytes + " B";
-  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-  return (bytes / 1024 / 1024).toFixed(1) + " MB";
-}
-
 function addImage(dataUrl, name = t("fs.image"), size = 0) {
   pendingImages.push(dataUrl);
   const wrap = document.createElement("span");
@@ -986,7 +973,7 @@ function addImage(dataUrl, name = t("fs.image"), size = 0) {
   nameEl.textContent = name;
   const sizeEl = document.createElement("span");
   sizeEl.className = "size";
-  sizeEl.textContent = size ? fmtSize(size) : "";
+  sizeEl.textContent = size ? fmtBytes(size, 1) : "";
   const x = document.createElement("button");
   x.className = "x";
   x.textContent = "×";

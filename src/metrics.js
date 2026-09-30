@@ -3,6 +3,7 @@ import { assessHealth, parseDf, parseFree, parseLoad } from "./health.js";
 import { collectSslAll } from "./ssl.js";
 import { readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { resolve, dirname, basename, join } from "node:path";
+import { pad2 } from "./util.js";
 
 export function createTtlCache(ttl) {
   const store = new Map();
@@ -85,12 +86,12 @@ export async function collectNginx() {
     version: vm ? vm[1] : "—",
     config: { ok: dump.exitCode === 0, detail: (dump.stderr || "").trim() || "配置正常" },
     workers: parseInt((workers.stdout || "").trim(), 10) || 0,
-    uptime: Number.isFinite(et) ? formatUptimeShort(et) : "—",
+    uptime: Number.isFinite(et) ? formatUptime(et) : "—",
     listens: parseNginxListens(dump.stdout || ""),
   };
 }
 
-function formatUptimeShort(sec) {
+export function formatUptime(sec) {
   const d = Math.floor(sec / 86400);
   const h = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
@@ -434,8 +435,7 @@ function formatMemMb(v) {
 
 export function formatDateTime(d) {
   if (Number.isNaN(d.getTime())) return "—";
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 }
 
 const parsePsLine = (line) => {

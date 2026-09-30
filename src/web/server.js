@@ -7,12 +7,13 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, formatDateTime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache } from "../metrics.js";
-import { loadConfig, normalizeSslSites } from "../config.js";
+import { collectAll, collectPorts, collectConnectivity, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache } from "../metrics.js";
+import { loadConfig, normalizeSslSites, readJsonFile } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
 import { createAlertsManager } from "../alerts.js";
 import { lanIPs, publicIP } from "../netip.js";
+import { buildUrls } from "../panel-access.js";
 import { createMetricAlerts, buildAlertEmail, METRICS, metricLabel } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
 import { hashPassword, verifyPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
@@ -34,17 +35,11 @@ async function ensureTlsCert(dir = TLS_CERT_DIR) {
 }
 
 async function printAccess(port, panelPath, httpsPort) {
-  const suffix = `/${panelPath}/`;
-  console.log("fixflow 面板已启动，访问地址（HTTPS 为自签证书，浏览器需手动信任一次）:");
-  for (const ip of lanIPs()) {
-    console.log(`  内网：http://${ip}:${port}${suffix}`);
-    if (httpsPort) console.log(`  内网：https://${ip}:${httpsPort}${suffix}`);
-  }
+  const lan = lanIPs();
   const pub = await publicIP();
-  if (pub) {
-    console.log(`  公网：http://${pub}:${port}${suffix}`);
-    if (httpsPort) console.log(`  公网：https://${pub}:${httpsPort}${suffix}`);
-  } else console.log(`  公网：获取失败（可能无外网），请在云安全组/防火墙放行端口 ${port}${httpsPort ? ` / ${httpsPort}` : ""}`);
+  console.log("fixflow 面板已启动，访问地址（HTTPS 为自签证书，浏览器需手动信任一次）:");
+  for (const u of buildUrls({ port, httpsPort, panelPath, lan, pub })) console.log("  " + u);
+  if (!pub) console.log(`  （公网 IP 获取失败，可能无外网）请在云安全组/防火墙放行端口 ${port}${httpsPort ? ` / ${httpsPort}` : ""}`);
 }
 
 function safeFsPath(p) {
@@ -197,9 +192,7 @@ export async function startWeb(config = {}, deps = {}) {
   const termHistoryPath = config.termHistoryPath || defaultTermHistoryPath();
   const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
   const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
-  const readConfigFile = async () => {
-    try { return JSON.parse(await readFile(configPath, "utf8")); } catch { return {}; }
-  };
+  const readConfigFile = () => readJsonFile(configPath);
   const writeAuth = async (auth) => {
     const existing = await readConfigFile();
     await mkdir(dirname(configPath), { recursive: true });
@@ -239,10 +232,12 @@ export async function startWeb(config = {}, deps = {}) {
     return sessions.valid(token) ? token : "";
   };
 
-  const send401 = (res, message = "未登录或会话已过期") => {
-    res.writeHead(401, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: message }));
+  const sendJson = (res, obj, code = 200) => {
+    res.writeHead(code, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(obj));
   };
+
+  const send401 = (res, message = "未登录或会话已过期") => sendJson(res, { error: message }, 401);
 
   const broadcast = (event) => {
     const data = `data: ${JSON.stringify(event)}\n\n`;
@@ -284,8 +279,7 @@ export async function startWeb(config = {}, deps = {}) {
   const fsWriteGuard = async (body, res) => {
     const auth = await readAuth();
     if (!auth || !verifyPassword(body.password || "", auth)) {
-      res.writeHead(403, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+      sendJson(res, { error: "密码错误，操作未执行" }, 403);
       return false;
     }
     return true;
@@ -374,15 +368,6 @@ export async function startWeb(config = {}, deps = {}) {
     };
   }
 
-function formatUptime(sec) {
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  if (d > 0) return `${d}天${h}小时`;
-  if (h > 0) return `${h}小时${m}分钟`;
-  return `${m}分钟`;
-}
-
   const captchaIdFromCookie = (req) => parseCookie(req.headers.cookie || "").fixflow_captcha || "";
 
   const handler = async (req, res) => {
@@ -410,41 +395,33 @@ function formatUptime(sec) {
         res.end(captchaSvg(code));
       } else if (url.pathname === "/api/status" && req.method === "GET") {
         const auth = await readAuth();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ registered: Boolean(auth), loggedIn: Boolean(authHeader(req)), username: authHeader(req) ? (auth?.username || "") : "" }));
+        sendJson(res, { registered: Boolean(auth), loggedIn: Boolean(authHeader(req)), username: authHeader(req) ? (auth?.username || "") : "" });
       } else if (url.pathname === "/api/register" && req.method === "POST") {
         const existing = await readAuth();
-        if (existing) { res.writeHead(409, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "已注册账号，请直接登录" })); return; }
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        if (existing) { sendJson(res, { error: "已注册账号，请直接登录" }, 409); return; }
+        const body = await readBody(req);
         const { username, password, captchaCode } = JSON.parse(body || "{}");
         if (!captchas.verify(captchaIdFromCookie(req), captchaCode)) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "验证码错误或已过期" }));
+          sendJson(res, { error: "验证码错误或已过期" }, 400);
           return;
         }
         if (!username || !password || password.length < 6) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "用户名和至少 6 位密码必填" }));
+          sendJson(res, { error: "用户名和至少 6 位密码必填" }, 400);
           return;
         }
         const { salt, hash } = hashPassword(password);
         await writeAuth({ username, salt, hash });
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/login" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { username, password, captchaCode } = JSON.parse(body || "{}");
         if (!captchas.verify(captchaIdFromCookie(req), captchaCode)) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "验证码错误或已过期" }));
+          sendJson(res, { error: "验证码错误或已过期" }, 400);
           return;
         }
         const auth = await readAuth();
         if (!auth || auth.username !== username || !verifyPassword(password, auth)) {
-          res.writeHead(401, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "用户名或密码错误" }));
+          sendJson(res, { error: "用户名或密码错误" }, 401);
           return;
         }
         const token = sessions.create();
@@ -476,93 +453,75 @@ function formatUptime(sec) {
         }
         if (q.get("port")) data.portScan = await collectPorts(q.get("port"));
         if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(data));
+        sendJson(res, data);
       } else if (url.pathname === "/api/overview") {
         const net = monitor.net();
         const io = monitor.io();
         const nics = Object.keys(net.last || {}).filter((n) => n !== "lo");
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({
+        sendJson(res, {
           status: await statusCache("status", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[status] ${Date.now()}`); return collectStatus(); }),
           nics,
           net: net.samples,
           io: io.samples,
           usage: usageStore.daily(30),
-        }));
+        });
       } else if (url.pathname === "/api/usage" && req.method === "GET") {
         const days = parseInt(url.searchParams.get("days") || "30", 10);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ days: usageStore.daily(Number.isFinite(days) ? days : 30) }));
+        sendJson(res, { days: usageStore.daily(Number.isFinite(days) ? days : 30) });
       } else if (url.pathname === "/api/alerts" && req.method === "GET") {
         const alerts = await alertsManager.list();
         const st = await alertsManager.smtp();
         const history = {};
         for (const a of alerts) history[a.id] = (await alertsManager.history(a.id)).slice(0, 3);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ alerts, smtp: { host: st.host, port: st.port, user: st.user, from: st.from, hasPass: Boolean(st.pass) }, history }));
+        sendJson(res, { alerts, smtp: { host: st.host, port: st.port, user: st.user, from: st.from, hasPass: Boolean(st.pass) }, history });
       } else if (url.pathname === "/api/alerts" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { name, instruction, time, recipients } = JSON.parse(body || "{}");
         if (!name || !instruction || !time || !Array.isArray(recipients) || !recipients.length) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "名称/指令/时间/收件人必填" }));
+          sendJson(res, { error: "名称/指令/时间/收件人必填" }, 400);
           return;
         }
         const alert = { id: `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, name: String(name), instruction: String(instruction), time: String(time), recipients, enabled: true };
         const alerts = await alertsManager.list();
         alerts.push(alert);
         await alertsManager.save(alerts);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, alert }));
+        sendJson(res, { ok: true, alert });
       } else if (url.pathname === "/api/alerts" && req.method === "PATCH") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id, name, instruction, time, recipients, enabled } = JSON.parse(body || "{}");
         const alerts = await alertsManager.list();
         const a = alerts.find((x) => x.id === id);
-        if (!a) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "告警不存在" })); return; }
+        if (!a) { sendJson(res, { error: "告警不存在" }, 404); return; }
         if (name !== undefined) a.name = String(name);
         if (instruction !== undefined) a.instruction = String(instruction);
         if (time !== undefined) a.time = String(time);
         if (Array.isArray(recipients)) a.recipients = recipients;
         if (enabled !== undefined) a.enabled = Boolean(enabled);
         await alertsManager.save(alerts);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/alerts" && req.method === "DELETE") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id } = JSON.parse(body || "{}");
         await alertsManager.save((await alertsManager.list()).filter((x) => x.id !== id));
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/alerts/smtp" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { host, port, user, pass, from } = JSON.parse(body || "{}");
         await alertsManager.saveSmtp({ host, port, user, pass, from });
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/alerts/run" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id } = JSON.parse(body || "{}");
         const r = await alertsManager.runNow(id);
-        res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(r));
+        sendJson(res, r, r.ok ? 200 : 400);
       } else if (url.pathname === "/api/metric-alerts" && req.method === "GET") {
         const [rules, settings] = await Promise.all([metricAlerts.list(), metricAlerts.settings()]);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ rules, incidents: metricAlerts.incidents(), ...settings }));
+        sendJson(res, { rules, incidents: metricAlerts.incidents(), ...settings });
       } else if (url.pathname === "/api/metric-alerts" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const r = JSON.parse(body || "{}");
         if (!r.name || !Object.keys(METRICS).includes(r.metric) || !["<=", ">="].includes(r.op) || !Number.isFinite(Number(r.threshold)) || !Array.isArray(r.recipients) || !r.recipients.length) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "名称/指标/运算符/阈值/收件人必填" }));
+          sendJson(res, { error: "名称/指标/运算符/阈值/收件人必填" }, 400);
           return;
         }
         const rule = {
@@ -577,47 +536,37 @@ function formatUptime(sec) {
         const rules = await metricAlerts.list();
         rules.push(rule);
         await metricAlerts.save(rules);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, rule }));
+        sendJson(res, { ok: true, rule });
       } else if (url.pathname === "/api/metric-alerts" && req.method === "PATCH") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const r = JSON.parse(body || "{}");
         const rules = await metricAlerts.list();
         const rule = rules.find((x) => x.id === r.id);
-        if (!rule) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "规则不存在" })); return; }
+        if (!rule) { sendJson(res, { error: "规则不存在" }, 404); return; }
         for (const k of ["name", "metric", "op", "env", "service", "team", "owner", "runbookUrl", "dashboardUrl", "logUrl"]) if (r[k] !== undefined) rule[k] = String(r[k]);
         for (const k of ["threshold", "duration", "level", "escalateAfter"]) if (r[k] !== undefined) rule[k] = Number(r[k]);
         if (r.enabled !== undefined) rule.enabled = Boolean(r.enabled);
         if (Array.isArray(r.recipients)) rule.recipients = r.recipients;
         if (Array.isArray(r.escalateTo)) rule.escalateTo = r.escalateTo;
         await metricAlerts.save(rules);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/metric-alerts" && req.method === "DELETE") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id } = JSON.parse(body || "{}");
         await metricAlerts.save((await metricAlerts.list()).filter((x) => x.id !== id));
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/metric-alerts/ack" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id } = JSON.parse(body || "{}");
         const r = await metricAlerts.ack(id);
-        res.writeHead(r.ok ? 200 : 404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(r));
+        sendJson(res, r, r.ok ? 200 : 404);
       } else if (url.pathname === "/api/metric-alerts/run" && req.method === "POST") {
         const r = await metricAlerts.runRule();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(r));
+        sendJson(res, r);
       } else if (url.pathname === "/api/metric-alerts/settings" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         await metricAlerts.saveSettings(JSON.parse(body || "{}"));
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/report") {
         const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
         const s = data.system;
@@ -643,24 +592,19 @@ function formatUptime(sec) {
           const baseUrl = url.searchParams.get("baseUrl") || config.baseUrl;
           const apiKey = url.searchParams.get("apiKey") || config.apiKey;
           const models = await fetchModels(baseUrl, apiKey);
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ models }));
+          sendJson(res, { models });
         } catch (e) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: e.message }));
+          sendJson(res, { error: e.message }, 400);
         }
       } else if (url.pathname === "/api/ssl" && req.method === "GET") {
         const data = await collectSslAll(config);
         const { tool } = await detectRenewTool();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ...data, renewTool: tool }));
+        sendJson(res, { ...data, renewTool: tool });
       } else if (url.pathname === "/api/ssl" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { type, host, port, path, label } = JSON.parse(body || "{}");
         if (type === "local" ? !path : !host) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: type === "local" ? "缺少证书路径" : "缺少域名" }));
+          sendJson(res, { error: type === "local" ? "缺少证书路径" : "缺少域名" }, 400);
           return;
         }
         const entry = {
@@ -671,60 +615,48 @@ function formatUptime(sec) {
         };
         config.sslSites.push(entry);
         await persistConfig();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, entry }));
+        sendJson(res, { ok: true, entry });
       } else if (url.pathname === "/api/ssl" && req.method === "PATCH") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id, label, enabled } = JSON.parse(body || "{}");
         const entry = config.sslSites.find((e) => e.id === id);
-        if (!entry) { res.writeHead(404, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "条目不存在" })); return; }
+        if (!entry) { sendJson(res, { error: "条目不存在" }, 404); return; }
         if (label !== undefined) entry.label = String(label);
         if (enabled !== undefined) entry.enabled = Boolean(enabled);
         await persistConfig();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/ssl" && req.method === "DELETE") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id } = JSON.parse(body || "{}");
         const entry = config.sslSites.find((e) => e.id === id);
         if (!entry || entry.source !== "manual") {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "自动发现的证书不可删除" }));
+          sendJson(res, { error: "自动发现的证书不可删除" }, 403);
           return;
         }
         config.sslSites = config.sslSites.filter((e) => e.id !== id);
         await persistConfig();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/ssl/renew" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id, password } = JSON.parse(body || "{}");
         const auth = await readAuth();
         if (!auth || !verifyPassword(password || "", auth)) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
           return;
         }
         const entry = config.sslSites.find((e) => e.id === id);
         if (!entry || entry.type !== "local") {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "仅本机证书文件支持续签" }));
+          sendJson(res, { error: "仅本机证书文件支持续签" }, 400);
           return;
         }
         const data = await collectSslAll(config);
         const live = data.results.find((r) => r.id === id) || entry;
         const result = await renewCert({ ...entry, cn: live.cn });
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(result));
+        sendJson(res, result);
       } else if (url.pathname === "/api/config" && req.method === "GET") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme }));
+        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme });
       } else if (url.pathname === "/api/config" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
@@ -735,74 +667,58 @@ function formatUptime(sec) {
         if (lang === "en" || lang === "zh") config.lang = lang;
         if (theme === "light" || theme === "dark") config.theme = theme;
         let existing = {};
-        try { existing = JSON.parse(await readFile(configPath, "utf8")); } catch {}
+        existing = await readJsonFile(configPath);
         const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme }));
+        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme });
       } else if (url.pathname === "/api/history" && req.method === "GET") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ messages: await readHistoryFile(historyPath) }));
+        sendJson(res, { messages: await readHistoryFile(historyPath) });
       } else if (url.pathname === "/api/history" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { messages } = JSON.parse(body || "{}");
         if (!Array.isArray(messages)) { res.writeHead(400); res.end("{}"); return; }
         const existing = await readHistoryFile(historyPath);
         await writeHistoryFile(historyPath, [...existing, ...messages]);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/history/clear" && req.method === "POST") {
         await writeHistoryFile(historyPath, []);
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/chat" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { input, images = [] } = JSON.parse(body || "{}");
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
         session.send(input, images)
           .then(() => broadcast({ type: "done" }))
           .catch((e) => { console.error("[fixflow] 对话错误:", e?.message || e); broadcast({ type: "error", text: String(e) }); });
       } else if (url.pathname === "/api/confirm" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { id, ok } = JSON.parse(body || "{}");
         const resolve = waiters.get(id);
         if (resolve) { waiters.delete(id); resolve(Boolean(ok)); }
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/abort" && req.method === "POST") {
         session.abort();
         broadcast({ type: "aborted" });
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/term/open" && req.method === "POST") {
         ensureShell();
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ history: termBuffer }));
+        sendJson(res, { history: termBuffer });
       } else if (url.pathname === "/api/term/input" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { data } = JSON.parse(body || "{}");
         const sh = ensureShell();
         try { sh.stdin.write(String(data ?? "")); } catch {}
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/term/close" && req.method === "POST") {
         termGen++;
         if (termShell) { try { termShell.kill(); } catch {} termShell = null; }
         termBuffer = "";
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/term/history" && req.method === "GET") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ records: await readHistoryFile(termHistoryPath) }));
+        sendJson(res, { records: await readHistoryFile(termHistoryPath) });
       } else if (url.pathname === "/api/term/history" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { command } = JSON.parse(body || "{}");
         const cmd = String(command || "").trim();
         if (cmd) {
@@ -812,19 +728,17 @@ function formatUptime(sec) {
           list.push(rec);
           await writeHistoryFile(termHistoryPath, list);
         }
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end("{}");
+        sendJson(res, {});
       } else if (url.pathname === "/api/fs/list" && req.method === "GET") {
         const r = await listFs(url.searchParams.get("path") || "/");
-        res.writeHead(r.error ? 400 : 200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(r));
+        sendJson(res, r, r.error ? 400 : 200);
       } else if (url.pathname === "/api/fs/download" && req.method === "GET") {
         const abs = safeFsPath(url.searchParams.get("path"));
-        if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+        if (!abs) { sendJson(res, { error: "路径不合法" }, 400); }
         else {
           try {
             const st = await lstat(abs);
-            if (!st.isFile()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "目标不是文件" })); }
+            if (!st.isFile()) { sendJson(res, { error: "目标不是文件" }, 400); }
             else {
               res.writeHead(200, {
                 "Content-Type": "application/octet-stream",
@@ -833,28 +747,28 @@ function formatUptime(sec) {
               });
               createReadStream(abs).pipe(res);
             }
-          } catch { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "文件不存在" })); }
+          } catch { sendJson(res, { error: "文件不存在" }, 400); }
         }
       } else if (url.pathname === "/api/fs/read" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         const abs = safeFsPath(body.path);
-        if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+        if (!abs) { sendJson(res, { error: "路径不合法" }, 400); }
         else {
           try {
             const st = await lstat(abs);
-            if (!st.isFile()) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "目标不是文件" })); }
-            else if (st.size > 2 * 1024 * 1024) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "文件过大（>2MB）" })); }
-            else { res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ path: abs, content: await readFile(abs, "utf8") })); }
-          } catch { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "读取失败" })); }
+            if (!st.isFile()) { sendJson(res, { error: "目标不是文件" }, 400); }
+            else if (st.size > 2 * 1024 * 1024) { sendJson(res, { error: "文件过大（>2MB）" }, 400); }
+            else { sendJson(res, { path: abs, content: await readFile(abs, "utf8") }); }
+          } catch { sendJson(res, { error: "读取失败" }, 400); }
         }
       } else if (url.pathname === "/api/fs/write" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         if (await fsWriteGuard(body, res)) {
           const abs = safeFsPath(body.path);
-          if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+          if (!abs) { sendJson(res, { error: "路径不合法" }, 400); }
           else {
-            try { await writeFile(abs, String(body.content ?? ""), "utf8"); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
-            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `写入失败：${e.code === "EACCES" ? "无权限" : e.message}` })); }
+            try { await writeFile(abs, String(body.content ?? ""), "utf8"); sendJson(res, { ok: true }); }
+            catch (e) { sendJson(res, { error: `写入失败：${e.code === "EACCES" ? "无权限" : e.message}` }, 400); }
           }
         }
       } else if (url.pathname === "/api/fs/mkdir" && req.method === "POST") {
@@ -862,10 +776,10 @@ function formatUptime(sec) {
         if (await fsWriteGuard(body, res)) {
           const base = safeFsPath(body.path);
           const name = basename(String(body.name || "")).replace(/[\\/]/g, "");
-          if (!base || !name) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "参数不合法" })); }
+          if (!base || !name) { sendJson(res, { error: "参数不合法" }, 400); }
           else {
-            try { await mkdir(join(base, name)); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
-            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `创建失败：${e.code === "EEXIST" ? "已存在" : e.message}` })); }
+            try { await mkdir(join(base, name)); sendJson(res, { ok: true }); }
+            catch (e) { sendJson(res, { error: `创建失败：${e.code === "EEXIST" ? "已存在" : e.message}` }, 400); }
           }
         }
       } else if (url.pathname === "/api/fs/rename" && req.method === "POST") {
@@ -873,26 +787,26 @@ function formatUptime(sec) {
         if (await fsWriteGuard(body, res)) {
           const abs = safeFsPath(body.path);
           const newName = basename(String(body.newName || "")).replace(/[\\/]/g, "");
-          if (!abs || !newName) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "参数不合法" })); }
+          if (!abs || !newName) { sendJson(res, { error: "参数不合法" }, 400); }
           else {
-            try { await fsRename(abs, join(dirname(abs), newName)); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
-            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `重命名失败：${e.message}` })); }
+            try { await fsRename(abs, join(dirname(abs), newName)); sendJson(res, { ok: true }); }
+            catch (e) { sendJson(res, { error: `重命名失败：${e.message}` }, 400); }
           }
         }
       } else if (url.pathname === "/api/fs/delete" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         if (await fsWriteGuard(body, res)) {
           const abs = safeFsPath(body.path);
-          if (!abs) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "路径不合法" })); }
+          if (!abs) { sendJson(res, { error: "路径不合法" }, 400); }
           else {
-            try { await rm(abs, { recursive: true }); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
-            catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `删除失败：${e.message}` })); }
+            try { await rm(abs, { recursive: true }); sendJson(res, { ok: true }); }
+            catch (e) { sendJson(res, { error: `删除失败：${e.message}` }, 400); }
           }
         }
       } else if (url.pathname === "/api/fs/upload" && req.method === "POST") {
         const ct = req.headers["content-type"] || "";
         const m = ct.match(/boundary=([^;]+)/);
-        if (!m) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "上传格式错误" })); }
+        if (!m) { sendJson(res, { error: "上传格式错误" }, 400); }
         else {
           const boundary = m[1].trim().replace(/^"|"$/g, "");
           const chunks = [];
@@ -902,37 +816,34 @@ function formatUptime(sec) {
             if (total > 60 * 1024 * 1024) { tooBig = true; break; }
             chunks.push(chunk);
           }
-          if (tooBig) { res.writeHead(413, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "上传文件过大（>50MB）" })); }
+          if (tooBig) { sendJson(res, { error: "上传文件过大（>50MB）" }, 413); }
           else {
             const parts = parseMultipart(Buffer.concat(chunks), boundary);
             const pathField = parts.find((p) => p.type === "field" && p.name === "path");
             const passField = parts.find((p) => p.type === "field" && p.name === "password");
             const file = parts.find((p) => p.type === "file");
             const auth = await readAuth();
-            if (!auth || !verifyPassword(passField?.value || "", auth)) { res.writeHead(403, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "密码错误，操作未执行" })); }
+            if (!auth || !verifyPassword(passField?.value || "", auth)) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
             else {
               const base = safeFsPath(pathField?.value);
               const fname = file ? basename(file.filename || "").replace(/[\\/]/g, "") : "";
-              if (!base || !fname) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "缺少目录或文件" })); }
-              else if (file.data.length > 50 * 1024 * 1024) { res.writeHead(413, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: "上传文件过大（>50MB）" })); }
+              if (!base || !fname) { sendJson(res, { error: "缺少目录或文件" }, 400); }
+              else if (file.data.length > 50 * 1024 * 1024) { sendJson(res, { error: "上传文件过大（>50MB）" }, 413); }
               else {
-                try { await writeFile(join(base, fname), file.data); res.writeHead(200, { "Content-Type": "application/json" }); res.end(JSON.stringify({ ok: true })); }
-                catch (e) { res.writeHead(400, { "Content-Type": "application/json" }); res.end(JSON.stringify({ error: `上传失败：${e.code === "EACCES" ? "无权限" : e.message}` })); }
+                try { await writeFile(join(base, fname), file.data); sendJson(res, { ok: true }); }
+                catch (e) { sendJson(res, { error: `上传失败：${e.code === "EACCES" ? "无权限" : e.message}` }, 400); }
               }
             }
           }
         }
       } else if (url.pathname === "/api/process" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { action, pid, service, password } = JSON.parse(body || "{}");
         const auth = await readAuth();
         if (!auth || !verifyPassword(password || "", auth)) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else if (!Number.isInteger(pid) || pid <= 0) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "无效的 PID" }));
+          sendJson(res, { error: "无效的 PID" }, 400);
         } else {
           const cmd = action === "restart" && service
             ? `systemctl restart ${service}`
@@ -940,80 +851,62 @@ function formatUptime(sec) {
               ? `kill ${pid}`
               : "";
           if (!cmd) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ error: "不支持的操作或缺少服务名" }));
+            sendJson(res, { error: "不支持的操作或缺少服务名" }, 400);
           } else {
             const guardErr = action === "kill" ? await procGuard(pid) : null;
             if (guardErr) {
-              res.writeHead(403, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ error: guardErr }));
+              sendJson(res, { error: guardErr }, 403);
             } else {
               const r = await execCmd(cmd, { timeout: 15000 });
-              res.writeHead(200, { "Content-Type": "application/json" });
-              res.end(JSON.stringify({ ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr }));
+              sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
             }
           }
         }
       } else if (url.pathname === "/api/firewall/close" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { port, proto = "tcp", mode, password } = JSON.parse(body || "{}");
         const auth = await readAuth();
         if (!auth || !verifyPassword(password || "", auth)) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else if (!Number.isInteger(port) || port < 1 || port > 65535) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "无效的端口" }));
+          sendJson(res, { error: "无效的端口" }, 400);
         } else if (!["tcp", "udp"].includes(proto)) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "不支持的协议" }));
+          sendJson(res, { error: "不支持的协议" }, 400);
         } else if (!["deny", "delete"].includes(mode)) {
-          res.writeHead(400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "不支持的关闭模式" }));
+          sendJson(res, { error: "不支持的关闭模式" }, 400);
         } else {
           const cmd = mode === "deny" ? `ufw deny ${port}/${proto}` : `ufw delete allow ${port}/${proto}`;
           const r = await execCmd(cmd, { timeout: 15000 });
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr }));
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
         }
       } else if (url.pathname === "/api/nginx/confs" && req.method === "GET") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(await listNginxConfs()));
+        sendJson(res, await listNginxConfs());
       } else if (url.pathname === "/api/nginx/conf" && req.method === "GET") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(await readNginxConf(url.searchParams.get("path"))));
+        sendJson(res, await readNginxConf(url.searchParams.get("path")));
       } else if (url.pathname === "/api/nginx/conf" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { path, content, password } = JSON.parse(body || "{}");
         const auth = await readAuth();
         if (!auth || !verifyPassword(password || "", auth)) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else {
           const r = await writeNginxConf(path, content ?? "");
-          res.writeHead(r.ok ? 200 : 400, { "Content-Type": "application/json" });
-          res.end(JSON.stringify(r));
+          sendJson(res, r, r.ok ? 200 : 400);
         }
       } else if (url.pathname === "/api/nginx/reload" && req.method === "POST") {
-        let body = "";
-        for await (const chunk of req) body += chunk;
+        const body = await readBody(req);
         const { action, password } = JSON.parse(body || "{}");
         const auth = await readAuth();
         if (!auth || !verifyPassword(password || "", auth)) {
-          res.writeHead(403, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ error: "密码错误，操作未执行" }));
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else {
           const cmds = { start: "systemctl start nginx", stop: "systemctl stop nginx", restart: "systemctl restart nginx", reload: "systemctl reload nginx" };
           const cmd = cmds[action] || cmds.reload;
           const r = await execCmd(cmd, { timeout: 15000 });
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ ok: r.exitCode === 0, output: (r.stdout || r.stderr || "").trim() }));
+          sendJson(res, { ok: r.exitCode === 0, output: (r.stdout || r.stderr || "").trim() });
         }
       } else if (url.pathname === "/api/restart" && req.method === "POST") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: true }));
+        sendJson(res, { ok: true });
         setTimeout(() => {
           const r = (config.restart || restartService)();
           console.log(`重启服务（${r.method}），进程即将退出。`);
@@ -1032,6 +925,10 @@ function formatUptime(sec) {
         const js = await readFile(join(STATIC, "app.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
+      } else if (url.pathname === "/app.css") {
+        const css = await readFile(join(STATIC, "app.css"));
+        res.writeHead(200, { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(css);
       } else if (url.pathname === "/i18n.js") {
         const js = await readFile(join(STATIC, "i18n.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
@@ -1050,8 +947,7 @@ function formatUptime(sec) {
     } catch (e) {
       console.error("请求处理失败:", e);
       try {
-        if (!res.headersSent) res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: String(e) }));
+        if (!res.headersSent) sendJson(res, { error: String(e) }, 500);
       } catch {}
     }
   };

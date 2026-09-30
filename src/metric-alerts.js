@@ -4,6 +4,8 @@ import { hostname } from "node:os";
 import { parseDf, parseFree } from "./health.js";
 import { runCommand } from "./tools.js";
 import { dayKey } from "./usage.js";
+import { pad2, escapeHtml } from "./util.js";
+import { readJsonFile } from "./config.js";
 
 export const METRICS = {
   cpu: { name: "CPU使用率", unit: "%" },
@@ -38,7 +40,7 @@ export async function sampleMetrics({ monitor, run = runCommand } = {}) {
 
 export async function createMetricAlerts({ config, configPath, monitor, exec = runCommand, now = () => new Date(), onNotify = () => {}, aggregate = false } = {}) {
   const statePath = join(dirname(configPath), "metric-incidents.json");
-  const readCfg = async () => { try { return JSON.parse(await readFile(configPath, "utf8")); } catch { return {}; } };
+  const readCfg = () => readJsonFile(configPath);
   const writeCfg = async (patch) => { const e = await readCfg(); await writeFile(configPath, JSON.stringify({ ...e, ...patch }, null, 2)); };
   let state = { seq: 0, day: dayKey(now()), incidents: [] };
   try { state = { ...state, ...JSON.parse(await readFile(statePath, "utf8")) }; } catch {}
@@ -162,11 +164,9 @@ const ADVICE = {
   net: ["检查异常流量来源", "排查是否被攻击或流量突增", "确认带宽上限"],
   sessions: ["检查连接数突增来源", "排查连接泄漏或慢查询", "调整连接池/内核参数"],
 };
-const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const pad2 = (n) => String(n).padStart(2, "0");
 const fmtLocal = (t) => { const d = new Date(t); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`; };
 const durMin = (ms) => `${Math.max(1, Math.round(ms / 60000))} 分钟`;
-const row = (k, v) => (v ? `<tr><td style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;white-space:nowrap">${k}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(v)}</td></tr>` : "");
+const row = (k, v) => (v ? `<tr><td style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;white-space:nowrap">${k}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${escapeHtml(v)}</td></tr>` : "");
 
 export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUrl = "", support = "", now = () => new Date(), events, rootCause }) {
   if (kind === "aggregate") {
@@ -175,19 +175,19 @@ export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUr
     const earliest = Math.min(...evs.map((e) => e.incident.startedAt));
     const maxLevel = Math.min(...evs.map((e) => e.incident.level || e.rule.level || 3));
     const subject = `[聚合告警] ${host} 发生${n}条告警 - ${fmtLocal(earliest)}`;
-    const rows = evs.map((e) => `<tr><td style="border:1px solid #e5e7eb;padding:5px 9px">P${e.incident.level || e.rule.level}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(metricLabel(e.rule.metric))}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(e.value)}${esc(METRICS[e.rule.metric]?.unit || "")}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${esc(e.rule.name)}</td></tr>`).join("");
+    const rows = evs.map((e) => `<tr><td style="border:1px solid #e5e7eb;padding:5px 9px">P${e.incident.level || e.rule.level}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${escapeHtml(metricLabel(e.rule.metric))}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${escapeHtml(e.value)}${escapeHtml(METRICS[e.rule.metric]?.unit || "")}</td><td style="border:1px solid #e5e7eb;padding:5px 9px">${escapeHtml(e.rule.name)}</td></tr>`).join("");
     const svc = [...new Set(evs.map((e) => e.rule.service).filter(Boolean))].join(", ") || "—";
     const html = `<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;font-size:14px;line-height:1.7;max-width:760px">
       <div style="border-left:4px solid #dc2626;padding:8px 12px;background:#f9fafb;margin-bottom:12px">
         <div style="font-weight:700;color:#dc2626">聚合告警 · 最高 P${maxLevel} ${LEVEL_NAME[maxLevel]} · 共 ${n} 条</div>
-        <div style="color:#6b7280;font-size:12px">主机 ${esc(host)} · 涉及服务 ${esc(svc)}</div>
+        <div style="color:#6b7280;font-size:12px">主机 ${escapeHtml(host)} · 涉及服务 ${escapeHtml(svc)}</div>
       </div>
       <h3 style="font-size:14px;margin:14px 0 6px">告警列表</h3>
       <table style="border-collapse:collapse;font-size:13px;width:100%"><thead><tr><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">级别</th><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">指标</th><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">当前值</th><th style="border:1px solid #e5e7eb;background:#f9fafb;padding:5px 9px;text-align:left">规则</th></tr></thead><tbody>${rows}</tbody></table>
       <h3 style="font-size:14px;margin:14px 0 6px">根因推测</h3>
-      <p style="margin:8px 0">${esc(rootCause || "（AI 分析不可用）")}</p>
+      <p style="margin:8px 0">${escapeHtml(rootCause || "（AI 分析不可用）")}</p>
       <h3 style="font-size:14px;margin:14px 0 6px">处理优先级建议</h3>
-      <ol style="margin:6px 0;padding-left:22px">${[...evs].sort((a, b) => (a.incident.level || 9) - (b.incident.level || 9)).map((e) => `<li style="margin:3px 0">优先处理 P${e.incident.level || e.rule.level} ${esc(metricLabel(e.rule.metric))}（${esc(e.rule.name)}）</li>`).join("")}</ol>
+      <ol style="margin:6px 0;padding-left:22px">${[...evs].sort((a, b) => (a.incident.level || 9) - (b.incident.level || 9)).map((e) => `<li style="margin:3px 0">优先处理 P${e.incident.level || e.rule.level} ${escapeHtml(metricLabel(e.rule.metric))}（${escapeHtml(e.rule.name)}）</li>`).join("")}</ol>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0">
       <div style="color:#9ca3af;font-size:12px">本邮件由智能运维助手自动发送，请勿回复。</div>
     </div>`;
@@ -206,13 +206,13 @@ export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUr
   else subject = `[升级-P${lvl}] ${host} ${metric}告警未处理 - 已持续${durMin(nowDate.getTime() - incident.startedAt)}`;
 
   const lvlColor = { 1: "#dc2626", 2: "#ea580c", 3: "#d97706", 4: "#2563eb", 5: "#6b7280" }[lvl] || "#6b7280";
-  const advice = (ADVICE[rule.metric] || []).map((a) => `<li style="margin:3px 0">${esc(a)}</li>`).join("");
+  const advice = (ADVICE[rule.metric] || []).map((a) => `<li style="margin:3px 0">${escapeHtml(a)}</li>`).join("");
   const links = [
-    rule.runbookUrl ? `<a href="${esc(rule.runbookUrl)}" style="color:#2563eb">Runbook</a>` : "",
-    rule.dashboardUrl ? `<a href="${esc(rule.dashboardUrl)}" style="color:#2563eb">监控面板</a>` : "",
-    rule.logUrl ? `<a href="${esc(rule.logUrl)}" style="color:#2563eb">日志查询</a>` : "",
+    rule.runbookUrl ? `<a href="${escapeHtml(rule.runbookUrl)}" style="color:#2563eb">Runbook</a>` : "",
+    rule.dashboardUrl ? `<a href="${escapeHtml(rule.dashboardUrl)}" style="color:#2563eb">监控面板</a>` : "",
+    rule.logUrl ? `<a href="${escapeHtml(rule.logUrl)}" style="color:#2563eb">日志查询</a>` : "",
   ].filter(Boolean).join(" · ");
-  const btn = (t, url) => (url ? `<a href="${esc(url)}" style="display:inline-block;margin:0 8px 8px 0;padding:8px 16px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">${t}</a>` : "");
+  const btn = (t, url) => (url ? `<a href="${escapeHtml(url)}" style="display:inline-block;margin:0 8px 8px 0;padding:8px 16px;background:#2563eb;color:#fff;border-radius:6px;text-decoration:none;font-size:13px">${t}</a>` : "");
   const buttons = panelBaseUrl ? btn("查看详情", panelBaseUrl) + btn("认领告警", panelBaseUrl) + btn("静默告警", panelBaseUrl) + btn("立即处理", rule.runbookUrl) : btn("立即处理", rule.runbookUrl);
 
   const fields = [
@@ -235,9 +235,9 @@ export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUr
   const html = `<div style="font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#1f2937;font-size:14px;line-height:1.7;max-width:760px">
     <div style="border-left:4px solid ${lvlColor};padding:8px 12px;background:#f9fafb;margin-bottom:12px">
       <div style="font-weight:700;color:${lvlColor}">P${lvl} ${lvlName} · 处理时效 ${LEVEL_TIME[lvl]}</div>
-      <div style="color:#6b7280;font-size:12px">主机 ${esc(host)} · 指标 ${esc(metric)} · 事件 ${esc(incident.id)}</div>
+      <div style="color:#6b7280;font-size:12px">主机 ${escapeHtml(host)} · 指标 ${escapeHtml(metric)} · 事件 ${escapeHtml(incident.id)}</div>
     </div>
-    <p style="margin:8px 0">${esc(metric)}${kind === "recovery" ? "已恢复" : "持续超阈值"}，当前值 <b>${esc(val)}</b>。</p>
+    <p style="margin:8px 0">${escapeHtml(metric)}${kind === "recovery" ? "已恢复" : "持续超阈值"}，当前值 <b>${escapeHtml(val)}</b>。</p>
     <h3 style="font-size:14px;margin:14px 0 6px">诊断信息</h3>
     <table style="border-collapse:collapse;font-size:13px;width:100%">${fields}${recoveryExtra}${escalationExtra}</table>
     <h3 style="font-size:14px;margin:14px 0 6px">处理建议</h3>
@@ -245,7 +245,7 @@ export function buildAlertEmail(kind, { rule, incident, value, host, panelBaseUr
     ${links ? `<p style="margin:8px 0">相关链接：${links}</p>` : ""}
     <div style="margin:14px 0">${buttons}</div>
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0">
-    <div style="color:#9ca3af;font-size:12px">本邮件由智能运维助手自动发送，请勿回复。${support ? ` 支持：${esc(support)}` : ""}</div>
+    <div style="color:#9ca3af;font-size:12px">本邮件由智能运维助手自动发送，请勿回复。${support ? ` 支持：${escapeHtml(support)}` : ""}</div>
   </div>`;
   return { subject, html };
 }

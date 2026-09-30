@@ -1,10 +1,10 @@
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+import { escapeHtml } from "./util.js";
 const CODE_STYLE = "background:#f3f4f6;padding:1px 5px;border-radius:4px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px";
 const PRE_STYLE = "background:#f3f4f6;padding:10px 12px;border-radius:6px;overflow:auto;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;white-space:pre-wrap";
 
 function inline(text) {
   const codes = [];
-  let s = esc(text).replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+  let s = escapeHtml(text).replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, "$1<em>$2</em>");
   s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => `<a href="${/^(https?:|mailto:)/i.test(u) ? u : "#"}" style="color:#2563eb">${t}</a>`);
@@ -26,7 +26,7 @@ export function mdToHtml(md) {
       const buf = [];
       while (i < lines.length && !/^```/.test(lines[i])) { buf.push(lines[i]); i++; }
       i++;
-      out.push(`<pre style="${PRE_STYLE}"><code>${esc(buf.join("\n"))}</code></pre>`);
+      out.push(`<pre style="${PRE_STYLE}"><code>${escapeHtml(buf.join("\n"))}</code></pre>`);
       continue;
     }
     if (/^\s*\|.*\|\s*$/.test(line) && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i + 1]) && lines[i + 1].includes("-")) {

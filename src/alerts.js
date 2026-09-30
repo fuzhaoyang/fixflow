@@ -5,10 +5,12 @@ import { sendEmail } from "./ssl.js";
 import { runCommand } from "./tools.js";
 import { formatDateTime } from "./metrics.js";
 import { dayKey } from "./usage.js";
+import { pad2 } from "./util.js";
+import { readJsonFile } from "./config.js";
 
 export async function createAlertsManager({ config, configPath, exec = runCommand, sessionFactory, now = () => new Date() } = {}) {
   const historyPath = join(dirname(configPath), "alert-history.json");
-  const readCfg = async () => { try { return JSON.parse(await readFile(configPath, "utf8")); } catch { return {}; } };
+  const readCfg = () => readJsonFile(configPath);
   const writeCfg = async (patch) => {
     const existing = await readCfg();
     await writeFile(configPath, JSON.stringify({ ...existing, ...patch }, null, 2));
@@ -73,7 +75,7 @@ export async function createAlertsManager({ config, configPath, exec = runComman
   const tick = async () => {
     const alerts = await list();
     const n = now();
-    const hm = `${String(n.getHours()).padStart(2, "0")}:${String(n.getMinutes()).padStart(2, "0")}`;
+    const hm = `${pad2(n.getHours())}:${pad2(n.getMinutes())}`;
     const key = dayKey(n);
     for (const a of alerts) {
       if (!a.enabled || hm < (a.time || "")) continue;

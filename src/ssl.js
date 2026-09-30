@@ -5,6 +5,7 @@ import { join } from "node:path";
 import net from "node:net";
 import tls from "node:tls";
 import { mdToHtml } from "./markdown.js";
+import { pad2 } from "./util.js";
 
 export function shellQuote(s) {
   return `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -238,8 +239,6 @@ export function sendSmtp(smtp) {
 }
 
 const rfc2047 = (s) => (/^[\x00-\x7f]+$/.test(String(s)) ? String(s) : `=?UTF-8?B?${Buffer.from(String(s)).toString("base64")}?=`);
-
-const pad2 = (n) => String(n).padStart(2, "0");
 
 function wrapHtml(inner, date = new Date()) {
   const t = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;

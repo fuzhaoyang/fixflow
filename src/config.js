@@ -1,5 +1,15 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { join, dirname } from "node:path";
+
+export async function readJsonFile(path) {
+  try { return JSON.parse(await readFile(path, "utf8")); } catch { return {}; }
+}
+
+export async function writeJsonFile(path, obj) {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(obj, null, 2));
+}
 
 export function normalizeSslSites(list) {
   if (!Array.isArray(list)) return [];
@@ -20,8 +30,6 @@ export function normalizeSslSites(list) {
     };
   });
 }
-
-export const DEFAULT_SERVICE_KEYWORDS = ["nginx", "docker", "pm2", "python", "java", "node"];
 
 export function loadConfig({ filePath = join(process.env.HOME || ".", ".config", "fixflow", "config.json") } = {}) {
   let file = {};

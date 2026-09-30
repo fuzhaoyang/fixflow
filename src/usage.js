@@ -1,8 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { pad2 } from "./util.js";
 
 export function dayKey(d = new Date()) {
-  const p = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
 function prune(data) {

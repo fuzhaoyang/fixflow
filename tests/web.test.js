@@ -297,7 +297,8 @@ test("自绘图表：页面不再加载 echarts", async () => {
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const html = await (await fetch(`${base}/`)).text();
   assert.doesNotMatch(html, /echarts/);
-  assert.match(html, /conic-gradient/);
+  const css = await (await fetch(`${base}/app.css`)).text();
+  assert.match(css, /conic-gradient/);
   const app = await (await fetch(`${base}/app.js`)).text();
   assert.match(app, /drawLineChart/);
   assert.doesNotMatch(app, /echarts\.init/);
@@ -949,7 +950,8 @@ test("登录遮罩默认隐藏 + 启动遮罩兜底，双场景无闪烁", async
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const body = await (await fetch(`${base}/`)).text();
-  assert.match(body, /#auth-mask \{[^}]*display: none/);
+  const css = await (await fetch(`${base}/app.css`)).text();
+  assert.match(css, /#auth-mask \{[^}]*display: none/);
   assert.match(body, /id="boot-mask"/);
   w.close();
 });

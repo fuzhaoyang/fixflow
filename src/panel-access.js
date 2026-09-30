@@ -1,7 +1,8 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomBytes } from "node:crypto";
 import net from "node:net";
+import { readJsonFile } from "./config.js";
 
 function portFree(p) {
   return new Promise((resolve) => {
@@ -24,8 +25,7 @@ export async function ensurePanelAccess(config = {}, { configPath } = {}) {
   if (config.port == null || config.port === 2222) { config.port = await pickPort(); changed = true; }
   if (!config.panelPath) { config.panelPath = randomBytes(6).toString("hex"); changed = true; }
   if (changed && configPath) {
-    let cur = {};
-    try { cur = JSON.parse(await readFile(configPath, "utf8")); } catch {}
+    const cur = await readJsonFile(configPath);
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify({ ...cur, port: config.port, panelPath: config.panelPath }, null, 2));
   }

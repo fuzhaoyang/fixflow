@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { verifyApiKey } from "./setup.js";
+import { buildUrls } from "./panel-access.js";
 
 export const DEFAULT_PORT = 2222;
 
@@ -27,8 +28,8 @@ async function checkApi({ config, verify }) {
 
 async function checkPanel({ config, fetchFn }) {
   try {
-    const suffix = config.panelPath ? `/${config.panelPath}/` : "/";
-    const res = await fetchFn(`http://127.0.0.1:${config.port || DEFAULT_PORT}${suffix}`);
+    const url = buildUrls({ port: config.port || DEFAULT_PORT, panelPath: config.panelPath, lan: ["127.0.0.1"] })[0];
+    const res = await fetchFn(url);
     return { name: "面板服务", ok: res.ok, detail: `HTTP ${res.status}`, advice: res.ok ? "" : "面板未运行，执行 fixflow web 或启动 systemd 服务。" };
   } catch {
     return { name: "面板服务", ok: false, detail: "无法连接", advice: "面板未运行，执行 fixflow web 或启动 systemd 服务。" };
