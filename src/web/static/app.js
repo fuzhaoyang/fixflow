@@ -1965,6 +1965,22 @@ function setupAuth() {
   authCaptchaImg.addEventListener("click", refreshCaptcha);
 }
 
+// 鼠标视差：登录背景场景随指针轻微 3D 倾斜（reduced-motion 时禁用）
+const authScene = document.querySelector(".auth-scene");
+if (authScene && !matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  let px = 0, py = 0, raf = 0;
+  const applyParallax = () => {
+    raf = 0;
+    authScene.style.transform = `rotateX(${(-py * 3).toFixed(2)}deg) rotateY(${(px * 3).toFixed(2)}deg) translate3d(${(px * 12).toFixed(1)}px, ${(py * 12).toFixed(1)}px, 0)`;
+  };
+  authMask.addEventListener("mousemove", (e) => {
+    px = (e.clientX / innerWidth - 0.5) * 2;
+    py = (e.clientY / innerHeight - 0.5) * 2;
+    if (!raf) raf = requestAnimationFrame(applyParallax);
+  });
+  authMask.addEventListener("mouseleave", () => { px = py = 0; if (!raf) raf = requestAnimationFrame(applyParallax); });
+}
+
 // ---------- 设置 ----------
 const settingsMask = document.getElementById("settings-mask");
 const cfgBaseUrl = document.getElementById("cfg-base-url");

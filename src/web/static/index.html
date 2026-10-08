@@ -10,9 +10,10 @@
 <script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
 <div id="boot-mask"><div class="spinner-lg"></div></div>
 <div id="auth-mask">
-  <div class="auth-aurora" aria-hidden="true"></div>
-  <div class="auth-stars" aria-hidden="true"></div>
-  <svg class="auth-scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+  <div class="auth-bg3d" aria-hidden="true">
+  <div class="auth-aurora"></div>
+  <div class="auth-stars"></div>
+  <svg class="auth-scene" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice" focusable="false">
     <defs>
       <pattern id="authSlots" width="120" height="26" patternUnits="userSpaceOnUse">
         <rect class="rack-slot" x="10" y="6" width="100" height="14" rx="3"/>
@@ -34,6 +35,8 @@
         <rect class="rack-body" x="0" y="0" width="130" height="350" rx="12"/>
         <rect class="rack-face" x="0" y="0" width="130" height="350" rx="12" fill="url(#authSlots)"/>
         <rect class="rack-scan" style="--d:0s" x="6" y="-30" width="118" height="26" rx="6" fill="url(#authScan)"/>
+        <rect class="rack-load" style="--d:0s" x="14" y="248" width="102" height="4" rx="2"/>
+        <rect class="rack-load" style="--d:1.2s" x="14" y="262" width="102" height="4" rx="2"/>
         <circle class="rack-led" style="--d:0s" cx="118" cy="19" r="3"/>
         <circle class="rack-led" style="--d:.4s" cx="118" cy="71" r="3"/>
         <circle class="rack-led" style="--d:.9s" cx="118" cy="123" r="3"/>
@@ -45,6 +48,8 @@
         <rect class="rack-body" x="0" y="0" width="130" height="350" rx="12"/>
         <rect class="rack-face" x="0" y="0" width="130" height="350" rx="12" fill="url(#authSlots)"/>
         <rect class="rack-scan" style="--d:2.2s" x="6" y="-30" width="118" height="26" rx="6" fill="url(#authScan)"/>
+        <rect class="rack-load" style="--d:.6s" x="14" y="248" width="102" height="4" rx="2"/>
+        <rect class="rack-load" style="--d:1.8s" x="14" y="262" width="102" height="4" rx="2"/>
         <circle class="rack-led" style="--d:.6s" cx="118" cy="19" r="3"/>
         <circle class="rack-led" style="--d:1.1s" cx="118" cy="71" r="3"/>
         <circle class="rack-led" style="--d:.3s" cx="118" cy="123" r="3"/>
@@ -54,56 +59,95 @@
       </g>
     </g>
 
-    <!-- 中间：数据流 -->
+    <!-- 中间：数据流 + 输送光点（终点飞入 AI 大脑核心） -->
     <g class="auth-flows">
-      <path class="flow" pathLength="100" d="M 380 420 C 600 420 760 400 1000 410"/>
-      <path class="flow" style="--d:.8s" pathLength="100" d="M 380 480 C 620 480 760 430 1000 430"/>
-      <path class="flow" style="--d:1.6s" pathLength="100" d="M 380 540 C 640 540 780 470 1000 455"/>
+      <path class="flow" pathLength="100" d="M 380 420 C 700 420 1000 400 1180 400"/>
+      <path class="flow" style="--d:.8s" pathLength="100" d="M 380 480 C 720 480 1000 420 1180 410"/>
+      <path class="flow" style="--d:1.6s" pathLength="100" d="M 380 540 C 740 540 1000 440 1180 420"/>
+      <path class="flow" style="--d:2.6s" pathLength="100" d="M 380 585 C 700 590 980 540 1180 470"/>
+      <path class="flow-packet" pathLength="100" d="M 380 420 C 700 420 1000 400 1180 400"/>
+      <path class="flow-packet" style="--d:2.8s" pathLength="100" d="M 380 585 C 700 590 980 540 1180 470"/>
+      <path class="flow-packet" style="--d:1.1s" pathLength="100" d="M 380 480 C 720 480 1000 420 1180 410"/>
+      <path class="flow-packet" style="--d:2.2s" pathLength="100" d="M 380 540 C 740 540 1000 440 1180 420"/>
+      <text class="bin" style="--d:0s" x="430" y="412">011001</text>
+      <text class="bin" style="--d:1.2s" x="630" y="468">10110</text>
+      <text class="bin" style="--d:2.4s" x="830" y="522">0101</text>
+      <text class="bin" style="--d:2s" x="600" y="580">11010</text>
     </g>
 
-    <!-- 右侧：AI 大模型神经网络 -->
-    <g class="auth-nn">
-      <circle class="nn-core" cx="1160" cy="440" r="180" fill="url(#authCore)"/>
+    <!-- 右侧：人头轮廓（面朝左）+ 脑神经网络 -->
+    <g class="auth-head">
+      <circle class="nn-core" cx="1180" cy="400" r="140" fill="url(#authCore)"/>
+      <path class="head-outline" d="M 1190 258 C 1120 258 1060 300 1030 360 L 1022 382 C 1010 400 995 412 998 424 C 1002 436 1020 440 1030 446 C 1026 456 1034 462 1030 472 C 1046 500 1080 520 1100 540 C 1160 566 1230 560 1270 520 C 1330 460 1340 350 1270 300 C 1250 278 1220 258 1190 258 Z"/>
       <g class="brain">
-        <path class="brain-outline" d="M 1000 430 C 990 360 1040 320 1100 320 C 1120 290 1170 285 1200 315 C 1250 300 1310 330 1310 390 C 1345 410 1350 470 1320 510 C 1330 560 1290 600 1240 600 C 1230 630 1180 635 1150 610 C 1100 625 1040 600 1030 550 C 990 530 985 470 1000 430 Z"/>
-        <path class="brain-fold" d="M 1050 360 C 1085 385 1085 425 1055 455"/>
-        <path class="brain-fold" d="M 1120 335 C 1150 375 1150 435 1120 480"/>
-        <path class="brain-fold" d="M 1200 345 C 1230 385 1230 445 1200 485"/>
-        <path class="brain-fold" d="M 1260 380 C 1280 420 1280 460 1258 500"/>
+        <path class="brain-outline" d="M 1090 400 C 1080 350 1110 320 1150 320 C 1170 300 1210 300 1230 318 C 1275 320 1300 350 1295 390 C 1310 410 1305 450 1275 465 C 1265 495 1230 505 1205 492 C 1175 505 1135 498 1120 470 C 1090 465 1075 430 1090 400 Z"/>
+        <path class="brain-fold" d="M 1120 345 C 1140 370 1140 400 1122 420"/>
+        <path class="brain-fold" d="M 1175 330 C 1195 365 1195 415 1175 450"/>
+        <path class="brain-fold" d="M 1235 340 C 1255 370 1255 415 1237 445"/>
       </g>
       <g class="nn-edges">
-        <line class="nn-edge" x1="1010" y1="320" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="320" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="320" x2="1120" y2="515"/>
-        <line class="nn-edge" x1="1010" y1="390" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="390" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="390" x2="1120" y2="515"/>
-        <line class="nn-edge" x1="1010" y1="460" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="460" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="460" x2="1120" y2="515"/>
-        <line class="nn-edge" x1="1010" y1="530" x2="1120" y2="365"/><line class="nn-edge" x1="1010" y1="530" x2="1120" y2="440"/><line class="nn-edge" x1="1010" y1="530" x2="1120" y2="515"/>
-        <line class="nn-edge" x1="1120" y1="365" x2="1230" y2="400"/><line class="nn-edge" x1="1120" y1="365" x2="1230" y2="480"/>
-        <line class="nn-edge" x1="1120" y1="440" x2="1230" y2="400"/><line class="nn-edge" x1="1120" y1="440" x2="1230" y2="480"/>
-        <line class="nn-edge" x1="1120" y1="515" x2="1230" y2="400"/><line class="nn-edge" x1="1120" y1="515" x2="1230" y2="480"/>
+        <line class="nn-edge" x1="1100" y1="345" x2="1180" y2="330"/><line class="nn-edge" x1="1100" y1="345" x2="1180" y2="400"/><line class="nn-edge" x1="1100" y1="345" x2="1180" y2="470"/>
+        <line class="nn-edge" x1="1100" y1="400" x2="1180" y2="330"/><line class="nn-edge" x1="1100" y1="400" x2="1180" y2="400"/><line class="nn-edge" x1="1100" y1="400" x2="1180" y2="470"/>
+        <line class="nn-edge" x1="1100" y1="455" x2="1180" y2="330"/><line class="nn-edge" x1="1100" y1="455" x2="1180" y2="400"/><line class="nn-edge" x1="1100" y1="455" x2="1180" y2="470"/>
+        <line class="nn-edge" x1="1180" y1="330" x2="1260" y2="355"/><line class="nn-edge" x1="1180" y1="330" x2="1260" y2="405"/><line class="nn-edge" x1="1180" y1="330" x2="1260" y2="455"/>
+        <line class="nn-edge" x1="1180" y1="400" x2="1260" y2="355"/><line class="nn-edge" x1="1180" y1="400" x2="1260" y2="405"/><line class="nn-edge" x1="1180" y1="400" x2="1260" y2="455"/>
+        <line class="nn-edge" x1="1180" y1="470" x2="1260" y2="355"/><line class="nn-edge" x1="1180" y1="470" x2="1260" y2="405"/><line class="nn-edge" x1="1180" y1="470" x2="1260" y2="455"/>
       </g>
       <g class="nn-nodes">
-        <circle class="nn-node" style="--d:0s" cx="1010" cy="320" r="8"/>
-        <circle class="nn-node" style="--d:.5s" cx="1010" cy="390" r="8"/>
-        <circle class="nn-node" style="--d:1s" cx="1010" cy="460" r="8"/>
-        <circle class="nn-node" style="--d:1.5s" cx="1010" cy="530" r="8"/>
-        <circle class="nn-node" style="--d:.3s" cx="1120" cy="365" r="9"/>
-        <circle class="nn-node" style="--d:.8s" cx="1120" cy="440" r="9"/>
-        <circle class="nn-node" style="--d:1.3s" cx="1120" cy="515" r="9"/>
-        <circle class="nn-node" style="--d:.6s" cx="1230" cy="400" r="8"/>
-        <circle class="nn-node" style="--d:1.1s" cx="1230" cy="480" r="8"/>
+        <circle class="nn-node" style="--d:0s" cx="1100" cy="345" r="7"/>
+        <circle class="nn-node" style="--d:.5s" cx="1100" cy="400" r="7"/>
+        <circle class="nn-node" style="--d:1s" cx="1100" cy="455" r="7"/>
+        <circle class="nn-node" style="--d:.3s" cx="1180" cy="330" r="8"/>
+        <circle class="nn-node" style="--d:.8s" cx="1180" cy="400" r="9"/>
+        <circle class="nn-node" style="--d:1.3s" cx="1180" cy="470" r="8"/>
+        <circle class="nn-node" style="--d:.6s" cx="1260" cy="355" r="7"/>
+        <circle class="nn-node" style="--d:1.1s" cx="1260" cy="405" r="7"/>
+        <circle class="nn-node" style="--d:1.6s" cx="1260" cy="455" r="7"/>
+      </g>
+      <!-- 神经信号：沿连线跑动的光点（双向） -->
+      <g class="nn-signals">
+        <path class="nn-signal" pathLength="100" d="M 1100 345 L 1180 400"/>
+        <path class="nn-signal" style="--d:.9s" pathLength="100" d="M 1100 455 L 1180 330"/>
+        <path class="nn-signal" style="--d:1.8s" pathLength="100" d="M 1180 400 L 1260 455"/>
+        <path class="nn-signal" style="--d:2.7s" pathLength="100" d="M 1260 355 L 1180 400"/>
+        <path class="nn-signal" style="--d:1.5s" pathLength="100" d="M 1180 470 L 1100 345"/>
+        <path class="nn-signal" style="--d:.9s" pathLength="100" d="M 1100 455 L 1260 355"/>
+      </g>
+      <!-- 大脑核心：环绕轨道粒子 -->
+      <g class="auth-orbit">
+        <ellipse class="orbit-ring" cx="1180" cy="400" rx="200" ry="64"/>
+        <ellipse class="orbit-ring orbit-ring-b" cx="1180" cy="400" rx="200" ry="64"/>
+      </g>
+      <!-- 数据流落点：核心外圈级联脉冲 -->
+      <g class="auth-sync">
+        <circle class="sync-ring" style="--d:0s" cx="1180" cy="400" r="26"/>
+        <circle class="sync-ring" style="--d:1.1s" cx="1180" cy="400" r="26"/>
+        <circle class="sync-ring" style="--d:2.2s" cx="1180" cy="400" r="26"/>
       </g>
     </g>
 
-    <!-- 下方：手指轻触（人机交互） -->
-    <g class="auth-ripples">
-      <circle class="auth-ripple" cx="1120" cy="624" r="10"/>
-      <circle class="auth-ripple" style="--d:1.4s" cx="1120" cy="624" r="10"/>
-    </g>
-    <g class="auth-finger">
-      <path class="finger" d="M 1076 940 L 1072 730 C 1068 668 1090 628 1120 626 C 1150 628 1172 668 1168 730 L 1164 940 Z"/>
-      <path class="finger-nail" d="M 1098 648 C 1106 638 1134 638 1142 648"/>
-      <circle class="finger-tip" cx="1120" cy="624" r="6"/>
+    <!-- 下方：拳头 + 食指指向人头（人机交互） -->
+    <g class="auth-fist">
+      <path class="beam" d="M 1118 682 L 1150 558"/>
+      <path class="beam-packet" pathLength="100" d="M 1118 682 L 1150 558"/>
+      <g class="auth-ripples">
+        <circle class="auth-ripple" cx="1118" cy="690" r="10"/>
+        <circle class="auth-ripple" style="--d:1.4s" cx="1118" cy="690" r="10"/>
+      </g>
+      <g class="auth-finger">
+        <path class="finger" d="M 1105 700 C 1105 684 1132 684 1132 700 L 1132 802 C 1132 814 1105 814 1105 802 Z"/>
+        <path class="finger-nail" d="M 1110 706 C 1114 700 1124 700 1128 706"/>
+        <circle class="finger-tip" cx="1118" cy="690" r="6"/>
+      </g>
+      <path class="fist" d="M 1088 792 C 1072 804 1068 852 1084 870 C 1102 886 1200 886 1218 870 C 1234 852 1230 804 1214 792 C 1200 782 1102 782 1088 792 Z"/>
+      <path class="fist-knuckle" d="M 1142 786 C 1146 776 1158 776 1162 786"/>
+      <path class="fist-knuckle" d="M 1168 784 C 1172 774 1184 774 1188 784"/>
+      <path class="fist-knuckle" d="M 1194 786 C 1198 776 1210 776 1214 786"/>
+      <path class="fist-thumb" d="M 1088 800 C 1074 812 1076 842 1092 852"/>
     </g>
   </svg>
+  <div class="auth-sweep"></div>
+  </div>
   <div class="auth-brand"><span class="brand-logo"><span class="ai-logo">AI</span></span><span data-i18n="brand.name">Fixflow 运维管家</span></div>
   <div class="auth-top">
     <button class="lang-btn" id="auth-lang-btn" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button>

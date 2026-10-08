@@ -522,6 +522,12 @@
       position: fixed; inset: 0; z-index: 400; display: none; align-items: center; justify-content: center; padding: 20px; overflow: hidden;
       background: var(--bg);
     }
+    .auth-bg3d { position: absolute; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+      perspective: 1100px;
+      transform-style: preserve-3d;
+      --tilt-x: 2.5deg; --tilt-y: 2deg;
+      animation: auth-stage 14s linear infinite;
+    }
     /* 分格底纹之下：缓慢流动的柔光 */
     #auth-mask::before {
       content: ''; position: absolute; inset: -30%; z-index: 0; pointer-events: none;
@@ -544,6 +550,10 @@
     @keyframes auth-glow-drift {
       0% { transform: translate(-4%, -3%) scale(1); opacity: .75; }
       100% { transform: translate(4%, 3%) scale(1.15); opacity: 1; }
+    }
+    @keyframes auth-stage {
+      0%, 100% { transform: rotateX(var(--tilt-x)) rotateY(calc(var(--tilt-y) * -1)); }
+      50% { transform: rotateX(calc(var(--tilt-x) * -1)) rotateY(var(--tilt-y)); }
     }
     @keyframes auth-grid-drift {
       from { background-position: 0 0, 0 0; }
@@ -593,7 +603,7 @@
       *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
     }
     /* 登录页背景场景：服务器机柜 + AI 神经网络 + 数据流（新增图层，叠加在现有柔光/网格之上） */
-    .auth-scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+    .auth-scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; transform: translateZ(0); }
     .auth-scene .rack-body { fill: color-mix(in srgb, var(--panel) 62%, transparent); stroke: color-mix(in srgb, var(--accent) 28%, transparent); stroke-width: 1.5; }
     .auth-scene .rack-slot { fill: color-mix(in srgb, var(--accent) 20%, transparent); }
     .auth-scene .rack-led { fill: var(--ok); opacity: .25; animation: auth-led 3.6s ease-in-out infinite; animation-delay: var(--d, 0s); }
@@ -607,7 +617,6 @@
     @keyframes auth-node { 0%, 100% { opacity: .3; transform: scale(.85); } 50% { opacity: .9; transform: scale(1.12); } }
     @keyframes auth-core { 0%, 100% { opacity: .5; transform: scale(.95); } 50% { opacity: .9; transform: scale(1.06); } }
     @keyframes auth-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -100; } }
-    html[data-theme="light"] .auth-scene { opacity: .5; }
     @media (max-width: 900px) { .auth-scene { display: none; } }
     /* 全屏科技氛围：极光 + 粒子星域 */
     .auth-aurora { position: absolute; inset: -30%; z-index: 0; pointer-events: none;
@@ -616,9 +625,10 @@
         radial-gradient(38% 30% at 24% 76%, color-mix(in srgb, #22d3ee 20%, transparent), transparent 72%),
         radial-gradient(50% 42% at 52% 52%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 75%);
       filter: blur(42px);
+      transform: translateZ(-200px);
       animation: auth-aurora 34s ease-in-out infinite alternate;
     }
-    .auth-stars { position: absolute; inset: -50%; z-index: 0; pointer-events: none; opacity: .55;
+    .auth-stars { position: absolute; inset: -50%; z-index: 0; pointer-events: none; opacity: .55; transform: translateZ(-120px);
       background-image:
         radial-gradient(1.6px 1.6px at 20% 30%, color-mix(in srgb, var(--text) 65%, transparent), transparent),
         radial-gradient(1.2px 1.2px at 70% 65%, color-mix(in srgb, var(--accent) 75%, transparent), transparent),
@@ -638,12 +648,53 @@
     .auth-scene .finger-nail { fill: none; stroke: color-mix(in srgb, var(--accent) 40%, transparent); stroke-width: 1.4; stroke-linecap: round; }
     .auth-scene .finger-tip { fill: var(--accent); opacity: .7; animation: auth-node 3.4s ease-in-out infinite; }
     .auth-scene .auth-ripple { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; animation: auth-ripple 2.8s ease-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .auth-fist { animation: auth-fist-float 5.5s ease-in-out infinite; }
     .auth-scene .auth-finger { animation: auth-finger 5s ease-in-out infinite; }
+    @keyframes auth-fist-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-14px) scale(1.02); } }
     .auth-scene #authScan .scan-a { stop-color: var(--accent); stop-opacity: 0; }
     .auth-scene #authScan .scan-b { stop-color: var(--accent); stop-opacity: .55; }
     .auth-scene #authScan .scan-c { stop-color: var(--accent); stop-opacity: 0; }
     @keyframes auth-scan { 0% { transform: translateY(0); opacity: 0; } 12% { opacity: .9; } 88% { opacity: .9; } 100% { transform: translateY(380px); opacity: 0; } }
     @keyframes auth-ripple { 0% { transform: scale(.35); opacity: .7; } 75%, 100% { transform: scale(3.4); opacity: 0; } }
     @keyframes auth-finger { 0%, 100% { transform: translateY(6px); } 50% { transform: translateY(-6px); } }
-    html[data-theme="light"] .auth-aurora { opacity: .55; }
-    html[data-theme="light"] .auth-stars { opacity: .3; }
+    /* 场景增强：机柜浮动 / 数据流输送光点 / 人头脑神经 / 拳头指向 */
+    .auth-scene .auth-racks { animation: auth-float 9s ease-in-out infinite; }
+    .auth-scene .flow-packet { fill: none; stroke: var(--accent); stroke-width: 4; stroke-linecap: round; stroke-dasharray: 1 99; opacity: .85; animation: auth-flow 3.6s linear infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .auth-head { transform-box: fill-box; transform-origin: center; animation: auth-head-float 8s ease-in-out infinite; }
+    .auth-scene .head-outline { fill: color-mix(in srgb, var(--accent) 5%, transparent); stroke: color-mix(in srgb, var(--accent) 36%, transparent); stroke-width: 1.6; animation: auth-head-glow 7s ease-in-out infinite; }
+    .auth-scene .nn-signal { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1 99; opacity: .8; animation: auth-flow 2.6s linear infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .beam { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 4 8; opacity: .2; animation: auth-beam 2.4s ease-in-out infinite; }
+    .auth-scene .beam-packet { fill: none; stroke: var(--accent); stroke-width: 3; stroke-linecap: round; stroke-dasharray: 1 99; opacity: .8; animation: auth-flow 2.2s linear infinite; }
+    .auth-scene .rack-load { fill: color-mix(in srgb, var(--ok) 50%, transparent); transform-box: fill-box; transform-origin: left center; animation: auth-load 3s ease-in-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .bin { fill: color-mix(in srgb, var(--accent) 70%, transparent); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; opacity: 0; animation: auth-bin 3.4s linear infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .sync-ring { fill: none; stroke: var(--accent); stroke-width: 1.5; opacity: 0; transform-box: fill-box; transform-origin: center; animation: auth-sync 3.3s ease-out infinite; animation-delay: var(--d, 0s); }
+    .auth-scene .fist { fill: color-mix(in srgb, var(--text) 10%, transparent); stroke: color-mix(in srgb, var(--accent) 32%, transparent); stroke-width: 1.5; }
+    .auth-scene .fist-knuckle, .auth-scene .fist-thumb { fill: none; stroke: color-mix(in srgb, var(--accent) 30%, transparent); stroke-width: 1.3; stroke-linecap: round; }
+    @keyframes auth-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+    @keyframes auth-head-float { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-8px) scale(1.01); } }
+    @keyframes auth-head-glow { 0%, 100% { stroke-opacity: .7; } 50% { stroke-opacity: 1; } }
+    @keyframes auth-beam { 0%, 100% { opacity: .12; } 50% { opacity: .7; } }
+    @keyframes auth-load { 0%, 100% { transform: scaleX(.15); opacity: .2; } 50% { transform: scaleX(1); opacity: .85; } }
+    @keyframes auth-bin { 0% { transform: translateX(0); opacity: 0; } 15% { opacity: .7; } 85% { opacity: .5; } 100% { transform: translateX(220px); opacity: 0; } }
+    @keyframes auth-sync { 0% { transform: scale(.4); opacity: 0; } 25% { opacity: .8; } 75%, 100% { transform: scale(2.4); opacity: 0; } }
+    /* 叙事增强：全屏扫描光带（前景层）/ 大脑核心环绕轨道 / 神经信号密度 */
+    .auth-sweep { position: absolute; left: 0; right: 0; top: 0; height: 22%; z-index: 2; pointer-events: none; opacity: 0; transform: translateZ(140px);
+      background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--accent) 26%, transparent) 50%, transparent);
+      filter: blur(2px);
+      --sweep-peak: .55;
+      animation: auth-sweep 7s ease-in-out infinite;
+    }
+    .auth-scene .auth-orbit { transform-box: fill-box; transform-origin: center; }
+    .auth-scene .orbit-ring { fill: none; stroke: color-mix(in srgb, var(--accent) 32%, transparent); stroke-width: 1.4; stroke-dasharray: 3 22; stroke-linecap: round; transform-box: fill-box; transform-origin: center; animation: auth-orbit 16s linear infinite; }
+    .auth-scene .orbit-ring-b { animation-direction: reverse; animation-duration: 11s; opacity: .5; }
+    @keyframes auth-orbit { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @keyframes auth-sweep { 0%, 14% { transform: translateZ(140px) translateY(-90%); opacity: 0; } 25% { opacity: var(--sweep-peak); } 55% { transform: translateZ(140px) translateY(520%); opacity: calc(var(--sweep-peak) * .5); } 68%, 100% { transform: translateZ(140px) translateY(520%); opacity: 0; } }
+    html[data-theme="light"] .auth-sweep { --sweep-peak: .3; }
+    /* 浅色皮肤：3D 视差适配（减小倾斜幅度、淡化光效与场景线框） */
+    html[data-theme="light"] .auth-bg3d { --tilt-x: 1.2deg; --tilt-y: 1deg; }
+    html[data-theme="light"] .auth-aurora { opacity: .35; }
+    html[data-theme="light"] .auth-stars { opacity: .25; }
+    html[data-theme="light"] .auth-scene { opacity: .55; }
+    html[data-theme="light"] .auth-scene .orbit-ring { stroke: color-mix(in srgb, var(--accent) 22%, transparent); }
+    html[data-theme="light"] .auth-scene .nn-node, html[data-theme="light"] .auth-scene .nn-signal,
+    html[data-theme="light"] .auth-scene .flow-packet { opacity: .5; }
