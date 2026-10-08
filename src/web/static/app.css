@@ -362,7 +362,18 @@
     .logs-item .dot.err { background: var(--bad); }
     .logs-item .grp { font-size: 10px; color: var(--muted); }
     .logs-item .tail { margin-left: auto; font-size: 10px; color: var(--muted); flex-shrink: 0; }
-    .logs-main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .logs-main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; position: relative; }
+    .ai-analyze-btn {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      display: flex; align-items: center; gap: 5px; z-index: 2;
+      padding: 8px 14px; border-radius: 999px; cursor: pointer;
+      border: 1px solid var(--border); font-size: 12px; font-weight: 600;
+      background: color-mix(in srgb, var(--accent) 12%, var(--panel));
+      color: var(--accent); box-shadow: 0 2px 10px rgba(0, 0, 0, .18);
+      transition: background .18s, transform .18s;
+    }
+    .ai-analyze-btn:hover { background: color-mix(in srgb, var(--accent) 22%, var(--panel)); transform: translateY(-50%) scale(1.03); }
+    .ai-analyze-btn .ic { width: 14px; height: 14px; }
     .logs-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
     .logs-target { font-size: 13px; font-weight: 600; color: var(--text); min-width: 120px; }
     .logs-toolbar input[type="text"] { flex: 1; min-width: 120px; }

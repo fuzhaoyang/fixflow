@@ -156,6 +156,7 @@ const logsList = document.getElementById("logs-list");
 const logsFilter = document.getElementById("logs-filter");
 const logsSearch = document.getElementById("logs-search");
 const logsLines = document.getElementById("logs-lines");
+const aiAnalyze = document.getElementById("ai-analyze");
 
 async function loadLogSources() {
   try {
@@ -187,6 +188,7 @@ logsList.addEventListener("click", (e) => {
   logTarget = { source: isDocker ? "docker" : "systemd", target: it.dataset.name };
   document.getElementById("logs-target").textContent = (isDocker ? t("logs.dockerPrefix") : "") + it.dataset.name;
   logsBody.innerHTML = `<pre class="logs-empty">${t("logs.loading")}</pre>`;
+  aiAnalyze.style.display = "none";
   renderLogList();
   loadLog();
 });
@@ -200,6 +202,7 @@ async function loadLog() {
     });
     const data = await res.json();
     renderLog(data.content || (data.error || t("logs.empty")));
+    aiAnalyze.style.display = data.content ? "" : "none";
   } catch { logsBody.innerHTML = `<pre>${t("op.fail")}</pre>`; }
 }
 function renderLog(text) {
@@ -226,6 +229,14 @@ document.getElementById("logs-follow").onclick = (e) => {
 document.getElementById("logs-copy").onclick = async () => {
   const txt = logsBody.querySelector("pre")?.textContent || "";
   try { await navigator.clipboard.writeText(txt); showSaveMsg(t("logs.copied"), "ok"); } catch { showSaveMsg(t("logs.copyFail"), "warn"); }
+};
+aiAnalyze.onclick = () => {
+  const txt = logsBody.querySelector("pre")?.textContent || "";
+  if (!txt.trim()) return;
+  const prompt = t("logs.aiAnalyzePrompt");
+  input.value = prompt + txt.slice(0, 5000 - prompt.length);
+  location.hash = "/chat";
+  send();
 };
 document.getElementById("logs-export").onclick = () => {
   const txt = logsBody.querySelector("pre")?.textContent || "";
