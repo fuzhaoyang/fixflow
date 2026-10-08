@@ -1104,6 +1104,9 @@ document.getElementById("ssl-renew-confirm").onclick = async () => {
 const FIREWALL_MODES = { delete: "删除放行规则", deny: "添加拒绝规则" };
 const FW_PAGE_SIZE = 10;
 let fwRiskPage = 0;
+let fwRulesPage = 0;
+let fwOpsPage = 0;
+let fwOpsCache = null;
 let lastFwMetrics = null;
 const FW_SERVICE_NAMES = { 21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch", 2375: "Docker API", 2376: "Docker TLS", 8888: "管理面板", 9090: "监控面板", 9000: "管理面板", 8080: "HTTP 备用" };
 
@@ -1132,44 +1135,43 @@ function renderFirewall(m) {
   const stateLabel = backend === "firewalld" ? t("fw.bkFirewalld") : backend === "ufw" ? t("fw.bkUfw") : t("fw.bkIptables");
   const conns = m.connections || {};
   const policy = m.policy || "";
-
-  const ctlBtn = canClose
-    ? `<button class="btn small" data-fw-control data-action="disable" style="margin-left:8px">${t("fw.disableBtn")}</button>
-       <button class="btn small" data-fw-control data-action="enable" style="margin-left:8px">${t("fw.enableBtn")}</button>`
+  const pager = (page, total, kind) => total > 1
+    ? `<div class="fw-pager">
+        <button class="btn small" data-fw-page="${kind}" data-fw-dir="prev"${page === 0 ? " disabled" : ""}>${t("fw.prev")}</button>
+        <span class="fw-pageinfo">${page + 1} / ${total}</span>
+        <button class="btn small" data-fw-page="${kind}" data-fw-dir="next"${page >= total - 1 ? " disabled" : ""}>${t("fw.next")}</button>
+      </div>`
     : "";
   const summary = `<div class="fw-summary">
     <div class="fw-stat"><span class="k">${t("fw.state")}</span><span class="v">${stateLabel}</span></div>
     <div class="fw-stat"><span class="k">${t("fw.rules")}</span><span class="v">${rules.length}</span></div>
     <div class="fw-stat"><span class="k">${t("fw.open")}</span><span class="v ${dangerCount ? "bad" : ""}">${risky.length}${dangerCount ? t("fw.danger").replace("{n}", dangerCount) : ""}</span></div>
-  </div>${policy ? `<div class="fw-policy"><span>${t("fw.policy")}</span><b>${escapeHtml(policy)}</b></div>` : ""}${ctlBtn}`;
+  </div>${policy ? `<div class="fw-policy"><span>${t("fw.policy")}</span><b>${escapeHtml(policy)}</b></div>` : ""}`;
 
+  // 放行规则（分页）
+  const rulesTotal = Math.max(1, Math.ceil(rules.length / FW_PAGE_SIZE));
+  if (fwRulesPage >= rulesTotal) fwRulesPage = rulesTotal - 1;
+  const pageRules = rules.slice(fwRulesPage * FW_PAGE_SIZE, (fwRulesPage + 1) * FW_PAGE_SIZE);
   let rulesHtml;
   if (rules.length) {
     const riskySet = new Set(risky.map((p) => `${p.proto}:${p.port}`));
-    const rows = rules.map((r) => {
+    const rows = pageRules.map((r) => {
       const hit = String(r.port || "").split(",").some((p) => riskySet.has(`${r.proto}:${p.trim()}`));
       const style = hit ? " style='background:rgba(248,113,113,0.12)'" : "";
       const fromClass = /^Anywhere/.test(r.from) ? ' class="fw-from-open"' : ' class="fw-from-ip"';
       const conn = String(r.port || "").split(",").map((p) => conns[Number(p)] ?? 0).reduce((a, b) => a + b, 0);
       return `<tr${style}><td>${r.num ?? "—"}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml((r.proto || "").toUpperCase())}</td><td>${fwServiceTag(r.port)}<span>${escapeHtml(r.port)}</span></td><td><span${fromClass}>${escapeHtml(r.from)}</span></td><td>${conn}</td><td>${escapeHtml(r.comment || "—")}</td></tr>`;
     }).join("");
-    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("fw.num")}</th><th>${t("fw.action")}</th><th>${t("fw.proto")}</th><th>${t("fw.port")}</th><th>${t("fw.from")}</th><th>${t("fw.conn")}</th><th>${t("fw.comment")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("fw.num")}</th><th>${t("fw.action")}</th><th>${t("fw.proto")}</th><th>${t("fw.port")}</th><th>${t("fw.from")}</th><th>${t("fw.conn")}</th><th>${t("fw.comment")}</th></tr></thead><tbody>${rows}</tbody></table></div>${pager(fwRulesPage, rulesTotal, "rules")}`;
   } else {
     rulesHtml = `<pre>${escapeHtml(m.raw || t("fw.noRules"))}</pre>`;
   }
 
+  // 对全网开放的端口（分页）
   const disabled = canClose ? "" : " disabled";
   const closeNote = canClose ? "" : `<div class="hint" style="margin-bottom:8px">${t("fw.noClose").replace("{backend}", escapeHtml(backend))}</div>`;
-  const ctlBtns = canClose
-    ? `<button class="btn small" data-fw-control data-action="disable">${t("fw.disableBtn")}</button>
-       <button class="btn small" data-fw-control data-action="enable">${t("fw.enableBtn")}</button>`
-    : "";
-  const openBtn = `<button class="btn small" data-fw-open${disabled}>${t("fw.openBtn")}</button>`;
-  const batchBtn = canClose && risky.length ? `<button class="btn small" data-fw-batch-close${disabled}>${t("fw.batchCloseBtn")}</button>
-    <button class="btn small${dangerCount ? " danger" : ""}" data-fw-harden${disabled}>${t("fw.hardenBtn")}</button>` : "";
-  const toolbar = `<div class="fw-toolbar">${ctlBtns}${openBtn}${batchBtn}</div>`;
-  const totalPages = Math.max(1, Math.ceil(risky.length / FW_PAGE_SIZE));
-  if (fwRiskPage >= totalPages) fwRiskPage = totalPages - 1;
+  const riskyTotal = Math.max(1, Math.ceil(risky.length / FW_PAGE_SIZE));
+  if (fwRiskPage >= riskyTotal) fwRiskPage = riskyTotal - 1;
   const pageRisky = risky.slice(fwRiskPage * FW_PAGE_SIZE, (fwRiskPage + 1) * FW_PAGE_SIZE);
   const riskRows = pageRisky.map((p) => {
     const tag = p.dangerous ? `<span class="risk-badge risk-high">${t("fw.dangerTag")}</span>` : `<span class="risk-badge risk-low">${t("fw.normalTag")}</span>`;
@@ -1178,18 +1180,33 @@ function renderFirewall(m) {
       <select class="fw-mode"${disabled}>${opts}</select>
       <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>${t("fw.closeBtn")}</button></div>`;
   }).join("");
-  const pager = risky.length > FW_PAGE_SIZE
-    ? `<div class="fw-pager">
-        <button class="btn small" data-fw-page="prev"${fwRiskPage === 0 ? " disabled" : ""}>${t("fw.prev")}</button>
-        <span class="fw-pageinfo">${fwRiskPage + 1} / ${totalPages}</span>
-        <button class="btn small" data-fw-page="next"${fwRiskPage >= totalPages - 1 ? " disabled" : ""}>${t("fw.next")}</button>
-      </div>`
-    : "";
   const riskHtml = risky.length
-    ? `${closeNote}<div class="fw-risk">${riskRows}</div>${pager}`
+    ? `${closeNote}<div class="fw-risk">${riskRows}</div>${pager(fwRiskPage, riskyTotal, "risk")}`
     : `<pre>${t("fw.noRisk")}</pre>`;
 
-  return `${summary}${toolbar}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}<h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops"></div>`;
+  // 工具条（唯一一份：停用/启用 + 新增端口 + 批量 + 加固）
+  const ctlBtns = canClose
+    ? `<button class="btn small" data-fw-control data-action="disable">${t("fw.disableBtn")}</button>
+       <button class="btn small" data-fw-control data-action="enable">${t("fw.enableBtn")}</button>`
+    : "";
+  const openBtn = `<button class="btn small" data-fw-open${disabled}>${t("fw.openBtn")}</button>`;
+  const batchBtn = canClose && risky.length ? `<button class="btn small" data-fw-batch-close${disabled}>${t("fw.batchCloseBtn")}</button>
+    <button class="btn small${dangerCount ? " danger" : ""}" data-fw-harden${disabled}>${t("fw.hardenBtn")}</button>` : "";
+  const toolbar = `<div class="fw-toolbar">${ctlBtns}${openBtn}${batchBtn}</div>`;
+
+  // 操作记录（分页）
+  const opsTotal = Math.max(1, Math.ceil((fwOpsCache || []).length / FW_PAGE_SIZE));
+  if (fwOpsPage >= opsTotal) fwOpsPage = opsTotal - 1;
+  const pageOps = (fwOpsCache || []).slice(fwOpsPage * FW_PAGE_SIZE, (fwOpsPage + 1) * FW_PAGE_SIZE);
+  const opsHtml = pageOps.length
+    ? `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("fw.opTime")}</th><th>${t("fw.opAction")}</th><th>${t("fw.opTarget")}</th></tr></thead><tbody>${pageOps.map((o) => {
+        const time = new Date(o.ts).toLocaleString();
+        const opLabel = { open: t("fw.opOpen"), deny: t("fw.opDeny"), close: t("fw.opClose"), enable: t("fw.opEnable"), disable: t("fw.opDisable") }[o.op] || o.op;
+        return `<tr><td>${time}</td><td>${escapeHtml(opLabel)}</td><td>${escapeHtml(o.target)}</td></tr>`;
+      }).join("")}</tbody></table></div>${pager(fwOpsPage, opsTotal, "ops")}`
+    : `<pre class="hint">${t("fw.noOps")}</pre>`;
+
+  return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}${toolbar}<h3 class="fw-sub">${t("fw.opSection")}</h3>${opsHtml}`;
 }
 
 function fmtVal(v) {
@@ -2737,24 +2754,26 @@ function refreshFirewallCard() {
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-fw-page]");
   if (!btn) return;
-  const total = Math.max(1, Math.ceil((lastFwMetrics?.riskyPorts?.length || 0) / FW_PAGE_SIZE));
-  fwRiskPage = btn.dataset.fwPage === "prev" ? Math.max(0, fwRiskPage - 1) : Math.min(total - 1, fwRiskPage + 1);
+  const kind = btn.dataset.fwPage;
+  const dir = btn.dataset.fwDir;
+  const len = kind === "rules" ? (lastFwMetrics?.rules?.length || 0) : kind === "ops" ? (fwOpsCache?.length || 0) : (lastFwMetrics?.riskyPorts?.length || 0);
+  const total = Math.max(1, Math.ceil(len / FW_PAGE_SIZE));
+  let cur;
+  if (kind === "rules") cur = fwRulesPage;
+  else if (kind === "ops") cur = fwOpsPage;
+  else cur = fwRiskPage;
+  const next = dir === "prev" ? Math.max(0, cur - 1) : Math.min(total - 1, cur + 1);
+  if (kind === "rules") fwRulesPage = next;
+  else if (kind === "ops") fwOpsPage = next;
+  else fwRiskPage = next;
   refreshFirewallCard();
 });
 async function loadFwOps() {
   try {
     const res = await fetch("api/firewall/ops");
     const data = await res.json();
-    const el = document.getElementById("fw-ops");
-    if (!el) return;
-    const ops = Array.isArray(data.ops) ? data.ops.slice(-20).reverse() : [];
-    if (!ops.length) { el.innerHTML = `<pre class="hint">${t("fw.noOps")}</pre>`; return; }
-    const rows = ops.map((o) => {
-      const time = new Date(o.ts).toLocaleString();
-      const opLabel = { open: t("fw.opOpen"), deny: t("fw.opDeny"), close: t("fw.opClose"), enable: t("fw.opEnable"), disable: t("fw.opDisable") }[o.op] || o.op;
-      return `<tr><td>${time}</td><td>${escapeHtml(opLabel)}</td><td>${escapeHtml(o.target)}</td></tr>`;
-    }).join("");
-    el.innerHTML = `<table class="svc-table"><thead><tr><th>${t("fw.opTime")}</th><th>${t("fw.opAction")}</th><th>${t("fw.opTarget")}</th></tr></thead><tbody>${rows}</tbody></table>`;
+    fwOpsCache = Array.isArray(data.ops) ? data.ops.slice().reverse() : [];
+    refreshFirewallCard();
   } catch {}
 }
 

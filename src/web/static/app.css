@@ -223,7 +223,9 @@
     #view-monitor { display: none; }
     .cards { display: grid; grid-template-columns: repeat(3, 1fr); grid-auto-rows: 580px; gap: 12px; align-items: stretch; }
     #view-monitor.single { display: flex; flex-direction: column; }
-    #view-monitor.single .cards { flex: 1; grid-template-columns: 1fr; grid-auto-rows: 860px; height: auto; min-height: 0; }
+    #view-monitor.single .cards { flex: 1; grid-template-columns: 1fr; grid-auto-rows: auto; height: auto; min-height: 0; }
+    .fw-card { overflow: visible; }
+    .fw-card .card-body { flex: 0 0 auto; max-height: 340px; }
     .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
     .card h2 { font-size: 13px; margin: 0 0 8px; color: var(--accent); flex-shrink: 0; }
     .card > pre, .card > div { min-height: 0; }
