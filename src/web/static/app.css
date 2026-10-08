@@ -308,6 +308,26 @@
     .chart-wrap .unit { position: absolute; top: 4px; right: 4px; z-index: 5; }
     .chart-wrap select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 11px; outline: none; }
     .chart-tip { position: fixed; z-index: 300; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; font-size: 12px; line-height: 1.6; pointer-events: none; display: none; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+    /* 总览骨架屏 */
+    #overview.loading .sys-info .sys-os,
+    #overview.loading .sys-info .sys-uptime,
+    #overview.loading .ring-info .value,
+    #overview.loading .ring-info .sub,
+    #overview.loading .kpi .val {
+      color: transparent;
+      background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%);
+      background-size: 400% 100%;
+      animation: skel 1.4s ease infinite;
+      border-radius: 6px;
+    }
+    #overview.loading .sys-info .sys-os { min-width: 220px; }
+    #overview.loading .sys-info .sys-uptime { min-width: 120px; }
+    #overview.loading .ring-info .value { min-width: 72px; }
+    #overview.loading .ring-info .sub { min-width: 130px; }
+    #overview.loading .kpi .val { min-width: 56px; }
+    #overview.loading .ring { background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%) !important; background-size: 400% 100% !important; animation: skel 1.4s ease infinite; }
+    #overview.loading .chart-wrap canvas { visibility: hidden; }
+    #overview.loading .chart-wrap::after { content: ""; position: absolute; inset: 8px; border-radius: 8px; background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; }
     .proc-ops { display: inline-flex; gap: 12px; white-space: nowrap; }
     .proc-ops a { color: var(--accent); cursor: pointer; }
     .proc-ops a:hover { text-decoration: underline; }

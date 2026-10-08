@@ -459,6 +459,7 @@ function drawTokenChart(canvas, days) {
 }
 
 async function refreshOverview() {
+  if (!overviewData) setOverviewLoading(true);
   try {
     const res = await fetch("api/overview");
     overviewData = await res.json();
@@ -472,6 +473,12 @@ async function refreshOverview() {
     renderChart();
     if (currentFilter === "system") drawSystemTrend();
   } catch {}
+  setOverviewLoading(false);
+}
+
+function setOverviewLoading(on) {
+  const el = document.getElementById("overview");
+  if (el) el.classList.toggle("loading", on);
 }
 
 document.getElementById("tab-traffic").onclick = () => switchTrafficTab("traffic");
