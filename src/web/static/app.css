@@ -273,6 +273,9 @@
     .fw-pick { accent-color: var(--accent); width: 15px; height: 15px; }
     .fw-ops { margin-top: 4px; }
     .fw-risk { display: flex; flex-direction: column; gap: 8px; }
+    .fw-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 6px; }
+    .fw-pager { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .fw-pageinfo { font-size: 12px; color: var(--muted); }
     .fw-risk-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
     .fw-risk-row .fw-port { font-family: var(--font-mono); font-weight: 600; min-width: 90px; }
     .fw-risk-row .fw-mode { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }

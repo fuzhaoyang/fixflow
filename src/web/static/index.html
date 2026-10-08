@@ -594,7 +594,7 @@
     <p class="modal-text" id="ssl-renew-text"></p>
     <div class="field">
       <label data-i18n="proc.pwdLabel">登录密码</label>
-      <input id="ssl-renew-password" type="password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder">
+      <div class="pwd-wrap"><input id="ssl-renew-password" type="password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
       <div class="hint" id="ssl-renew-err" style="color:var(--bad)"></div>
     </div>
     <div class="modal-actions">
@@ -616,7 +616,7 @@
       </select>
     </div>
     <div class="field"><label data-i18n="fw.fromLabel">来源（留空=全网）</label><input id="fw-open-from" type="text" placeholder="192.168.1.0/24" data-i18n="fw.fromPh" data-i18n-attr="placeholder"></div>
-    <div class="field"><label data-i18n="fw.rootPwdLabel">root 密码</label><input id="fw-open-password" type="password" autocomplete="current-password" placeholder="请输入 root 密码" data-i18n="fw.rootPwdPh" data-i18n-attr="placeholder"></div>
+    <div class="field"><label data-i18n="fw.rootPwdLabel">root 密码</label><div class="pwd-wrap"><input id="fw-open-password" type="password" autocomplete="current-password" placeholder="请输入 root 密码" data-i18n="fw.rootPwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div></div>
     <div class="hint" id="fw-open-err" style="color:var(--bad)"></div>
     <div class="modal-actions">
       <button class="btn" id="fw-open-cancel" data-i18n="proc.cancel">取消</button>
@@ -630,7 +630,7 @@
     <p class="modal-text" id="proc-text"></p>
     <div class="field">
       <label data-i18n="proc.pwdLabel">登录密码</label>
-      <input id="proc-password" type="password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder">
+      <div class="pwd-wrap"><input id="proc-password" type="password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
       <div class="hint" id="proc-err" style="color:var(--bad)"></div>
     </div>
     <div class="modal-actions">

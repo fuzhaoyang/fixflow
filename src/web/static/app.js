@@ -695,6 +695,8 @@ function renderCards() {
       card.innerHTML = `<h2>${label}</h2>${renderNginx(m, metrics.nginxLogs)}`;
       setTimeout(loadNginxConfs, 0);
     } else if (key === "firewall") {
+      card.classList.add("fw-card");
+      lastFwMetrics = m;
       card.innerHTML = `<h2>${label}</h2>${renderFirewall(m)}`;
       loadFwOps();
     } else {
@@ -1100,6 +1102,9 @@ document.getElementById("ssl-renew-confirm").onclick = async () => {
 };
 
 const FIREWALL_MODES = { delete: "删除放行规则", deny: "添加拒绝规则" };
+const FW_PAGE_SIZE = 10;
+let fwRiskPage = 0;
+let lastFwMetrics = null;
 const FW_SERVICE_NAMES = { 21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch", 2375: "Docker API", 2376: "Docker TLS", 8888: "管理面板", 9090: "监控面板", 9000: "管理面板", 8080: "HTTP 备用" };
 
 function fwServiceTag(portStr) {
@@ -1155,19 +1160,36 @@ function renderFirewall(m) {
 
   const disabled = canClose ? "" : " disabled";
   const closeNote = canClose ? "" : `<div class="hint" style="margin-bottom:8px">${t("fw.noClose").replace("{backend}", escapeHtml(backend))}</div>`;
-  const openBtn = `<button class="btn small" data-fw-open${disabled} style="margin-bottom:8px">${t("fw.openBtn")}</button>`;
-  const batchBtn = canClose && risky.length ? `<button class="btn small" data-fw-batch-close${disabled} style="margin-left:8px">${t("fw.batchCloseBtn")}</button>
-    <button class="btn small${dangerCount ? " danger" : ""}" data-fw-harden${disabled} style="margin-left:8px">${t("fw.hardenBtn")}</button>` : "";
-  const riskRows = risky.map((p) => {
+  const ctlBtns = canClose
+    ? `<button class="btn small" data-fw-control data-action="disable">${t("fw.disableBtn")}</button>
+       <button class="btn small" data-fw-control data-action="enable">${t("fw.enableBtn")}</button>`
+    : "";
+  const openBtn = `<button class="btn small" data-fw-open${disabled}>${t("fw.openBtn")}</button>`;
+  const batchBtn = canClose && risky.length ? `<button class="btn small" data-fw-batch-close${disabled}>${t("fw.batchCloseBtn")}</button>
+    <button class="btn small${dangerCount ? " danger" : ""}" data-fw-harden${disabled}>${t("fw.hardenBtn")}</button>` : "";
+  const toolbar = `<div class="fw-toolbar">${ctlBtns}${openBtn}${batchBtn}</div>`;
+  const totalPages = Math.max(1, Math.ceil(risky.length / FW_PAGE_SIZE));
+  if (fwRiskPage >= totalPages) fwRiskPage = totalPages - 1;
+  const pageRisky = risky.slice(fwRiskPage * FW_PAGE_SIZE, (fwRiskPage + 1) * FW_PAGE_SIZE);
+  const riskRows = pageRisky.map((p) => {
     const tag = p.dangerous ? `<span class="risk-badge risk-high">${t("fw.dangerTag")}</span>` : `<span class="risk-badge risk-low">${t("fw.normalTag")}</span>`;
     const opts = Object.entries(FIREWALL_MODES).map(([v]) => `<option value="${v}">${t(v === "delete" ? "fw.modeDelete" : "fw.modeDeny")}</option>`).join("");
     return `<div class="fw-risk-row"><input type="checkbox" class="fw-pick" data-fw-port="${p.port}" data-fw-proto="${p.proto}">${tag}<span class="fw-port">${fwServiceTag(p.port)}${p.port}/${p.proto}</span>
       <select class="fw-mode"${disabled}>${opts}</select>
       <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>${t("fw.closeBtn")}</button></div>`;
   }).join("");
-  const riskHtml = risky.length ? `${closeNote}<div class="fw-risk">${riskRows}</div>${batchBtn}` : `<pre>${t("fw.noRisk")}</pre>`;
+  const pager = risky.length > FW_PAGE_SIZE
+    ? `<div class="fw-pager">
+        <button class="btn small" data-fw-page="prev"${fwRiskPage === 0 ? " disabled" : ""}>${t("fw.prev")}</button>
+        <span class="fw-pageinfo">${fwRiskPage + 1} / ${totalPages}</span>
+        <button class="btn small" data-fw-page="next"${fwRiskPage >= totalPages - 1 ? " disabled" : ""}>${t("fw.next")}</button>
+      </div>`
+    : "";
+  const riskHtml = risky.length
+    ? `${closeNote}<div class="fw-risk">${riskRows}</div>${pager}`
+    : `<pre>${t("fw.noRisk")}</pre>`;
 
-  return `${summary}${openBtn}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}<h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops"></div>`;
+  return `${summary}${toolbar}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}<h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops"></div>`;
 }
 
 function fmtVal(v) {
@@ -2706,6 +2728,19 @@ document.getElementById("fw-open-submit").onclick = async () => {
 };
 
 // 审计区加载
+function refreshFirewallCard() {
+  const card = document.querySelector(".fw-card");
+  if (!card || !lastFwMetrics) return;
+  const h2 = card.querySelector("h2");
+  card.innerHTML = h2 ? `<h2>${h2.innerHTML}</h2>${renderFirewall(lastFwMetrics)}` : renderFirewall(lastFwMetrics);
+}
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-fw-page]");
+  if (!btn) return;
+  const total = Math.max(1, Math.ceil((lastFwMetrics?.riskyPorts?.length || 0) / FW_PAGE_SIZE));
+  fwRiskPage = btn.dataset.fwPage === "prev" ? Math.max(0, fwRiskPage - 1) : Math.min(total - 1, fwRiskPage + 1);
+  refreshFirewallCard();
+});
 async function loadFwOps() {
   try {
     const res = await fetch("api/firewall/ops");
