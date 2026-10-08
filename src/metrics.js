@@ -471,17 +471,6 @@ async function collectConnections() {
   return parseConnections(r.stdout || "");
 }
 
-export async function collectServices({ services = [] }) {
-  return Promise.all(services.map(async (s) => {
-    try {
-      const res = await fetch(s.url, { signal: AbortSignal.timeout(5000) });
-      return { name: s.name, ok: res.status < 500, detail: `HTTP ${res.status}` };
-    } catch (e) {
-      return { name: s.name, ok: false, detail: e.message };
-    }
-  }));
-}
-
 export async function collectDatabases({ databases = [] }) {
   const probes = {
     postgres: "pg_isready",
@@ -720,7 +709,6 @@ export async function collectAll(config) {
     network: await safe(collectNetwork),
     nginx: await safe(collectNginx),
     firewall: await safe(collectFirewall),
-    services: await safe(() => collectServices(config)),
     databases: await safe(() => collectDatabases(config)),
     docker: await safe(collectDocker),
     systemd: await safe(() => collectSystemd(config.serviceKeywords)),

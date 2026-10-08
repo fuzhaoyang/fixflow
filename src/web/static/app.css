@@ -366,6 +366,18 @@
     .logs-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
     .logs-target { font-size: 13px; font-weight: 600; color: var(--text); min-width: 120px; }
     .logs-toolbar input[type="text"] { flex: 1; min-width: 120px; }
+    .logs-search input,
+    .logs-toolbar input[type="text"],
+    .logs-toolbar select {
+      padding: 6px 12px; border-radius: var(--r-sm); border: 1px solid var(--border);
+      background: var(--bg); color: var(--text); font-size: 12px; outline: none;
+      transition: border-color .18s, box-shadow .18s;
+    }
+    .logs-search input:focus,
+    .logs-toolbar input[type="text"]:focus,
+    .logs-toolbar select:focus {
+      border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+    }
     .logs-body { flex: 1; overflow: auto; background: var(--bg); }
     .logs-body pre { margin: 0; padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--text); }
     .logs-body pre.logs-empty { color: var(--muted); text-align: center; padding-top: 60px; }

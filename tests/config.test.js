@@ -13,17 +13,15 @@ test("默认配置：默认端口 2222", () => {
   assert.equal(cfg.model, "kimi-k2.7-code");
   assert.equal(cfg.port, 2222);
   assert.equal(cfg.timeout, 30000);
-  assert.deepEqual(cfg.services, []);
 });
 
 test("配置文件覆盖默认值", () => {
   const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
   const file = join(dir, "config.json");
-  writeFileSync(file, JSON.stringify({ model: "m1", port: 9000, services: [{ name: "web", port: 8000 }] }));
+  writeFileSync(file, JSON.stringify({ model: "m1", port: 9000 }));
   const cfg = loadConfig({ filePath: file });
   assert.equal(cfg.model, "m1");
   assert.equal(cfg.port, 9000);
-  assert.equal(cfg.services.length, 1);
 });
 
 test("配置新增 sslSites 与 pingTargets", () => {

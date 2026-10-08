@@ -4,7 +4,7 @@ const I18N = { zh: {}, en: {} };
 const I18N_ZH = {
   "group.monitor": "监控", "group.actions": "操作",
   "menu.overview": "总览", "menu.system": "系统", "menu.network": "网络", "menu.nginx": "Nginx",
-  "menu.firewall": "防火墙", "menu.services": "Python 服务", "menu.databases": "数据库",
+  "menu.firewall": "防火墙", "menu.databases": "数据库",
   "menu.docker": "Docker", "menu.processes": "进程", "menu.ssl": "SSL 证书", "menu.systemd": "服务", "menu.logs": "日志",
   "menu.chat": "Agent 对话",
   "brand.name": "Fixflow 运维管家",
@@ -88,7 +88,7 @@ const I18N_ZH = {
   "chat.clear": "清空历史", "chat.clearTitle": "清空聊天历史", "chat.inputPh": "例如：检查磁盘占用，帮我清理旧日志（Enter 发送，Shift+Enter 换行）",
   "chat.welcomeTitle": "你好，我是 Fixflow 运维管家", "chat.welcomeSub": "我虽然不会修空调，但服务器那点破事，交给我就行。",
   "chat.welcomeTip": "输入指令即可开干，比如「看看磁盘还够不够用」。放心，我不会在没得到你点头前动任何文件——毕竟我是运维，不是拆家工。",
-  "chat.tagSys": "系统监控", "chat.tagNet": "网络检查", "chat.tagNginx": "Nginx 体检", "chat.tagFw": "防火墙巡检", "chat.tagPy": "Python 服务探活", "chat.tagDb": "数据库连接诊断", "chat.tagDocker": "Docker 状态", "chat.tagFix": "自动修复（先问过你）",
+  "chat.tagSys": "系统监控", "chat.tagNet": "网络检查", "chat.tagNginx": "Nginx 体检", "chat.tagFw": "防火墙巡检", "chat.tagDb": "数据库连接诊断", "chat.tagDocker": "Docker 状态", "chat.tagFix": "自动修复（先问过你）",
   "chat.attachTitle": "上传图片", "chat.sendTitle": "发送", "chat.stopTitle": "停止生成",
   "ov.load": "负载状态", "ov.cpu": "CPU 使用率", "ov.mem": "内存使用率", "ov.disk": "磁盘使用率", "ov.realtime": "实时", "ov.rootFs": "根分区", "ov.cores": "{n} 核",
   "ov.up": "上行", "ov.down": "下行", "ov.tx": "总发送", "ov.rx": "总接收", "ov.traffic": "流量", "ov.io": "磁盘IO", "ov.unit": "单位 {u}", "ov.unitCnt": "单位 个", "ov.unitK": "单位 k", "ov.unitM": "单位 M",
@@ -170,7 +170,7 @@ const I18N_ZH = {
 const I18N_EN = {
   "group.monitor": "Monitoring", "group.actions": "Actions",
   "menu.overview": "Overview", "menu.system": "System", "menu.network": "Network", "menu.nginx": "Nginx",
-  "menu.firewall": "Firewall", "menu.services": "Python Services", "menu.databases": "Databases",
+  "menu.firewall": "Firewall", "menu.databases": "Databases",
   "menu.docker": "Docker", "menu.processes": "Processes", "menu.ssl": "SSL Certificates", "menu.systemd": "Services", "menu.logs": "Logs",
   "menu.chat": "Agent Chat",
   "brand.name": "Fixflow Ops Assistant",
@@ -254,7 +254,7 @@ const I18N_EN = {
   "chat.clear": "Clear history", "chat.clearTitle": "Clear chat history", "chat.inputPh": "e.g. Check disk usage, clean old logs (Enter to send, Shift+Enter newline)",
   "chat.welcomeTitle": "Hi, I'm Fixflow Ops Assistant", "chat.welcomeSub": "I can't fix air conditioners, but server stuff — leave it to me.",
   "chat.welcomeTip": "Just type a command to get started, e.g. \"Check if disk is running out\". I won't touch any file without your approval — I'm an ops assistant, not a demolition crew.",
-  "chat.tagSys": "System monitor", "chat.tagNet": "Network check", "chat.tagNginx": "Nginx check", "chat.tagFw": "Firewall scan", "chat.tagPy": "Python services", "chat.tagDb": "Database diagnostics", "chat.tagDocker": "Docker status", "chat.tagFix": "Auto-fix (ask first)",
+  "chat.tagSys": "System monitor", "chat.tagNet": "Network check", "chat.tagNginx": "Nginx check", "chat.tagFw": "Firewall scan", "chat.tagDb": "Database diagnostics", "chat.tagDocker": "Docker status", "chat.tagFix": "Auto-fix (ask first)",
   "chat.attachTitle": "Upload image", "chat.sendTitle": "Send", "chat.stopTitle": "Stop generating",
   "ov.load": "Load", "ov.cpu": "CPU Usage", "ov.mem": "Memory Usage", "ov.disk": "Disk Usage", "ov.realtime": "Live", "ov.rootFs": "Root", "ov.cores": "{n} cores",
   "ov.up": "Up", "ov.down": "Down", "ov.tx": "Total TX", "ov.rx": "Total RX", "ov.traffic": "Traffic", "ov.io": "Disk I/O", "ov.unit": "Unit {u}", "ov.unitCnt": "Unit pcs", "ov.unitK": "Unit k", "ov.unitM": "Unit M",
@@ -399,7 +399,7 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>网络</td><td>端口监听、端口占用查询、连通性检测（ping）</td></tr>
   <tr><td>Nginx</td><td>运行状态、配置校验、错误日志、配置文件查看 / 编辑 / 保存重载、服务操作</td></tr>
   <tr><td>防火墙</td><td>状态、放行规则、对全网开放端口风险、一键关闭端口</td></tr>
-  <tr><td>Python 服务 / 数据库</td><td>服务与数据库探活</td></tr>
+  <tr><td>数据库</td><td>数据库探活</td></tr>
   <tr><td>Docker</td><td>容器状态</td></tr>
   <tr><td>进程</td><td>进程列表（按 CPU / 内存排序），可重启 / 关闭进程</td></tr>
   <tr><td>SSL 证书</td><td>自动发现 + 手动添加，到期进度与 SAN，一键续签，到期告警</td></tr>
@@ -520,7 +520,7 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>Network</td><td>Listening ports, port lookup, connectivity check (ping)</td></tr>
   <tr><td>Nginx</td><td>Status, config check, error log, view / edit / save-and-reload configs, service actions</td></tr>
   <tr><td>Firewall</td><td>Status, allow rules, open-to-all port risks, one-click close port</td></tr>
-  <tr><td>Python Services / Databases</td><td>Service and database liveness</td></tr>
+  <tr><td>Databases</td><td>Database liveness</td></tr>
   <tr><td>Docker</td><td>Container status</td></tr>
   <tr><td>Processes</td><td>Process list (sort by CPU / memory), restart / kill</td></tr>
   <tr><td>SSL Certificates</td><td>Auto-discovery + manual add, expiry bar and SAN, one-click renew, expiry alerts</td></tr>

@@ -76,7 +76,6 @@ const MODULES = [
   ["network", "menu.network"],
   ["nginx", "menu.nginx"],
   ["firewall", "menu.firewall"],
-  ["services", "menu.services"],
   ["databases", "menu.databases"],
   ["docker", "menu.docker"],
   ["processes", "menu.processes"],
@@ -1394,7 +1393,7 @@ function renderWelcome() {
   <h2>${t("chat.welcomeTitle")}</h2>
   <p>${t("chat.welcomeSub")}</p>
   <div class="tag-list">
-    <span class="tag">${icon("monitor")} ${t("chat.tagSys")}</span><span class="tag">${icon("globe")} ${t("chat.tagNet")}</span><span class="tag">${icon("server")} ${t("chat.tagNginx")}</span><span class="tag">${icon("shield")} ${t("chat.tagFw")}</span><span class="tag">${icon("code")} ${t("chat.tagPy")}</span><span class="tag">${icon("database")} ${t("chat.tagDb")}</span><span class="tag">${icon("box")} ${t("chat.tagDocker")}</span><span class="tag">${icon("sparkles")} ${t("chat.tagFix")}</span>
+    <span class="tag">${icon("monitor")} ${t("chat.tagSys")}</span><span class="tag">${icon("globe")} ${t("chat.tagNet")}</span><span class="tag">${icon("server")} ${t("chat.tagNginx")}</span><span class="tag">${icon("shield")} ${t("chat.tagFw")}</span><span class="tag">${icon("database")} ${t("chat.tagDb")}</span><span class="tag">${icon("box")} ${t("chat.tagDocker")}</span><span class="tag">${icon("sparkles")} ${t("chat.tagFix")}</span>
   </div>
   <p class="tip">${t("chat.welcomeTip")}</p>`;
 }
@@ -1895,7 +1894,7 @@ document.addEventListener("mouseup", () => { fsDrag = false; });
 document.getElementById("term-toggle").onclick = () => setTermOpen(!termOpen);
 document.getElementById("term-close").onclick = () => setTermOpen(false);
 document.getElementById("term-clear").onclick = () => { if (terminal) terminal.clear(); };
-let fsCollapsed = false;
+let fsCollapsed = true;
 function applyFsCollapsed(collapsed) {
   fsCollapsed = !!collapsed;
   termPane.classList.toggle("fs-collapsed", fsCollapsed);
@@ -2118,7 +2117,7 @@ connectStream();
    loadModelStatus();
    refreshAlerts();
    if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
-   fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); applyTheme(cfg.theme || "dark"); applyFsCollapsed(cfg.fsCollapsed === true); localStorage.setItem("fixflow_lang", cfg.lang || "zh"); localStorage.setItem("fixflow_theme", cfg.theme || "dark"); renderWelcome(); if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); else renderCards(); }).catch(() => {});
+   fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); applyTheme(cfg.theme || "dark"); applyFsCollapsed(cfg.fsCollapsed !== false); localStorage.setItem("fixflow_lang", cfg.lang || "zh"); localStorage.setItem("fixflow_theme", cfg.theme || "dark"); renderWelcome(); if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); else renderCards(); }).catch(() => {});
  }
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopPolling();
