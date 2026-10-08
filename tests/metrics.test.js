@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -300,4 +300,41 @@ test("writeNginxConf 校验失败时回滚原文件", async () => {
   assert.equal(r.ok, false);
   assert.match(r.error, /syntax error/);
   assert.equal(readFileSync(f, "utf8"), "OLD");
+});
+
+test("collectLogSources 解析 systemd 单元与 docker 容器", async () => {
+  const run = async (cmd) => cmd.startsWith("systemctl")
+    ? { exitCode: 0, stdout: "nginx.service loaded active running Nginx\nsshd.service loaded inactive dead SSH\n", stderr: "" }
+    : { exitCode: 0, stdout: "web_app | Up 5 minutes\ndb | Exited (0)\n", stderr: "" };
+  const r = await collectLogSources({ run });
+  assert.equal(r.systemd[0].name, "nginx");
+  assert.equal(r.systemd[0].state, "active");
+  assert.equal(r.systemd[1].state, "inactive");
+  assert.equal(r.docker[0].name, "web_app");
+  assert.match(r.docker[1].status, /Exited/);
+  assert.equal(r.dockerAvailable, true);
+});
+
+test("collectLogs 拼 systemd 单元命令并限行数", async () => {
+  let seen = null;
+  const run = async (cmd) => { seen = cmd; return { exitCode: 0, stdout: "line1\nline2\n", stderr: "" }; };
+  const r = await collectLogs({ service: "nginx", lines: 200 }, { run });
+  assert.equal(r.source, "systemd");
+  assert.equal(r.target, "nginx.service");
+  assert.equal(r.content, "line1\nline2\n");
+  assert.match(seen, /journalctl -u nginx.service -n 200 --no-pager -o cat/);
+});
+
+test("collectLogs docker 容器走 docker logs 且限行数上限", async () => {
+  let seen = null;
+  const run = async (cmd) => { seen = cmd; return { exitCode: 0, stdout: "log", stderr: "" }; };
+  const r = await collectLogs({ container: "web_app", lines: 99999 }, { run });
+  assert.equal(r.source, "docker");
+  assert.match(seen, /docker logs --tail 5000 --timestamps web_app/);
+});
+
+test("collectLogs 缺参返回错误", async () => {
+  const r = await collectLogs({}, { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) });
+  assert.equal(r.exitCode, 1);
+  assert.match(r.content, /缺少服务名/);
 });

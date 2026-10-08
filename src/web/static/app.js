@@ -19,6 +19,7 @@ const netTools = document.getElementById("net-tools");
 const viewTitle = document.getElementById("view-title");
 const viewMonitor = document.getElementById("view-monitor");
 const viewChat = document.getElementById("view-chat");
+const viewLogs = document.getElementById("view-logs");
 const overviewEl = document.getElementById("overview");
 
 let pendingImages = [];
@@ -86,6 +87,7 @@ const MODULES = [
 let currentFilter = "all";
 let lastRoute = localStorage.getItem("fixflow_route") || "all";
 let chatView = false;
+let logsView = false;
 let metrics = {};
 let busy = false;
 
@@ -98,22 +100,34 @@ function applyRoute() {
   if (authMask.style.display === "flex") return;
   const route = helpOpen ? lastRoute : raw;
   document.querySelectorAll(".menu-item").forEach((i) => {
-    const hit = route === "chat" ? i.dataset.view === "chat" : i.dataset.view === "monitor" && i.dataset.filter === route;
+    const hit = route === "chat" ? i.dataset.view === "chat" : route === "logs" ? i.dataset.view === "logs" : i.dataset.view === "monitor" && i.dataset.filter === route;
     i.classList.toggle("active", hit);
   });
   chatView = route === "chat";
+  logsView = route === "logs";
   if (route === "chat") {
     viewMonitor.style.display = "none";
     viewChat.style.display = "flex";
+    viewLogs.style.display = "none";
     viewTitle.dataset.i18nTitle = "title.chat";
     viewTitle.textContent = t("title.chat");
     searchBox.style.display = "none";
     netTools.style.display = "none";
+  } else if (route === "logs") {
+    viewMonitor.style.display = "none";
+    viewChat.style.display = "none";
+    viewLogs.style.display = "flex";
+    viewTitle.dataset.i18nTitle = "title.logs";
+    viewTitle.textContent = t("title.logs");
+    searchBox.style.display = "none";
+    netTools.style.display = "none";
+    loadLogSources();
   } else {
     currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
     viewMonitor.classList.toggle("single", currentFilter !== "all");
     viewMonitor.style.display = currentFilter === "all" ? "block" : "flex";
     viewChat.style.display = "none";
+    viewLogs.style.display = "none";
     viewMonitor.style.display = "block";
     const titleKey = currentFilter === "all" ? "title.overview" : `menu.${currentFilter}`;
     viewTitle.dataset.i18nTitle = titleKey;
@@ -129,9 +143,103 @@ function applyRoute() {
 }
 document.querySelectorAll(".menu-item").forEach((item) => {
   item.addEventListener("click", () => {
-    location.hash = item.dataset.view === "chat" ? "/chat" : "/" + item.dataset.filter;
+    const v = item.dataset.view;
+    location.hash = v === "chat" ? "/chat" : v === "logs" ? "/logs" : "/" + item.dataset.filter;
   });
 });
+
+// ---------- 日志页 ----------
+let logSources = { systemd: [], docker: [], dockerAvailable: false };
+let logTarget = null;
+let logFollow = true;
+const logsBody = document.getElementById("logs-body");
+const logsList = document.getElementById("logs-list");
+const logsFilter = document.getElementById("logs-filter");
+const logsSearch = document.getElementById("logs-search");
+const logsLines = document.getElementById("logs-lines");
+
+async function loadLogSources() {
+  try {
+    const res = await fetch("api/logs/sources");
+    logSources = await res.json();
+  } catch {}
+  renderLogList();
+}
+function renderLogList() {
+  const kw = (logsFilter.value || "").trim().toLowerCase();
+  const sys = logSources.systemd.filter((s) => !kw || s.name.toLowerCase().includes(kw));
+  const dock = (logSources.docker || []).filter((c) => !kw || c.name.toLowerCase().includes(kw));
+  const item = (s, src) => {
+    const state = src === "docker" ? (s.status || "").toLowerCase() : (s.state || "").toLowerCase();
+    const dot = /up|running/.test(state) ? "ok" : /exit|fail|error|degraded/.test(state) ? "err" : state === "active" ? "act" : "stop";
+    const cls = logTarget && logTarget.source === src && logTarget.target === (src === "docker" ? s.name : s.name) ? " active" : "";
+    return `<div class="logs-item${cls}" data-src="${src}" data-name="${escapeHtml(s.name)}" data-target="${escapeHtml(src === "docker" ? s.name : s.name)}"><span class="dot ${dot}"></span><span>${escapeHtml(s.name)}</span><span class="grp">${src === "docker" ? "docker" : "sys"}</span><span class="tail">${src === "docker" ? escapeHtml((s.status || "").slice(0, 12)) : ""}</span></div>`;
+  };
+  const head = (label) => `<div class="logs-item" style="cursor:default;font-weight:700;font-size:11px;color:var(--muted);pointer-events:none">${label}</div>`;
+  logsList.innerHTML = (sys.length ? head(t("logs.sysGroup")) + sys.map((s) => item(s, "systemd")).join("") : "")
+    + (dock.length ? head(t("logs.dockerGroup")) + dock.map((c) => item(c, "docker")).join("") : "");
+  if (!sys.length && !dock.length) logsList.innerHTML = `<div class="logs-item" style="color:var(--muted)">${t("logs.none")}</div>`;
+}
+logsFilter.addEventListener("input", renderLogList);
+logsList.addEventListener("click", (e) => {
+  const it = e.target.closest("[data-name]");
+  if (!it) return;
+  const isDocker = it.dataset.src === "docker";
+  logTarget = { source: isDocker ? "docker" : "systemd", target: it.dataset.name };
+  document.getElementById("logs-target").textContent = (isDocker ? t("logs.dockerPrefix") : "") + it.dataset.name;
+  logsBody.innerHTML = `<pre class="logs-empty">${t("logs.loading")}</pre>`;
+  renderLogList();
+  loadLog();
+});
+async function loadLog() {
+  if (!logTarget) return;
+  try {
+    const res = await fetch("api/logs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(logTarget.source === "docker" ? { container: logTarget.target, lines: Number(logsLines.value) } : { service: logTarget.target, lines: Number(logsLines.value) }),
+    });
+    const data = await res.json();
+    renderLog(data.content || (data.error || t("logs.empty")));
+  } catch { logsBody.innerHTML = `<pre>${t("op.fail")}</pre>`; }
+}
+function renderLog(text) {
+  const kw = (logsSearch.value || "").trim();
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+  const html = String(text || "").split("\n").map((line) => {
+    let cls = "";
+    if (/ERROR|FATAL|CRIT|Exception|Traceback/i.test(line)) cls = " err";
+    else if (/WARN|WARNING/i.test(line)) cls = " warn";
+    const safe = kw ? esc(line).replace(new RegExp(esc(kw).replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), (m) => `<mark>${m}</mark>`) : esc(line);
+    return `<div class="log-line${cls}">${safe}</div>`;
+  }).join("");
+  logsBody.innerHTML = `<pre>${html}</pre>`;
+  if (logFollow) logsBody.scrollTop = logsBody.scrollHeight;
+}
+logsLines.addEventListener("change", () => { if (logTarget) { logsBody.innerHTML = `<pre class="logs-empty">${t("logs.loading")}</pre>`; loadLog(); } });
+logsSearch.addEventListener("input", () => { if (logTarget) loadLog(); });
+document.getElementById("logs-follow").onclick = (e) => {
+  logFollow = !logFollow;
+  e.currentTarget.classList.toggle("btn-danger", !logFollow);
+  e.currentTarget.textContent = logFollow ? t("logs.follow") : t("logs.paused");
+  if (logFollow && logTarget) logsBody.scrollTop = logsBody.scrollHeight;
+};
+document.getElementById("logs-copy").onclick = async () => {
+  const txt = logsBody.querySelector("pre")?.textContent || "";
+  try { await navigator.clipboard.writeText(txt); showSaveMsg(t("logs.copied"), "ok"); } catch { showSaveMsg(t("logs.copyFail"), "warn"); }
+};
+document.getElementById("logs-export").onclick = () => {
+  const txt = logsBody.querySelector("pre")?.textContent || "";
+  if (!txt) return;
+  const name = (logTarget ? logTarget.target : "logs") + ".log";
+  const blob = new Blob([txt], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
+
 window.addEventListener("hashchange", applyRoute);
 
 // ---------- 总览：状态圆环 + 流量/磁盘IO ----------
@@ -1931,7 +2039,7 @@ function stopPolling() {
 }
 function startPolling() {
   stopPolling();
-  metricsTimer = setInterval(() => { if (!chatView) refreshMetrics(); }, 10000);
+  metricsTimer = setInterval(() => { if (!chatView && !logsView) refreshMetrics(); }, 10000);
   overviewTimer = setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 3000);
 }
 let curTheme = "dark";

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
@@ -536,6 +536,13 @@ export async function startWeb(config = {}, deps = {}) {
         if (q.get("port")) data.portScan = await collectPorts(q.get("port"));
         if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
         sendJson(res, data);
+      } else if (url.pathname === "/api/logs/sources" && req.method === "GET") {
+        sendJson(res, await collectLogSources({ run: execCmd }));
+      } else if (url.pathname === "/api/logs" && req.method === "POST") {
+        const body = await readBody(req);
+        const { service, container, lines } = JSON.parse(body || "{}");
+        if (!service && !container) { sendJson(res, { error: "缺少服务或容器名" }, 400); return; }
+        sendJson(res, await collectLogs({ service: String(service || ""), container: String(container || ""), lines }, { run: execCmd }));
       } else if (url.pathname === "/api/overview") {
         const net = monitor.net();
         const io = monitor.io();

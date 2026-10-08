@@ -336,6 +336,34 @@
     /* 对话区 */
     #view-chat { display: flex; flex-direction: row; height: 100%; min-height: 0; padding: 0; position: relative; }
     .chat-pane { flex: 1; display: flex; flex-direction: column; min-width: 0; height: 100%; }
+    /* 日志页 */
+    #view-logs { display: flex; height: 100%; min-height: 0; padding: 0; }
+    .logs-layout { display: flex; width: 100%; height: 100%; min-height: 0; }
+    .logs-side { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+    .logs-search { padding: 10px; border-bottom: 1px solid var(--border); }
+    .logs-search input { width: 100%; box-sizing: border-box; }
+    .logs-list { flex: 1; overflow-y: auto; padding: 6px; }
+    .logs-item { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .logs-item:hover { background: var(--hover); }
+    .logs-item.active { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+    .logs-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .logs-item .dot.ok { background: var(--ok); }
+    .logs-item .dot.act { background: var(--accent); }
+    .logs-item .dot.stop { background: var(--muted); }
+    .logs-item .dot.err { background: var(--bad); }
+    .logs-item .grp { font-size: 10px; color: var(--muted); }
+    .logs-item .tail { margin-left: auto; font-size: 10px; color: var(--muted); flex-shrink: 0; }
+    .logs-main { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+    .logs-toolbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .logs-target { font-size: 13px; font-weight: 600; color: var(--text); min-width: 120px; }
+    .logs-toolbar input[type="text"] { flex: 1; min-width: 120px; }
+    .logs-body { flex: 1; overflow: auto; background: var(--bg); }
+    .logs-body pre { margin: 0; padding: 12px 14px; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: var(--text); }
+    .logs-body pre.logs-empty { color: var(--muted); text-align: center; padding-top: 60px; }
+    .logs-empty { color: var(--muted); }
+    .log-line.err { color: var(--bad); }
+    .log-line.warn { color: var(--warn); }
+    .log-line mark { background: color-mix(in srgb, var(--warn) 55%, transparent); color: inherit; border-radius: 2px; padding: 0 2px; }
     .term-splitter { display: none; width: 5px; cursor: col-resize; flex-shrink: 0; }
     .term-splitter.show { display: block; }
     .term-pane { display: none; flex-direction: column; width: 40%; min-width: 220px; max-width: 80%; height: 100%; background: var(--bg); border-left: 1px solid var(--border); }

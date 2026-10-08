@@ -616,6 +616,45 @@ test("/api/firewall/ops 返回操作记录且成功操作写入审计", async ()
   w.close();
 });
 
+test("/api/logs/sources 返回 systemd 与 docker 列表", async () => {
+  const w = await makeServer({}, { runCommand: async (cmd) => cmd.startsWith("systemctl")
+    ? { exitCode: 0, stdout: "nginx.service active\n", stderr: "" }
+    : { exitCode: 0, stdout: "web | Up\n", stderr: "" } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const data = await (await fetch(`${base}/api/logs/sources`, { headers: { Cookie: cookie } })).json();
+  assert.ok(Array.isArray(data.systemd));
+  assert.ok(data.systemd.some((s) => s.name === "nginx"));
+  assert.ok(data.docker.some((c) => c.name === "web"));
+  w.close();
+});
+
+test("/api/logs 拉取 service 日志（journalctl）", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    return { exitCode: 0, stdout: "log line\n", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const r = await fetch(`${base}/api/logs`, { method: "POST", headers, body: JSON.stringify({ service: "nginx", lines: 50 }) });
+  const data = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(data.content, "log line\n");
+  assert.ok(calls.some((c) => c.includes("journalctl -u nginx.service -n 50")));
+  w.close();
+});
+
+test("/api/logs 缺参返回 400", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const r = await fetch(`${base}/api/logs`, { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify({}) });
+  assert.equal(r.status, 400);
+  w.close();
+});
+
 test("SSL 接口：增删改查与手动条目保护", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;

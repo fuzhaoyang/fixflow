@@ -675,6 +675,35 @@ export async function collectDbSlow({ databases = [] }) {
   }));
 }
 
+export async function collectLogSources({ run = runCommand } = {}) {
+  const [sys, docker] = await Promise.all([
+    run("systemctl list-units --type=service --all --no-legend --plain --no-pager"),
+    run("docker ps -a --format '{{.Names}} | {{.Status}}' 2>/dev/null"),
+  ]);
+  const systemd = (sys.stdout || "").split("\n").filter(Boolean).map((l) => {
+    const parts = l.trim().replace(/^●\s*/, "").split(/\s+/);
+    const unit = parts[0] || "";
+    return { name: String(unit).replace(/\.service$/, ""), unit, state: parts[2] || "unknown" };
+  }).filter((s) => s.unit);
+  const dockerCtrs = (docker.stdout || "").split("\n").filter(Boolean).map((l) => {
+    const i = l.indexOf(" | ");
+    return { name: i > -1 ? l.slice(0, i).trim() : l.trim(), status: i > -1 ? l.slice(i + 3).trim() : "" };
+  });
+  return { systemd, docker: dockerCtrs, dockerAvailable: docker.exitCode === 0 };
+}
+
+export async function collectLogs({ service = "", container = "", lines = 100 } = {}, { run = runCommand } = {}) {
+  const n = Math.max(1, Math.min(Number(lines) || 100, 5000));
+  if (container) {
+    const r = await run(`docker logs --tail ${n} --timestamps ${container} 2>&1`);
+    return { source: "docker", target: container, exitCode: r.exitCode, content: r.stdout || "" };
+  }
+  if (!service) return { source: "systemd", target: "", exitCode: 1, content: "缺少服务名" };
+  const unit = service.includes(".") ? service : `${service}.service`;
+  const r = await run(`journalctl -u ${unit} -n ${n} --no-pager -o cat 2>&1`);
+  return { source: "systemd", target: unit, exitCode: r.exitCode, content: r.stdout || "" };
+}
+
 export async function collectDockerDetail() {
   const [stats, logs, restarts] = await Promise.all([
     runCommand("docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}' 2>&1"),
