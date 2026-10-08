@@ -1123,12 +1123,12 @@ function renderFirewall(m) {
   const risky = Array.isArray(m.riskyPorts) ? m.riskyPorts : [];
   const dangerCount = risky.filter((p) => p.dangerous).length;
   const backend = m.backend || "ufw";
-  const canClose = backend === "ufw";
+  const canClose = backend === "ufw" || backend === "firewalld";
   const stateLabel = backend === "firewalld" ? t("fw.bkFirewalld") : backend === "ufw" ? t("fw.bkUfw") : t("fw.bkIptables");
   const conns = m.connections || {};
   const policy = m.policy || "";
 
-  const ctlBtn = backend === "ufw"
+  const ctlBtn = canClose
     ? `<button class="btn small" data-fw-control data-action="disable" style="margin-left:8px">${t("fw.disableBtn")}</button>
        <button class="btn small" data-fw-control data-action="enable" style="margin-left:8px">${t("fw.enableBtn")}</button>`
     : "";

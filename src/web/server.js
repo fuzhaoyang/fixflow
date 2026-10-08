@@ -21,7 +21,7 @@ import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPasswor
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
-import { verifySudo, runPrivileged } from "../firewall.js";
+import { verifySudo, runPrivileged, detectBackend, activeZones } from "../firewall.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
@@ -214,6 +214,20 @@ export async function startWeb(config = {}, deps = {}) {
   const execCmd = deps.runCommand || runCommand;
   const fwVerify = (password) => verifySudo(password, { run: execCmd });
   const fwRun = (cmd, password, timeout) => runPrivileged(cmd, password, { run: execCmd, timeout });
+  const firewalldBackend = async () => (await detectBackend({ run: execCmd })) === "firewalld";
+  const firewalldOps = async (zoneCmd, password) => {
+    const zones = await activeZones({ run: execCmd });
+    let ok = true, detail = "";
+    const permCmd = /--add-port|--add-rich-rule|--remove-port/.test(zoneCmd) ? `${zoneCmd} --permanent` : zoneCmd;
+    for (const z of zones) {
+      const r = await fwRun(`firewall-cmd --zone=${z} ${permCmd}`, password, 15000);
+      if (r.exitCode !== 0) ok = false;
+      detail += (r.stdout || r.stderr || "").trim();
+    }
+    const reload = await fwRun("firewall-cmd --reload", password, 15000);
+    return { ok: ok && reload.exitCode === 0, stdout: detail, stderr: reload.stderr || "" };
+  };
+  const fwRes = (r) => ({ ok: r.exitCode === 0, stdout: r.stdout || "", stderr: r.stderr || "" });
   const fwOpsPath = join(dirname(configPath), "firewall-ops.json");
   const readFwOps = async () => {
     try { return JSON.parse(await readFile(fwOpsPath, "utf8")); } catch { return []; }
@@ -965,10 +979,18 @@ export async function startWeb(config = {}, deps = {}) {
         } else if (from && !/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(from)) {
           sendJson(res, { error: "无效的来源（需 IP 或网段，如 192.168.1.0/24）" }, 400);
         } else {
-          const cmd = from ? `ufw allow from ${from} to any port ${port} proto ${proto}` : `ufw allow ${port}/${proto}`;
-          const r = await fwRun(cmd, password);
-          if (r.exitCode === 0) await appendFwOp({ op: "open", target: `${port}/${proto}${from ? ` from ${from}` : ""}`, cmd, ok: true });
-          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+          const isFwd = await firewalldBackend();
+          let r, cmd;
+          if (isFwd) {
+            const add = from ? `--add-rich-rule='rule family=ipv4 source address=${from} port port="${port}" protocol=${proto} accept'` : `--add-port=${port}/${proto}`;
+            cmd = add;
+            r = await firewalldOps(add, password);
+          } else {
+            cmd = from ? `ufw allow from ${from} to any port ${port} proto ${proto}` : `ufw allow ${port}/${proto}`;
+            r = fwRes(await fwRun(cmd, password, 15000));
+          }
+          if (r.ok) await appendFwOp({ op: "open", target: `${port}/${proto}${from ? ` from ${from}` : ""}`, cmd, ok: true });
+          sendJson(res, { ok: r.ok, stdout: r.stdout, stderr: r.stderr });
         }
       } else if (url.pathname === "/api/firewall/close" && req.method === "POST") {
         const body = await readBody(req);
@@ -982,10 +1004,19 @@ export async function startWeb(config = {}, deps = {}) {
         } else if (!["deny", "delete"].includes(mode)) {
           sendJson(res, { error: "不支持的关闭模式" }, 400);
         } else {
-          const cmd = mode === "deny" ? `ufw deny ${port}/${proto}` : `ufw delete allow ${port}/${proto}`;
-          const r = await fwRun(cmd, password);
-          if (r.exitCode === 0) await appendFwOp({ op: mode === "deny" ? "deny" : "close", target: `${port}/${proto}`, cmd, ok: true });
-          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+          const isFwd = await firewalldBackend();
+          let r, cmd;
+          if (isFwd) {
+            cmd = mode === "deny"
+              ? `--add-rich-rule='rule family=ipv4 port port="${port}" protocol=${proto} reject'`
+              : `--remove-port=${port}/${proto}`;
+            r = await firewalldOps(cmd, password);
+          } else {
+            cmd = mode === "deny" ? `ufw deny ${port}/${proto}` : `ufw delete allow ${port}/${proto}`;
+            r = fwRes(await fwRun(cmd, password, 15000));
+          }
+          if (r.ok) await appendFwOp({ op: mode === "deny" ? "deny" : "close", target: `${port}/${proto}`, cmd, ok: true });
+          sendJson(res, { ok: r.ok, stdout: r.stdout, stderr: r.stderr });
         }
       } else if (url.pathname === "/api/firewall/control" && req.method === "POST") {
         const body = await readBody(req);
@@ -995,10 +1026,17 @@ export async function startWeb(config = {}, deps = {}) {
         } else if (!["enable", "disable"].includes(action)) {
           sendJson(res, { error: "不支持的操作" }, 400);
         } else {
-          const cmd = `ufw ${action}`;
-          const r = await fwRun(cmd, password);
-          if (r.exitCode === 0) await appendFwOp({ op: action, target: "ufw", cmd, ok: true });
-          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+          const isFwd = await firewalldBackend();
+          let r, cmd;
+          if (isFwd) {
+            cmd = `systemctl ${action === "enable" ? "start" : "stop"} firewalld`;
+            r = fwRes(await fwRun(cmd, password, 15000));
+          } else {
+            cmd = `ufw ${action}`;
+            r = fwRes(await fwRun(cmd, password, 15000));
+          }
+          if (r.ok) await appendFwOp({ op: action, target: isFwd ? "firewalld" : "ufw", cmd, ok: true });
+          sendJson(res, { ok: r.ok, stdout: r.stdout, stderr: r.stderr });
         }
       } else if (url.pathname === "/api/firewall/ops" && req.method === "GET") {
         sendJson(res, { ops: await readFwOps() });

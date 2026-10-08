@@ -26,6 +26,20 @@ export async function runPrivileged(cmd, password, { run = runCommand, timeout =
   return run(sudoCmd(cmd, password, getuid), { timeout });
 }
 
+export async function detectBackend({ run = runCommand } = {}) {
+  const fw = await run("firewall-cmd --state 2>/dev/null");
+  if (fw.exitCode === 0 && /running/i.test(fw.stdout || "")) return "firewalld";
+  const ufw = await run("ufw status 2>/dev/null");
+  if (ufw.exitCode === 0 && /Status:\s*active/i.test(ufw.stdout || "")) return "ufw";
+  return null;
+}
+
+export async function activeZones({ run = runCommand } = {}) {
+  const az = await run("firewall-cmd --get-active-zones 2>/dev/null");
+  const zones = (az.stdout || "").split("\n").filter((l) => l && !/^\s/.test(l)).map((s) => s.trim());
+  return zones.length ? zones : ["public"];
+}
+
 export async function openFirewallPort(port, { run = runCommand, getuid = () => (typeof process.getuid === "function" ? process.getuid() : 0) } = {}) {
   if (getuid() !== 0) return { ok: false, reason: "非 root，跳过防火墙放行" };
   const p = String(port);
