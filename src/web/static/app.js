@@ -1180,11 +1180,7 @@ function renderFirewall(m) {
       <select class="fw-mode"${disabled}>${opts}</select>
       <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>${t("fw.closeBtn")}</button></div>`;
   }).join("");
-  const riskHtml = risky.length
-    ? `${closeNote}<div class="fw-risk">${riskRows}</div>${pager(fwRiskPage, riskyTotal, "risk")}`
-    : `<pre>${t("fw.noRisk")}</pre>`;
-
-  // 工具条（唯一一份：停用/启用 + 新增端口 + 批量 + 加固）
+  // 工具条（唯一一份：停用/启用 + 新增端口 + 批量 + 加固），与分页同行（左分页右操作）
   const ctlBtns = canClose
     ? `<button class="btn small" data-fw-control data-action="disable">${t("fw.disableBtn")}</button>
        <button class="btn small" data-fw-control data-action="enable">${t("fw.enableBtn")}</button>`
@@ -1193,6 +1189,9 @@ function renderFirewall(m) {
   const batchBtn = canClose && risky.length ? `<button class="btn small" data-fw-batch-close${disabled}>${t("fw.batchCloseBtn")}</button>
     <button class="btn small${dangerCount ? " danger" : ""}" data-fw-harden${disabled}>${t("fw.hardenBtn")}</button>` : "";
   const toolbar = `<div class="fw-toolbar">${ctlBtns}${openBtn}${batchBtn}</div>`;
+  const riskHtml = risky.length
+    ? `${closeNote}<div class="fw-risk">${riskRows}</div><div class="fw-footer">${pager(fwRiskPage, riskyTotal, "risk")}${toolbar}</div>`
+    : `<pre>${t("fw.noRisk")}</pre><div class="fw-footer">${toolbar}</div>`;
 
   // 操作记录（分页）
   const opsTotal = Math.max(1, Math.ceil((fwOpsCache || []).length / FW_PAGE_SIZE));
@@ -1206,7 +1205,7 @@ function renderFirewall(m) {
       }).join("")}</tbody></table></div>${pager(fwOpsPage, opsTotal, "ops")}`
     : `<pre class="hint">${t("fw.noOps")}</pre>`;
 
-  return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}${toolbar}<h3 class="fw-sub">${t("fw.opSection")}</h3>${opsHtml}`;
+  return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}<h3 class="fw-sub">${t("fw.opSection")}</h3>${opsHtml}`;
 }
 
 function fmtVal(v) {
