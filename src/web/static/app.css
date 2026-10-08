@@ -656,6 +656,15 @@
     .auth-err.show { display: block; }
     .field input { width: 100%; padding: 9px 12px; height: 42px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; box-sizing: border-box; transition: border-color .18s, box-shadow .18s; }
     .field input:focus { border-color: var(--accent); }
+    /* 密码可见性切换 */
+    .pwd-wrap { position: relative; }
+    .pwd-wrap input { padding-right: 40px; }
+    .pwd-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; background: none; border: none; color: var(--muted); cursor: pointer; padding: 0; border-radius: 6px; }
+    .pwd-eye:hover { color: var(--accent); }
+    .pwd-eye svg { width: 19px; height: 19px; }
+    .pwd-eye .eye-closed { display: none; }
+    .pwd-eye.showing .eye-open { display: none; }
+    .pwd-eye.showing .eye-closed { display: block; }
     #auth-form input { background: var(--bg) !important; -webkit-box-shadow: 0 0 0 1000px var(--bg) inset; box-shadow: 0 0 0 1000px var(--bg) inset; }
     #auth-form input:focus { border-color: var(--accent); box-shadow: 0 0 0 1000px var(--bg) inset, 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
     #auth-form input:-webkit-autofill { -webkit-box-shadow: 0 0 0 1000px var(--bg) inset; -webkit-text-fill-color: var(--text); transition: background-color 9999s ease-out 0s; }

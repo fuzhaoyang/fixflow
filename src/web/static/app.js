@@ -2141,6 +2141,28 @@ modelStatus.addEventListener("click", openSettings);
 
 // ---------- 登录 / 注册 ----------
 const authMask = document.getElementById("auth-mask");
+
+// 密码可见性切换（按住显示、松开隐藏；登录 + 修改密码弹窗共用）
+const setEye = (eye, show) => {
+  const input = eye.parentElement.querySelector("input");
+  if (!input) return;
+  input.type = show ? "text" : "password";
+  eye.classList.toggle("showing", show);
+  eye.setAttribute("aria-label", show ? t("pwd.eyeHide") : t("pwd.eyeShow"));
+};
+let pressedEye = null;
+document.addEventListener("mousedown", (e) => {
+  const eye = e.target.closest(".pwd-eye");
+  if (!eye) return;
+  pressedEye = eye;
+  setEye(eye, true);
+});
+document.addEventListener("mouseup", () => {
+  if (pressedEye) { setEye(pressedEye, false); pressedEye = null; }
+});
+document.addEventListener("mouseleave", () => {
+  if (pressedEye) { setEye(pressedEye, false); pressedEye = null; }
+});
 const authTitle = document.getElementById("auth-title");
 const authSub = document.getElementById("auth-sub");
 const authErr = document.getElementById("auth-err");
