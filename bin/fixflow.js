@@ -46,8 +46,8 @@ if (cmd === "reset-password") {
     process.exit(1);
   }
   console.log(`当前账号：${current.auth.username}`);
-  const pwd = await rl.question("请输入新密码（至少 8 位，含大小写字母、数字和特殊字符）: ");
-  if (!isStrongPassword((pwd || "").trim())) { console.log("密码强度不足（需 8-128 位，且包含大小写字母、数字和特殊字符），未修改。"); process.exit(1); }
+  const pwd = await rl.question("请输入新密码（8-24 位，含大小写字母、数字和特殊字符）: ");
+  if (!isStrongPassword((pwd || "").trim())) { console.log("密码强度不足（需 8-24 位，且包含大小写字母、数字和特殊字符），未修改。"); process.exit(1); }
   const { salt, hash } = hashPassword(pwd.trim());
   current.auth = { ...current.auth, salt, hash };
   await mkdir(dirname(DEFAULT_CONFIG_PATH), { recursive: true });

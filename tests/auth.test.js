@@ -32,6 +32,8 @@ test("isStrongPassword 拒绝弱口令/长度越界，接受强口令", () => {
   assert.equal(isStrongPassword("Secret123"), false);
   assert.equal(isStrongPassword("password1!"), false);
   assert.equal(isStrongPassword("A1!" + "x".repeat(200)), false);
+  assert.equal(isStrongPassword("A1!" + "x".repeat(21)), true);
+  assert.equal(isStrongPassword("A1!" + "x".repeat(22)), false);
 });
 
 test("验证码长度不符/错误返回 false 而非抛错，正确码大小写不敏感", () => {

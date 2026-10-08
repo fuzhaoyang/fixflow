@@ -445,7 +445,7 @@ export async function startWeb(config = {}, deps = {}) {
         }
         if (!username || !isStrongPassword(password)) {
           recordLoginFail(req);
-          sendJson(res, { error: "密码需 8-128 位，且包含大小写字母、数字和特殊字符" }, 400);
+          sendJson(res, { error: "密码需 8-24 位，且包含大小写字母、数字和特殊字符" }, 400);
           return;
         }
         const { salt, hash } = await hashPasswordAsync(password);
@@ -484,7 +484,7 @@ export async function startWeb(config = {}, deps = {}) {
         const { currentPassword, newPassword } = JSON.parse(body || "{}");
         const auth = await readAuth();
         if (!auth || !(await verifyPasswordAsync(currentPassword || "", auth))) { sendJson(res, { error: "当前密码错误" }, 403); return; }
-        if (!isStrongPassword(newPassword)) { sendJson(res, { error: "新密码需 8-128 位，且包含大小写字母、数字和特殊字符" }, 400); return; }
+        if (!isStrongPassword(newPassword)) { sendJson(res, { error: "新密码需 8-24 位，且包含大小写字母、数字和特殊字符" }, 400); return; }
         if (newPassword === currentPassword) { sendJson(res, { error: "新密码不能与当前密码相同" }, 400); return; }
         const { salt, hash } = await hashPasswordAsync(newPassword);
         await writeAuth({ username: auth.username, salt, hash });
