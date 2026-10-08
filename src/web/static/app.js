@@ -586,6 +586,7 @@ function renderCards() {
       setTimeout(loadNginxConfs, 0);
     } else if (key === "firewall") {
       card.innerHTML = `<h2>${label}</h2>${renderFirewall(m)}`;
+      loadFwOps();
     } else {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
     }
@@ -839,6 +840,13 @@ document.getElementById("ssl-renew-confirm").onclick = async () => {
 };
 
 const FIREWALL_MODES = { delete: "删除放行规则", deny: "添加拒绝规则" };
+const FW_SERVICE_NAMES = { 21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS", 3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch", 2375: "Docker API", 2376: "Docker TLS", 8888: "管理面板", 9090: "监控面板", 9000: "管理面板", 8080: "HTTP 备用" };
+
+function fwServiceTag(portStr) {
+  const n = Number(String(portStr).split(",")[0].split("-")[0]);
+  const name = FW_SERVICE_NAMES[n];
+  return name ? `<span class="fw-svc">${escapeHtml(name)}</span>` : "";
+}
 
 function renderFirewall(m) {
   if (!m || m.error) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
@@ -848,11 +856,18 @@ function renderFirewall(m) {
   const backend = m.backend || "ufw";
   const canClose = backend === "ufw";
   const stateLabel = backend === "firewalld" ? t("fw.bkFirewalld") : backend === "ufw" ? t("fw.bkUfw") : t("fw.bkIptables");
+  const conns = m.connections || {};
+  const policy = m.policy || "";
+
+  const ctlBtn = backend === "ufw"
+    ? `<button class="btn small" data-fw-control data-action="disable" style="margin-left:8px">${t("fw.disableBtn")}</button>
+       <button class="btn small" data-fw-control data-action="enable" style="margin-left:8px">${t("fw.enableBtn")}</button>`
+    : "";
   const summary = `<div class="fw-summary">
     <div class="fw-stat"><span class="k">${t("fw.state")}</span><span class="v">${stateLabel}</span></div>
     <div class="fw-stat"><span class="k">${t("fw.rules")}</span><span class="v">${rules.length}</span></div>
     <div class="fw-stat"><span class="k">${t("fw.open")}</span><span class="v ${dangerCount ? "bad" : ""}">${risky.length}${dangerCount ? t("fw.danger").replace("{n}", dangerCount) : ""}</span></div>
-  </div>`;
+  </div>${policy ? `<div class="fw-policy"><span>${t("fw.policy")}</span><b>${escapeHtml(policy)}</b></div>` : ""}${ctlBtn}`;
 
   let rulesHtml;
   if (rules.length) {
@@ -860,25 +875,30 @@ function renderFirewall(m) {
     const rows = rules.map((r) => {
       const hit = String(r.port || "").split(",").some((p) => riskySet.has(`${r.proto}:${p.trim()}`));
       const style = hit ? " style='background:rgba(248,113,113,0.12)'" : "";
-      return `<tr${style}><td>${r.num ?? "—"}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml((r.proto || "").toUpperCase())}</td><td>${escapeHtml(r.port)}</td><td>${escapeHtml(r.from)}</td><td>${escapeHtml(r.comment || "—")}</td></tr>`;
+      const fromClass = /^Anywhere/.test(r.from) ? ' class="fw-from-open"' : ' class="fw-from-ip"';
+      const conn = String(r.port || "").split(",").map((p) => conns[Number(p)] ?? 0).reduce((a, b) => a + b, 0);
+      return `<tr${style}><td>${r.num ?? "—"}</td><td>${escapeHtml(r.action)}</td><td>${escapeHtml((r.proto || "").toUpperCase())}</td><td>${fwServiceTag(r.port)}<span>${escapeHtml(r.port)}</span></td><td><span${fromClass}>${escapeHtml(r.from)}</span></td><td>${conn}</td><td>${escapeHtml(r.comment || "—")}</td></tr>`;
     }).join("");
-    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("fw.num")}</th><th>${t("fw.action")}</th><th>${t("fw.proto")}</th><th>${t("fw.port")}</th><th>${t("fw.from")}</th><th>${t("fw.comment")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    rulesHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("fw.num")}</th><th>${t("fw.action")}</th><th>${t("fw.proto")}</th><th>${t("fw.port")}</th><th>${t("fw.from")}</th><th>${t("fw.conn")}</th><th>${t("fw.comment")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
   } else {
     rulesHtml = `<pre>${escapeHtml(m.raw || t("fw.noRules"))}</pre>`;
   }
 
   const disabled = canClose ? "" : " disabled";
   const closeNote = canClose ? "" : `<div class="hint" style="margin-bottom:8px">${t("fw.noClose").replace("{backend}", escapeHtml(backend))}</div>`;
+  const openBtn = `<button class="btn small" data-fw-open${disabled} style="margin-bottom:8px">${t("fw.openBtn")}</button>`;
+  const batchBtn = canClose && risky.length ? `<button class="btn small" data-fw-batch-close${disabled} style="margin-left:8px">${t("fw.batchCloseBtn")}</button>
+    <button class="btn small${dangerCount ? " danger" : ""}" data-fw-harden${disabled} style="margin-left:8px">${t("fw.hardenBtn")}</button>` : "";
   const riskRows = risky.map((p) => {
     const tag = p.dangerous ? `<span class="risk-badge risk-high">${t("fw.dangerTag")}</span>` : `<span class="risk-badge risk-low">${t("fw.normalTag")}</span>`;
     const opts = Object.entries(FIREWALL_MODES).map(([v]) => `<option value="${v}">${t(v === "delete" ? "fw.modeDelete" : "fw.modeDeny")}</option>`).join("");
-    return `<div class="fw-risk-row">${tag}<span class="fw-port">${p.port}/${p.proto}</span>
+    return `<div class="fw-risk-row"><input type="checkbox" class="fw-pick" data-fw-port="${p.port}" data-fw-proto="${p.proto}">${tag}<span class="fw-port">${fwServiceTag(p.port)}${p.port}/${p.proto}</span>
       <select class="fw-mode"${disabled}>${opts}</select>
       <button class="btn small" data-fw-close data-fw-port="${p.port}" data-fw-proto="${p.proto}"${disabled}>${t("fw.closeBtn")}</button></div>`;
   }).join("");
-  const riskHtml = risky.length ? `${closeNote}<div class="fw-risk">${riskRows}</div>` : `<pre>${t("fw.noRisk")}</pre>`;
+  const riskHtml = risky.length ? `${closeNote}<div class="fw-risk">${riskRows}</div>${batchBtn}` : `<pre>${t("fw.noRisk")}</pre>`;
 
-  return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}`;
+  return `${summary}${openBtn}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}<h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops"></div>`;
 }
 
 function fmtVal(v) {
@@ -2146,6 +2166,14 @@ restartConfirmBtn.onclick = () => {
 };
 
 const procMask = document.getElementById("proc-mask");
+function setProcPwdLabel(kind) {
+  const label = procMask.querySelector("label");
+  const input = document.getElementById("proc-password");
+  const isFw = kind === "fw";
+  label.textContent = isFw ? t("fw.rootPwdLabel") : t("proc.pwdLabel");
+  input.placeholder = isFw ? t("fw.rootPwdPh") : t("proc.pwdPh");
+  input.setAttribute("autocomplete", isFw ? "current-password" : "current-password");
+}
 let procTarget = null;
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-proc-action]");
@@ -2159,6 +2187,7 @@ document.addEventListener("click", (e) => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
+  setProcPwdLabel("proc");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
@@ -2172,6 +2201,7 @@ document.addEventListener("click", (e) => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
+  setProcPwdLabel("fw");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
@@ -2216,6 +2246,7 @@ document.getElementById("nginx-conf-save").onclick = () => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
+  setProcPwdLabel("proc");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 };
@@ -2232,6 +2263,7 @@ document.addEventListener("click", (e) => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
+  setProcPwdLabel("proc");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
@@ -2246,12 +2278,32 @@ document.getElementById("proc-confirm").onclick = async () => {
   confirmBtn.disabled = true;
   const kind = procTarget?.kind;
   const isFw = kind === "firewall";
+  const isFwCtl = kind === "fw-control";
+  const isFwBatch = kind === "fw-batch";
   const isNginxSave = kind === "nginx-save";
   const isNginxOp = kind === "nginx-op";
   const isFs = kind === "fs";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
+    if (isFwBatch) {
+      let fail = null;
+      for (const it of procTarget.items) {
+        const r2 = await fetch("api/firewall/close", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ port: it.port, proto: it.proto, mode: "deny", password }),
+        });
+        data = await r2.json();
+        if (r2.status === 403 || r2.status === 400) { fail = data.error || t("op.fail"); break; }
+        if (!data.ok) { fail = data.stderr || data.error || t("op.fail"); break; }
+      }
+      if (fail) { errEl.textContent = fail; return; }
+      procMask.classList.remove("show");
+      showSaveMsg(t("fw.batchDone").replace("{n}", procTarget.items.length), "ok");
+      refreshMetrics();
+      return;
+    }
     if (isFs && fsOp === "upload") {
       const fd = new FormData();
       fd.append("path", procTarget.body.path);
@@ -2259,28 +2311,31 @@ document.getElementById("proc-confirm").onclick = async () => {
       fd.append("file", procTarget.body.file, procTarget.body.file.name);
       res = await fetch("api/fs/upload", { method: "POST", body: fd });
     } else {
-      const endpoint = isFw ? "api/firewall/close" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : "api/process";
+      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : "api/process";
       const payload = isFw
         ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
-        : isNginxSave
-          ? { path: procTarget.path, content: procTarget.content, password }
-          : isNginxOp
-            ? { action: procTarget.action, password }
-            : isFs
-              ? { ...(procTarget.body || {}), password }
-              : { ...procTarget, password };
+        : isFwCtl
+          ? { action: procTarget.action, password }
+          : isNginxSave
+            ? { path: procTarget.path, content: procTarget.content, password }
+            : isNginxOp
+              ? { action: procTarget.action, password }
+              : isFs
+                ? { ...(procTarget.body || {}), password }
+                : { ...procTarget, password };
       res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      data = await res.json();
+      if (res.status === 403 || res.status === 400) {
+        errEl.textContent = data.error || t("op.fail");
+        if (isNginxSave) document.getElementById("nginx-conf-err").textContent = data.error || "";
+        return;
+      }
+      if (!data.ok) { errEl.textContent = data.stderr || data.error || t("op.fail"); return; }
     }
-    data = await res.json();
-    if (res.status === 403 || res.status === 400) {
-      errEl.textContent = data.error || t("op.fail");
-      if (isNginxSave) document.getElementById("nginx-conf-err").textContent = data.error || "";
-      return;
-    }
-    if (!data.ok) { errEl.textContent = data.stderr || data.error || t("op.fail"); return; }
     if (isNginxSave) nginxConfMask.classList.remove("show");
     if (isFs && fsOp === "write") fsEditMask.classList.remove("show");
     procMask.classList.remove("show");
+    if (isFwCtl) showSaveMsg(t("fw.controlDone").replace("{action}", procTarget.action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn")), "ok");
     refreshMetrics();
     if (isFs) fsRefresh();
   } catch (e2) {
@@ -2289,6 +2344,121 @@ document.getElementById("proc-confirm").onclick = async () => {
     confirmBtn.disabled = false;
   }
 };
+
+// 新增开放端口弹窗
+const fwOpenMask = document.getElementById("fw-open-mask");
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-fw-open]");
+  if (!btn) return;
+  document.getElementById("fw-open-port").value = "";
+  document.getElementById("fw-open-proto").value = "tcp";
+  document.getElementById("fw-open-from").value = "";
+  document.getElementById("fw-open-password").value = "";
+  document.getElementById("fw-open-err").textContent = "";
+  fwOpenMask.classList.add("show");
+  setTimeout(() => document.getElementById("fw-open-port").focus(), 50);
+});
+document.getElementById("fw-open-cancel").onclick = () => fwOpenMask.classList.remove("show");
+document.getElementById("fw-open-close").onclick = () => fwOpenMask.classList.remove("show");
+fwOpenMask.addEventListener("click", (e) => { if (e.target === fwOpenMask) fwOpenMask.classList.remove("show"); });
+document.getElementById("fw-open-submit").onclick = async () => {
+  const errEl = document.getElementById("fw-open-err");
+  const port = document.getElementById("fw-open-port").value.trim();
+  const proto = document.getElementById("fw-open-proto").value;
+  const from = document.getElementById("fw-open-from").value.trim();
+  const password = document.getElementById("fw-open-password").value.trim();
+  if (!port || !/^\d+(,\d+)*$/.test(port)) { errEl.textContent = t("fw.invalidPort"); return; }
+  if (from && !/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(from)) { errEl.textContent = t("fw.invalidFrom"); return; }
+  if (!password) { errEl.textContent = t("proc.pwdRequired"); return; }
+  errEl.textContent = "";
+  const btn = document.getElementById("fw-open-submit");
+  btn.disabled = true;
+  try {
+    const res = await fetch("api/firewall/open", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ port, proto, from, password }),
+    });
+    const data = await res.json();
+    if (res.status === 403 || res.status === 400 || !data.ok) { errEl.textContent = data.error || data.stderr || t("op.fail"); return; }
+    fwOpenMask.classList.remove("show");
+    showSaveMsg(t("fw.opened").replace("{port}", port), "ok");
+    refreshMetrics();
+  } catch (e2) {
+    errEl.textContent = String(e2);
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+// 审计区加载
+async function loadFwOps() {
+  try {
+    const res = await fetch("api/firewall/ops");
+    const data = await res.json();
+    const el = document.getElementById("fw-ops");
+    if (!el) return;
+    const ops = Array.isArray(data.ops) ? data.ops.slice(-20).reverse() : [];
+    if (!ops.length) { el.innerHTML = `<pre class="hint">${t("fw.noOps")}</pre>`; return; }
+    const rows = ops.map((o) => {
+      const time = new Date(o.ts).toLocaleString();
+      const opLabel = { open: t("fw.opOpen"), deny: t("fw.opDeny"), close: t("fw.opClose"), enable: t("fw.opEnable"), disable: t("fw.opDisable") }[o.op] || o.op;
+      return `<tr><td>${time}</td><td>${escapeHtml(opLabel)}</td><td>${escapeHtml(o.target)}</td></tr>`;
+    }).join("");
+    el.innerHTML = `<table class="svc-table"><thead><tr><th>${t("fw.opTime")}</th><th>${t("fw.opAction")}</th><th>${t("fw.opTarget")}</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch {}
+}
+
+// 关闭一个端口（共用弹窗提交流程）
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-fw-control]");
+  if (!btn) return;
+  const action = btn.dataset.action;
+  procTarget = { kind: "fw-control", action };
+  document.getElementById("proc-title").textContent = action === "disable" ? t("fw.disableTitle") : t("fw.enableTitle");
+  document.getElementById("proc-text").textContent = t("fw.controlText").replace("{action}", action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn"));
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-fw-batch-close]");
+  if (!btn) return;
+  const picked = [...document.querySelectorAll(".fw-pick:checked")];
+  if (!picked.length) { showSaveMsg(t("fw.pickNone"), "warn"); return; }
+  procTarget = { kind: "fw-batch", items: picked.map((p) => ({ port: Number(p.dataset.fwPort), proto: p.dataset.fwProto })) };
+  document.getElementById("proc-title").textContent = t("fw.batchTitle");
+  document.getElementById("proc-text").textContent = t("fw.batchText").replace("{n}", procTarget.items.length);
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-fw-harden]");
+  if (!btn) return;
+  const dangerPorts = [...document.querySelectorAll(".fw-risk-row .risk-badge.risk-high")].map((el) => el.closest(".fw-risk-row")).map((row) => ({
+    port: Number(row.querySelector(".fw-pick").dataset.fwPort),
+    proto: row.querySelector(".fw-pick").dataset.fwProto,
+  }));
+  if (!dangerPorts.length) { showSaveMsg(t("fw.hardenNone"), "warn"); return; }
+  procTarget = { kind: "fw-batch", items: dangerPorts };
+  document.getElementById("proc-title").textContent = t("fw.hardenTitle");
+  document.getElementById("proc-text").textContent = t("fw.hardenText").replace("{n}", dangerPorts.length);
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
 
 document.getElementById("cfg-save").onclick = async () => {
   const body = {

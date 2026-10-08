@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, parseUfwStatus, parseFirewalld, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectServices, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ services: [], databases: [] });
@@ -151,6 +151,37 @@ test("parseUfwStatus 解析 ufw status numbered", () => {
 test("parseUfwStatus 空/异常输出返回空", () => {
   assert.deepEqual(parseUfwStatus(""), { rules: [], riskyPorts: [] });
   assert.deepEqual(parseUfwStatus("Status: inactive"), { rules: [], riskyPorts: [] });
+});
+
+test("parseIptablesRules 解析 iptables -L -n", () => {
+  const out = [
+    "Chain INPUT (policy ACCEPT)",
+    "num  target     prot opt source               destination",
+    "1    ACCEPT     tcp  0.0.0.0/0            0.0.0.0/0            tcp dpt:22",
+    "2    ACCEPT     tcp  192.168.1.0/24       0.0.0.0/0            tcp dpt:3306",
+  ].join("\n");
+  const rules = parseIptablesRules(out);
+  assert.equal(rules.length, 2);
+  assert.equal(rules[0].port, "22");
+  assert.equal(rules[0].from, "Anywhere");
+  assert.equal(rules[1].from, "192.168.1.0/24");
+});
+
+test("parseConnections 统计 ESTAB 连接数按端口聚合", () => {
+  const out = [
+    "State  Recv-Q Send-Q Local Address:Port Peer Address:Port",
+    "LISTEN 0      128    0.0.0.0:80 0.0.0.0:*",
+    "ESTAB  0      0      0.0.0.0:80 1.2.3.4:5000",
+    "ESTAB  0      0      0.0.0.0:80 1.2.3.5:5001",
+    "ESTAB  0      0      0.0.0.0:443 1.2.3.6:6000",
+    "TIME_WAIT 0 0  0.0.0.0:80 1.2.3.7:6001",
+  ].join("\n");
+  assert.deepEqual(parseConnections(out), { 80: 2, 443: 1 });
+});
+
+test("parseUfwPolicy 提取默认策略", () => {
+  assert.equal(parseUfwPolicy("Status: active\nDefault: deny (incoming), allow (outgoing)\n"), "deny (incoming), allow (outgoing)");
+  assert.equal(parseUfwPolicy(""), "");
 });
 
 test("parseFirewalld 解析 ports + services，含范围与去重", () => {

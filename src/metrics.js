@@ -1,5 +1,5 @@
 import { runCommand } from "./tools.js";
-import { assessHealth, parseDf, parseFree, parseLoad } from "./health.js";
+import { assessHealth, parseDf, parseDfInodes, parseFree, parseLoad, realDisks } from "./health.js";
 import { collectSslAll } from "./ssl.js";
 import { readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { resolve, dirname, basename, join } from "node:path";
@@ -24,22 +24,99 @@ const safe = async (fn) => {
   try { return await fn(); } catch { return { error: "N/A" }; }
 };
 
+function formatMb(mb) {
+  const n = Number(mb) || 0;
+  return n >= 1024 ? `${(n / 1024).toFixed(1)} GB` : `${n} MB`;
+}
+
+export function parseSshRisk(text = "", emptyPwUsers = []) {
+  const get = (key) => {
+    const re = new RegExp(`^\\s*${key}\\s+(\\S+)`, "gim");
+    let m, val = "";
+    while ((m = re.exec(text))) val = m[1].toLowerCase();
+    return val;
+  };
+  const prl = get("PermitRootLogin");
+  const pwa = get("PasswordAuthentication");
+  const pep = get("PermitEmptyPasswords");
+  return {
+    items: [
+      { name: "PermitRootLogin", ok: prl === "no" || prl === "prohibit-password", detail: prl || "未设置（默认 prohibit-password）" },
+      { name: "PasswordAuthentication", ok: pwa !== "yes", detail: pwa || "未设置（默认 yes）" },
+      { name: "PermitEmptyPasswords", ok: pep !== "yes", detail: pep || "未设置（默认 no）" },
+      { name: "空密码账户", ok: emptyPwUsers.length === 0, detail: emptyPwUsers.length ? emptyPwUsers.join(", ") : "无" },
+    ],
+  };
+}
+
+export function parseWho(stdout = "") {
+  return String(stdout).split("\n").filter((l) => l.trim()).slice(0, 10).map((l) => l.trim().replace(/\s+/g, " "));
+}
+
+export function parseLast(stdout = "") {
+  return String(stdout).split("\n").map((l) => l.trimEnd())
+    .filter((l) => l.trim() && !/^wtmp begins|^btmp begins/i.test(l)).slice(0, 15);
+}
+
+async function collectUpdates() {
+  const r = await runCommand("apt list --upgradable 2>/dev/null");
+  if (r.exitCode !== 0) return { count: 0, security: 0, list: [] };
+  const lines = (r.stdout || "").split("\n").slice(1).map((l) => l.trim()).filter(Boolean);
+  return { count: lines.length, security: lines.filter((l) => /security/i.test(l)).length, list: lines.slice(0, 50) };
+}
+
+async function collectLogins() {
+  const [who, last, lastb] = await Promise.all([
+    runCommand("who"), runCommand("last -n 15"), runCommand("lastb -n 15 2>/dev/null"),
+  ]);
+  return { current: parseWho(who.stdout || ""), recent: parseLast(last.stdout || ""), failed: parseLast(lastb.stdout || "") };
+}
+
+async function collectSsh() {
+  const [conf, emptyPw] = await Promise.all([
+    runCommand("cat /etc/ssh/sshd_config /etc/ssh/sshd_config.d/*.conf 2>/dev/null"),
+    runCommand('awk -F: \'($2==""){print $1}\' /etc/shadow 2>/dev/null'),
+  ]);
+  const users = (emptyPw.stdout || "").split("\n").map((s) => s.trim()).filter(Boolean);
+  return parseSshRisk(conf.stdout || "", users);
+}
+
 export async function collectSystem() {
-  const [uptime, mem, disk, nproc] = await Promise.all([
-    runCommand("uptime"), runCommand("free -m"), runCommand("df -h"), runCommand("nproc"),
+  const [uptime, mem, disk, diskInode, nproc, osRelease, unameR, unameM, hostname, cpuinfo, tz, procUptime] = await Promise.all([
+    runCommand("uptime"), runCommand("free -m"), runCommand("df -h"), runCommand("df -i"), runCommand("nproc"),
+    runCommand("cat /etc/os-release"), runCommand("uname -r"), runCommand("uname -m"), runCommand("hostname"),
+    runCommand("grep -m1 'model name' /proc/cpuinfo"),
+    runCommand("timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null"),
+    runCommand("cat /proc/uptime"),
   ]);
   const cpuCount = nproc.exitCode === 0 ? parseInt(nproc.stdout.trim() || "1", 10) || 1 : 1;
-  const health = assessHealth({
-    df: parseDf(disk.stdout || ""),
-    free: parseFree(mem.stdout || "").usedPct,
-    load: parseLoad(uptime.stdout || "").load,
-    cpuCount,
-  });
+  const memInfo = parseFree(mem.stdout || "");
+  const loadInfo = parseLoad(uptime.stdout || "");
+  const disks = realDisks(parseDf(disk.stdout || ""));
+  const inodes = realDisks(parseDfInodes(diskInode.stdout || ""));
+  const health = assessHealth({ df: disks, free: memInfo.usedPct, load: loadInfo.load, cpuCount, swap: memInfo.swapUsedPct, inodes });
+  const osMatch = (osRelease.stdout || "").match(/PRETTY_NAME="?([^"\n]+)/);
+  const cpuModel = (cpuinfo.stdout || "").split(":").slice(1).join(":").trim() || "—";
+  const uptimeSec = parseFloat((procUptime.stdout || "").trim().split(/\s+/)[0] || "");
   return {
-    uptime: { ok: uptime.exitCode === 0, detail: uptime.stdout || uptime.stderr },
-    memory: { ok: mem.exitCode === 0, detail: mem.stdout || mem.stderr },
-    disk: { ok: disk.exitCode === 0, detail: disk.stdout || disk.stderr },
+    info: {
+      os: osMatch?.[1] || "未知系统",
+      kernel: (unameR.stdout || "").trim() || "—",
+      hostname: (hostname.stdout || "").trim() || "—",
+      arch: (unameM.stdout || "").trim() || "—",
+      uptime: Number.isFinite(uptimeSec) ? formatUptime(uptimeSec) : "—",
+      cpuModel,
+      cpuCount,
+      memTotal: formatMb(memInfo.total),
+      swapTotal: formatMb(memInfo.swapTotal),
+      tz: (tz.stdout || "").trim() || "—",
+    },
     health,
+    disks,
+    load: { load1: loadInfo.load1, load5: loadInfo.load5, load15: loadInfo.load15, ncpu: cpuCount },
+    updates: await safe(() => updatesCache("updates", collectUpdates)),
+    logins: await safe(collectLogins),
+    ssh: await safe(collectSsh),
   };
 }
 
@@ -199,6 +276,46 @@ export async function writeNginxConf(path, content, { run = runCommand, baseDir 
 
 const DANGEROUS_PORTS = new Set([3306, 5432, 6379, 27017, 9200, 8888, 888, 9090, 9000, 2375, 2376]);
 
+export const PORT_SERVICE_NAMES = {
+  21: "FTP", 22: "SSH", 25: "SMTP", 53: "DNS", 80: "HTTP", 110: "POP3", 143: "IMAP", 443: "HTTPS",
+  3306: "MySQL", 5432: "PostgreSQL", 6379: "Redis", 27017: "MongoDB", 9200: "Elasticsearch",
+  2375: "Docker API", 2376: "Docker TLS", 8888: "管理面板", 9090: "监控面板", 9000: "管理面板", 8080: "HTTP 备用",
+};
+
+export function parseIptablesRules(stdout) {
+  const rules = [];
+  let num = 0;
+  for (const rawLine of (stdout || "").split("\n")) {
+    const line = rawLine.trim();
+    const m = line.match(/^(\d+)\s+(\w+)\s+(tcp|udp)\s+(\S+)\s+(\S+)\s+.*?\s+dpt:(\d+)\s*$/);
+    if (!m) continue;
+    const [, n, target, proto, src, dst, port] = m;
+    num += 1;
+    rules.push({ num, action: target, proto, port, from: src === "0.0.0.0/0" ? "Anywhere" : src, comment: "" });
+  }
+  return rules;
+}
+
+export function parseConnections(stdout) {
+  const conns = {};
+  for (const rawLine of (stdout || "").split("\n")) {
+    const line = rawLine.trim();
+    const parts = line.split(/\s+/);
+    if (parts.length < 4 || parts[0] !== "ESTAB") continue;
+    const local = parts[3];
+    const m = local.match(/:(\d+)$/);
+    if (!m) continue;
+    const port = Number(m[1]);
+    conns[port] = (conns[port] || 0) + 1;
+  }
+  return conns;
+}
+
+export function parseUfwPolicy(stdout) {
+  const m = String(stdout || "").match(/Default:\s*(.+)/);
+  return m ? m[1].trim() : "";
+}
+
 export function parseUfwStatus(stdout) {
   const rules = [];
   const riskyPorts = [];
@@ -304,20 +421,30 @@ export async function collectFirewall() {
 
 async function doCollectFirewall() {
   if (process.env.FF_DEBUG_METRICS) console.log(`[fw] ${Date.now()}`);
+  const conns = await collectConnections();
   const fwState = await runCommand("firewall-cmd --state");
   if (fwState.exitCode === 0 && /running/i.test(fwState.stdout || "")) {
-    return collectFirewalld();
+    const base = await collectFirewalld();
+    return { ...base, connections: conns };
   }
-  const [ufw, iptables] = await Promise.all([
+  const [ufw, verbose, iptables] = await Promise.all([
     runCommand("ufw status numbered"),
+    runCommand("ufw status verbose"),
     runCommand("iptables -L -n --line-numbers"),
   ]);
   const isActive = ufw.exitCode === 0 && /Status:\s*active/i.test(ufw.stdout || "");
   if (isActive) {
     const { rules, riskyPorts } = parseUfwStatus(ufw.stdout || "");
-    return { ok: riskyPorts.every((p) => !p.dangerous), backend: "ufw", status: { ok: true, detail: "ufw active" }, rules, riskyPorts, raw: "" };
+    return {
+      ok: riskyPorts.every((p) => !p.dangerous),
+      backend: "ufw",
+      status: { ok: true, detail: "ufw active" },
+      policy: parseUfwPolicy(verbose.stdout || ""),
+      rules, riskyPorts, raw: "", connections: conns,
+    };
   }
   const raw = iptables.stdout || iptables.stderr || "";
+  const rules = parseIptablesRules(raw);
   const riskyPorts = [];
   const seen = new Set();
   for (const line of raw.split("\n")) {
@@ -333,10 +460,13 @@ async function doCollectFirewall() {
     ok: riskyPorts.every((p) => !p.dangerous),
     backend: "iptables",
     status: { ok: true, detail: (ufw.stdout || "").trim() || "ufw 不可用" },
-    rules: [],
-    riskyPorts,
-    raw,
+    rules, riskyPorts, raw, connections: conns,
   };
+}
+
+async function collectConnections() {
+  const r = await runCommand("ss -tan 2>/dev/null");
+  return parseConnections(r.stdout || "");
 }
 
 export async function collectServices({ services = [] }) {

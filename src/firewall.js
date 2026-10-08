@@ -1,5 +1,31 @@
 import { runCommand } from "./tools.js";
 
+export function isRoot(getuid = () => (typeof process.getuid === "function" ? process.getuid() : 0)) {
+  return getuid() === 0;
+}
+
+// 校验 root 密码（面板 root 时校验本机 root 登录；非 root 时用 sudo -S 校验当前用户 sudo 密码）
+export async function verifySudo(password, { run = runCommand, getuid } = {}) {
+  if (!password) return false;
+  if (isRoot(getuid)) {
+    const r = await run(`echo "${password}" | su -c true root 2>/dev/null`);
+    return r.exitCode === 0;
+  }
+  const r = await run(`echo "${password}" | sudo -S -p '' true 2>/dev/null`);
+  return r.exitCode === 0;
+}
+
+// 以 root 权限执行命令：root 进程直跑，非 root 走 sudo -S（密码经 stdin）
+export function sudoCmd(cmd, password, getuid) {
+  if (isRoot(getuid)) return cmd;
+  const escaped = String(cmd).replace(/"/g, '\\"');
+  return `echo "${password}" | sudo -S -p '' bash -c "${escaped}" 2>/dev/null`;
+}
+
+export async function runPrivileged(cmd, password, { run = runCommand, timeout = 15000, getuid } = {}) {
+  return run(sudoCmd(cmd, password, getuid), { timeout });
+}
+
 export async function openFirewallPort(port, { run = runCommand, getuid = () => (typeof process.getuid === "function" ? process.getuid() : 0) } = {}) {
   if (getuid() !== 0) return { ok: false, reason: "非 root，跳过防火墙放行" };
   const p = String(port);

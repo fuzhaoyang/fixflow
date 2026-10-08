@@ -421,7 +421,7 @@ test("/api/firewall/close 未登录返回 401", async () => {
 
 test("/api/firewall/close 密码错误返回 403 且不执行命令", async () => {
   const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 1, stdout: "", stderr: "" }; } });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const res = await fetch(`${base}/api/firewall/close`, {
@@ -430,13 +430,17 @@ test("/api/firewall/close 密码错误返回 403 且不执行命令", async () =
   });
   assert.equal(res.status, 403);
   assert.match((await res.json()).error, /密码错误/);
-  assert.equal(calls.length, 0);
+  assert.ok(!calls.some((c) => c.includes("ufw")));
   w.close();
 });
 
 test("/api/firewall/close 正确密码执行 deny 与 delete", async () => {
   const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; } });
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "ok", stderr: "" };
+  } });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const headers = { "Content-Type": "application/json", Cookie: cookie };
@@ -446,19 +450,23 @@ test("/api/firewall/close 正确密码执行 deny 与 delete", async () => {
   });
   assert.equal(deny.status, 200);
   assert.equal((await deny.json()).ok, true);
-  assert.equal(calls[0], "ufw deny 3306/tcp");
+  assert.ok(calls.some((c) => c.includes("ufw deny 3306/tcp")));
   const del = await fetch(`${base}/api/firewall/close`, {
     method: "POST", headers,
     body: JSON.stringify({ port: 80, proto: "tcp", mode: "delete", password: "Secret123!" }),
   });
   assert.equal(del.status, 200);
-  assert.equal(calls[1], "ufw delete allow 80/tcp");
+  assert.ok(calls.some((c) => c.includes("ufw delete allow 80/tcp")));
   w.close();
 });
 
 test("/api/firewall/close 无效参数返回 400", async () => {
   const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  } });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const headers = { "Content-Type": "application/json", Cookie: cookie };
@@ -472,7 +480,139 @@ test("/api/firewall/close 无效参数返回 400", async () => {
     body: JSON.stringify({ port: 22, proto: "tcp", mode: "open", password: "Secret123!" }),
   });
   assert.equal(badMode.status, 400);
-  assert.equal(calls.length, 0);
+  assert.ok(!calls.some((c) => c.includes("ufw")));
+  w.close();
+});
+
+test("/api/firewall/open 密码错误返回 403", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 1, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ port: "8080", proto: "tcp", password: "wrong" }),
+  });
+  assert.equal(res.status, 403);
+  assert.ok(!calls.some((c) => c.includes("ufw")));
+  w.close();
+});
+
+test("/api/firewall/open 正确密码执行 ufw allow，支持逗号分隔", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "Rule added", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const one = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "8080", proto: "tcp", password: "Secret123!" }),
+  });
+  assert.equal(one.status, 200);
+  assert.ok(calls.some((c) => c.includes("ufw allow 8080/tcp")));
+  const multi = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "80,443", proto: "udp", password: "Secret123!" }),
+  });
+  assert.equal(multi.status, 200);
+  assert.ok(calls.some((c) => c.includes("ufw allow 80,443/udp")));
+  w.close();
+});
+
+test("/api/firewall/open 无效端口/协议返回 400", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const badPort = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "70000", proto: "tcp", password: "Secret123!" }),
+  });
+  assert.equal(badPort.status, 400);
+  const badProto = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "22", proto: "icmp", password: "Secret123!" }),
+  });
+  assert.equal(badProto.status, 400);
+  assert.ok(!calls.some((c) => c.includes("ufw")));
+  w.close();
+});
+
+test("/api/firewall/open 支持来源 IP 与无效来源校验", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "Rule added", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const withFrom = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "22", proto: "tcp", from: "192.168.1.0/24", password: "Secret123!" }),
+  });
+  assert.equal(withFrom.status, 200);
+  assert.ok(calls.some((c) => c.includes("ufw allow from 192.168.1.0/24 to any port 22 proto tcp")));
+  const badFrom = await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "22", proto: "tcp", from: "not-an-ip", password: "Secret123!" }),
+  });
+  assert.equal(badFrom.status, 400);
+  assert.ok(!calls.some((c) => c.includes("allow from not-an-ip")));
+  w.close();
+});
+
+test("/api/firewall/control enable/disable 提权执行", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "ok", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const en = await fetch(`${base}/api/firewall/control`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "enable", password: "Secret123!" }),
+  });
+  assert.equal(en.status, 200);
+  assert.ok(calls.some((c) => c.includes("ufw enable")));
+  const bad = await fetch(`${base}/api/firewall/control`, {
+    method: "POST", headers,
+    body: JSON.stringify({ action: "reboot", password: "Secret123!" }),
+  });
+  assert.equal(bad.status, 400);
+  w.close();
+});
+
+test("/api/firewall/ops 返回操作记录且成功操作写入审计", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "ok", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  await fetch(`${base}/api/firewall/open`, {
+    method: "POST", headers,
+    body: JSON.stringify({ port: "8080", proto: "tcp", password: "Secret123!" }),
+  });
+  const ops = await (await fetch(`${base}/api/firewall/ops`, { headers: { Cookie: cookie } })).json();
+  assert.ok(Array.isArray(ops.ops));
+  assert.ok(ops.ops.some((o) => o.op === "open" && o.target.includes("8080")));
   w.close();
 });
 

@@ -242,6 +242,13 @@
     .fw-stat .v { font-size: 18px; font-weight: 700; line-height: 1.4; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
     .fw-stat .v.bad { color: var(--bad); }
     .fw-sub { font-size: 13px; color: var(--accent); margin: 14px 0 8px; }
+    .fw-policy { font-size: 12px; color: var(--muted); margin: 0 0 10px; display: flex; gap: 6px; align-items: center; }
+    .fw-policy b { color: var(--text); font-family: var(--font-mono); }
+    .fw-svc { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); font-size: 10px; border-radius: 4px; padding: 1px 5px; margin-right: 6px; }
+    .fw-from-open { color: var(--bad); font-weight: 600; }
+    .fw-from-ip { color: var(--ok); }
+    .fw-pick { accent-color: var(--accent); width: 15px; height: 15px; }
+    .fw-ops { margin-top: 4px; }
     .fw-risk { display: flex; flex-direction: column; gap: 8px; }
     .fw-risk-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
     .fw-risk-row .fw-port { font-family: var(--font-mono); font-weight: 600; min-width: 90px; }

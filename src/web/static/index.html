@@ -578,6 +578,27 @@
     </div>
   </div>
 </div>
+<div class="modal-mask" id="fw-open-mask">
+  <div class="modal">
+    <button class="modal-close" id="fw-open-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2 data-i18n="fw.openTitle">新增开放端口</h2>
+    <p class="modal-text" data-i18n="fw.openHint">开放防火墙端口（ufw allow），操作需输入 root 密码。</p>
+    <div class="field"><label data-i18n="fw.port">端口</label><input id="fw-open-port" type="text" placeholder="80 或 80,443 或 8000-9000" data-i18n="fw.portPh" data-i18n-attr="placeholder"></div>
+    <div class="field"><label data-i18n="fw.proto">协议</label>
+      <select id="fw-open-proto" style="width:100%;padding:9px 12px;height:42px;border-radius:var(--r-sm);border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px">
+        <option value="tcp">TCP</option>
+        <option value="udp">UDP</option>
+      </select>
+    </div>
+    <div class="field"><label data-i18n="fw.fromLabel">来源（留空=全网）</label><input id="fw-open-from" type="text" placeholder="192.168.1.0/24" data-i18n="fw.fromPh" data-i18n-attr="placeholder"></div>
+    <div class="field"><label data-i18n="fw.rootPwdLabel">root 密码</label><input id="fw-open-password" type="password" autocomplete="current-password" placeholder="请输入 root 密码" data-i18n="fw.rootPwdPh" data-i18n-attr="placeholder"></div>
+    <div class="hint" id="fw-open-err" style="color:var(--bad)"></div>
+    <div class="modal-actions">
+      <button class="btn" id="fw-open-cancel" data-i18n="proc.cancel">取消</button>
+      <button class="btn" id="fw-open-submit" data-i18n="fw.openBtn">开放端口</button>
+    </div>
+  </div>
+</div>
 <div class="modal-mask" id="proc-mask">
   <div class="modal">
     <h2 id="proc-title">进程操作</h2>

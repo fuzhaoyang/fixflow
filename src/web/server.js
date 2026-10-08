@@ -21,6 +21,7 @@ import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPasswor
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
+import { verifySudo, runPrivileged } from "../firewall.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
@@ -211,6 +212,19 @@ export async function startWeb(config = {}, deps = {}) {
     await chmod(configPath, 0o600).catch(() => {});
   };
   const execCmd = deps.runCommand || runCommand;
+  const fwVerify = (password) => verifySudo(password, { run: execCmd });
+  const fwRun = (cmd, password) => runPrivileged(cmd, password, { run: execCmd });
+  const fwOpsPath = join(dirname(configPath), "firewall-ops.json");
+  const readFwOps = async () => {
+    try { return JSON.parse(await readFile(fwOpsPath, "utf8")); } catch { return []; }
+  };
+  const appendFwOp = async (op) => {
+    try {
+      const ops = await readFwOps();
+      ops.push({ ts: Date.now(), ...op });
+      await writeFile(fwOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
+    } catch {}
+  };
 
   const procGuard = async (pid) => {
     if (!Number.isInteger(pid) || pid <= 1) return "系统级进程，禁止操作";
@@ -920,11 +934,27 @@ export async function startWeb(config = {}, deps = {}) {
             }
           }
         }
+      } else if (url.pathname === "/api/firewall/open" && req.method === "POST") {
+        const body = await readBody(req);
+        const { port, proto = "tcp", from = "", password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else if (!/^\d+(,\d+)*$/.test(String(port || "")) || String(port).split(",").some((p) => { const n = Number(p); return !Number.isInteger(n) || n < 1 || n > 65535; })) {
+          sendJson(res, { error: "无效的端口" }, 400);
+        } else if (!["tcp", "udp"].includes(proto)) {
+          sendJson(res, { error: "不支持的协议" }, 400);
+        } else if (from && !/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(from)) {
+          sendJson(res, { error: "无效的来源（需 IP 或网段，如 192.168.1.0/24）" }, 400);
+        } else {
+          const cmd = from ? `ufw allow from ${from} to any port ${port} proto ${proto}` : `ufw allow ${port}/${proto}`;
+          const r = await fwRun(cmd, password);
+          if (r.exitCode === 0) await appendFwOp({ op: "open", target: `${port}/${proto}${from ? ` from ${from}` : ""}`, cmd, ok: true });
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
       } else if (url.pathname === "/api/firewall/close" && req.method === "POST") {
         const body = await readBody(req);
         const { port, proto = "tcp", mode, password } = JSON.parse(body || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(password || "", auth)) {
+        if (!(await fwVerify(password))) {
           sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else if (!Number.isInteger(port) || port < 1 || port > 65535) {
           sendJson(res, { error: "无效的端口" }, 400);
@@ -934,9 +964,25 @@ export async function startWeb(config = {}, deps = {}) {
           sendJson(res, { error: "不支持的关闭模式" }, 400);
         } else {
           const cmd = mode === "deny" ? `ufw deny ${port}/${proto}` : `ufw delete allow ${port}/${proto}`;
-          const r = await execCmd(cmd, { timeout: 15000 });
+          const r = await fwRun(cmd, password);
+          if (r.exitCode === 0) await appendFwOp({ op: mode === "deny" ? "deny" : "close", target: `${port}/${proto}`, cmd, ok: true });
           sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
         }
+      } else if (url.pathname === "/api/firewall/control" && req.method === "POST") {
+        const body = await readBody(req);
+        const { action, password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else if (!["enable", "disable"].includes(action)) {
+          sendJson(res, { error: "不支持的操作" }, 400);
+        } else {
+          const cmd = `ufw ${action}`;
+          const r = await fwRun(cmd, password);
+          if (r.exitCode === 0) await appendFwOp({ op: action, target: "ufw", cmd, ok: true });
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
+      } else if (url.pathname === "/api/firewall/ops" && req.method === "GET") {
+        sendJson(res, { ops: await readFwOps() });
       } else if (url.pathname === "/api/nginx/confs" && req.method === "GET") {
         sendJson(res, await listNginxConfs());
       } else if (url.pathname === "/api/nginx/conf" && req.method === "GET") {
