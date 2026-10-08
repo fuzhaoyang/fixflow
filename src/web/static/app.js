@@ -122,10 +122,8 @@ function applyRoute() {
     netTools.style.display = currentFilter === "network" ? "flex" : "none";
     overviewEl.style.display = currentFilter === "all" ? "flex" : "none";
     cards.style.display = currentFilter === "all" ? "none" : "";
-    if (currentFilter === "all") {
-      refreshOverview();
-    }
-    else renderCards();
+    if (currentFilter === "all" || currentFilter === "system") refreshOverview();
+    if (currentFilter !== "all") renderCards();
     refreshMetrics();
   }
 }
@@ -472,6 +470,7 @@ async function refreshOverview() {
     sel.innerHTML = `<option value="all" data-i18n="ov.all">${t("ov.all")}</option>` + nics.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
     if (nics.includes(prev)) sel.value = prev;
     renderChart();
+    if (currentFilter === "system") drawSystemTrend();
   } catch {}
 }
 
@@ -541,26 +540,22 @@ function initOverview() {
 // ---------- 监控 ----------
 function renderCards() {
   cards.innerHTML = "";
+  cards.classList.toggle("system-mode", currentFilter === "system");
   const items = currentFilter === "all" ? MODULES : MODULES.filter(([k]) => k === currentFilter);
   for (const [key, lkey] of items) {
     const label = t(lkey);
     const m = metrics[key];
+    if (key === "system") {
+      cards.innerHTML = renderSystem(m, label);
+      bindSystemCards();
+      const sdot = document.querySelector('.menu-item[data-filter="system"] .dot');
+      if (sdot) sdot.className = "dot " + (m?.health && !(m.health.risks || []).length ? "ok" : m?.health ? "bad" : "na");
+      continue;
+    }
     const card = document.createElement("div");
     card.className = "card";
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd({ ...m, userProcs: metrics.userProcs })}`;
-    } else if (key === "system") {
-      const health = m?.health?.items;
-      let healthHtml = "";
-      if (health?.length) {
-        const rows = health.map((h) => {
-          const stIcon = icon(h.status === "ok" ? "check" : h.status === "warn" ? "warn" : "x");
-          const cls = h.status === "ok" ? "ok" : h.status === "warn" ? "na" : "bad";
-          return `<tr><td>${escapeHtml(h.name)}</td><td class="${cls}">${stIcon} ${h.status === "ok" ? t("mon.ok") : h.status === "warn" ? t("mon.warn") : t("mon.bad")}</td><td>${escapeHtml(h.detail)}</td>${h.advice ? `<td>${escapeHtml(h.advice)}</td>` : "<td>—</td>"}</tr>`;
-        }).join("");
-        healthHtml = `<div style="margin-bottom:8px"><table class="svc-table"><thead><tr><th>${t("mon.item")}</th><th>${t("mon.status")}</th><th>${t("mon.value")}</th><th>${t("mon.advice")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-      }
-      card.innerHTML = `<h2>${label} <button class="btn small" id="report-btn" style="margin-left:8px">${icon("file")} ${t("mon.report")}</button></h2>${healthHtml}<pre>${escapeHtml(detail(m))}</pre><div id="report-box" style="display:none"><div style="margin-bottom:8px"><button class="btn small" id="report-copy">${t("mon.copy")}</button> <button class="btn small" id="report-dl">${t("mon.downloadMd")}</button></div><pre id="report-out"></pre></div>`;
     } else if (key === "network") {
       const scan = metrics.portScan;
       const ping = metrics.pingResult;
@@ -621,6 +616,156 @@ function renderCards() {
       dot.className = "dot " + (ok === true ? "ok" : ok === false ? "bad" : "na");
     }
   }
+}
+
+function sysKv(label, value) {
+  return `<div class="kv-item"><span class="k">${escapeHtml(label)}</span><span class="v">${escapeHtml(value ?? "—")}</span></div>`;
+}
+
+function sysStatusCls(status) {
+  return status === "ok" ? "ok" : status === "warn" ? "na" : "bad";
+}
+
+function renderSystemSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  const body = (inner) => `<div class="card-body">${inner}</div>`;
+  const card = (title, inner, wide = false) => `<div class="card${wide ? " wide" : ""}"><h2>${title}</h2>${inner}</div>`;
+  const kvSkel = `<div class="sys-kv">${Array.from({ length: 10 }, () => `<div class="kv-item"><div class="skel-line" style="width:100%"></div></div>`).join("")}</div>`;
+  return [
+    card(t("sys.infoTitle"), kvSkel, true),
+    card(t("sys.healthTitle"), body(skel(4))),
+    card(t("sys.loadTitle"), body(skel(3))),
+    card(t("sys.diskTitle"), body(skel(4)), true),
+    card(t("sys.trendTitle"), body(`<div class="skel-block"></div>`), true),
+    card(t("sys.loginTitle"), body(skel(4))),
+    card(t("sys.sshTitle"), body(skel(4))),
+    card(t("sys.updateTitle"), body(skel(2))),
+    card(t("sys.opTitle"), body(skel(3))),
+  ].join("");
+}
+
+function renderSystem(m, label) {
+  if (!m) return renderSystemSkeleton();
+  if (m.error) return `<div class="card wide"><h2>${label}</h2><pre>${escapeHtml(m.error)}</pre></div>`;
+  const info = m.info || {};
+  const health = m.health || {};
+  const out = [];
+
+  out.push(`<div class="card wide"><h2>${icon("activity")} ${t("sys.infoTitle")} <button class="btn small" id="report-btn" style="margin-left:8px">${icon("file")} ${t("mon.report")}</button></h2>
+    <div class="sys-kv">
+      ${sysKv(t("sys.os"), info.os)}
+      ${sysKv(t("sys.kernel"), info.kernel)}
+      ${sysKv(t("sys.hostname"), info.hostname)}
+      ${sysKv(t("sys.arch"), info.arch)}
+      ${sysKv(t("sys.uptime"), info.uptime)}
+      ${sysKv(t("sys.cpuModel"), info.cpuModel)}
+      ${sysKv(t("sys.cpuCount"), info.cpuCount)}
+      ${sysKv(t("sys.memTotal"), info.memTotal)}
+      ${sysKv(t("sys.swapTotal"), info.swapTotal)}
+      ${sysKv(t("sys.tz"), info.tz)}
+    </div>
+    <div id="report-box" style="display:none"><div style="margin:8px 0"><button class="btn small" id="report-copy">${t("mon.copy")}</button> <button class="btn small" id="report-dl">${t("mon.downloadMd")}</button></div><pre id="report-out"></pre></div>
+  </div>`);
+
+  const hrows = (health.items || []).map((h) => `<tr><td>${escapeHtml(h.name)}</td><td class="${sysStatusCls(h.status)}">${escapeHtml(h.status === "ok" ? t("mon.ok") : h.status === "warn" ? t("mon.warn") : t("mon.bad"))}</td><td>${escapeHtml(h.detail)}</td><td>${escapeHtml(h.advice || "—")}</td></tr>`).join("");
+  out.push(`<div class="card"><h2>${t("sys.healthTitle")}</h2><div class="card-body"><table class="svc-table"><thead><tr><th>${t("mon.item")}</th><th>${t("mon.status")}</th><th>${t("mon.value")}</th><th>${t("mon.advice")}</th></tr></thead><tbody>${hrows || `<tr><td colspan="4">${t("mon.notConfigured")}</td></tr>`}</tbody></table></div></div>`);
+
+  const ld = m.load || {};
+  const bar = (label, v) => {
+    const ncpu = ld.ncpu || 1;
+    const pct = Math.min(100, Math.round(((v || 0) / ncpu) * 100));
+    const cls = (v || 0) > ncpu ? "bad" : (v || 0) > ncpu * 0.7 ? "na" : "ok";
+    return `<div class="load-row"><span class="k">${label}</span><div class="load-track"><div class="load-fill ${cls}" style="width:${pct}%"></div></div><span class="v">${v ?? "—"}</span></div>`;
+  };
+  out.push(`<div class="card"><h2>${t("sys.loadTitle")}</h2><div class="card-body">${bar("1 min", ld.load1)}${bar("5 min", ld.load5)}${bar("15 min", ld.load15)}<div class="sys-hint">${t("sys.loadHint").replace("{n}", ld.ncpu || "?")}</div></div></div>`);
+
+  const drows = (m.disks || []).map((d) => `<tr><td>${escapeHtml(d.fs)}</td><td>${escapeHtml(d.size)}</td><td>${escapeHtml(d.used)}</td><td>${escapeHtml(d.avail)}</td><td class="${d.usedPct > 90 ? "bad" : d.usedPct > 80 ? "na" : "ok"}">${d.usedPct}%</td><td>${escapeHtml(d.mount)}</td></tr>`).join("");
+  out.push(`<div class="card wide"><h2>${t("sys.diskTitle")}</h2><div class="card-body"><table class="svc-table"><thead><tr><th>${t("sys.fs")}</th><th>${t("sys.size")}</th><th>${t("sys.used")}</th><th>${t("sys.avail")}</th><th>${t("sys.usePct")}</th><th>${t("sys.mount")}</th></tr></thead><tbody>${drows || `<tr><td colspan="6">${t("mon.notConfigured")}</td></tr>`}</tbody></table></div></div>`);
+
+  out.push(`<div class="card wide"><h2>${t("sys.trendTitle")}</h2><div class="chart-wrap" style="height:220px"><canvas id="sys-trend-chart" style="width:100%;height:220px;display:block"></canvas></div><div class="trend-legend" id="sys-trend-legend"></div></div>`);
+
+  const lg = m.logins || {};
+  const listBlock = (arr) => (arr && arr.length) ? `<pre class="sys-list">${escapeHtml(arr.join("\n"))}</pre>` : `<pre class="sys-list hint">${t("sys.none")}</pre>`;
+  out.push(`<div class="card"><h2>${t("sys.loginTitle")}</h2><div class="card-body"><h3 class="sys-sub">${t("sys.loginCurrent")}</h3>${listBlock(lg.current)}<h3 class="sys-sub">${t("sys.loginRecent")}</h3>${listBlock(lg.recent)}<h3 class="sys-sub">${t("sys.loginFailed")}</h3>${listBlock(lg.failed)}</div></div>`);
+
+  const srows = (m.ssh?.items || []).map((s) => `<tr><td>${escapeHtml(s.name)}</td><td class="${s.ok ? "ok" : "na"}">${s.ok ? t("mon.ok") : t("mon.warn")}</td><td>${escapeHtml(s.detail)}</td></tr>`).join("");
+  out.push(`<div class="card"><h2>${t("sys.sshTitle")}</h2><div class="card-body"><table class="svc-table"><thead><tr><th>${t("sys.sshItem")}</th><th>${t("mon.status")}</th><th>${t("sys.sshValue")}</th></tr></thead><tbody>${srows || `<tr><td colspan="3">${t("sys.none")}</td></tr>`}</tbody></table></div></div>`);
+
+  const up = m.updates;
+  const upBody = up && up.count > 0
+    ? `<div class="sys-hint">${t("sys.updateCount").replace("{n}", up.count)}${up.security ? " · " + t("sys.updateSecurity").replace("{n}", up.security) : ""}</div><pre class="sys-list">${escapeHtml((up.list || []).join("\n"))}</pre>`
+    : `<div class="sys-hint">${t("sys.updateNone")}</div>`;
+  out.push(`<div class="card"><h2>${t("sys.updateTitle")}</h2><div class="card-body">${upBody}<button class="btn small danger" data-sys-op="update" ${up && up.count > 0 ? "" : "disabled"}>${t("sys.updateBtn")}</button></div></div>`);
+
+  out.push(`<div class="card"><h2>${t("sys.opTitle")}</h2><div class="card-body"><div class="sys-op-btns"><button class="btn small" data-sys-op="clean">${t("sys.cleanBtn")}</button><button class="btn small" data-sys-op="power" data-sys-action="reboot">${t("sys.rebootBtn")}</button><button class="btn small danger" data-sys-op="power" data-sys-action="shutdown">${t("sys.shutdownBtn")}</button></div><h3 class="sys-sub">${t("sys.opHistory")}</h3><div id="sys-ops-list"><pre class="sys-list hint">${t("fs.loading")}</pre></div></div></div>`);
+
+  return out.join("");
+}
+
+function bindSystemCards() {
+  drawSystemTrend();
+  loadSysOps();
+  const reportBtn = document.getElementById("report-btn");
+  if (reportBtn) {
+    reportBtn.onclick = async () => {
+      const box = document.getElementById("report-box");
+      const res = await fetch("api/report");
+      const report = await res.text();
+      document.getElementById("report-out").textContent = report;
+      box.style.display = "";
+      document.getElementById("report-copy").onclick = () => navigator.clipboard.writeText(report);
+      document.getElementById("report-dl").onclick = () => {
+        const blob = new Blob([report], { type: "text/markdown" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `fixflow-report-${Date.now()}.md`;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      };
+    };
+  }
+}
+
+function drawSystemTrend() {
+  const canvas = document.getElementById("sys-trend-chart");
+  if (!canvas) return;
+  const samples = overviewData?.trend || [];
+  if (!samples.length) {
+    const { ctx, w, h } = setupCanvas(canvas);
+    ctx.fillStyle = cssVar("--muted"); ctx.font = "12px sans-serif"; ctx.textAlign = "center";
+    ctx.fillText(t("sys.trendWait"), w / 2, h / 2); ctx.textAlign = "left";
+    return;
+  }
+  const labels = samples.map((s) => { const d = new Date(s.t * 1000); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`; });
+  drawLineChart(canvas, {
+    labels,
+    series: [
+      { name: "CPU", color: "#3b82f6", data: samples.map((s) => s.cpu || 0) },
+      { name: t("sys.mem"), color: "#f59e0b", data: samples.map((s) => s.mem || 0) },
+      { name: t("sys.disk"), color: "#10b981", data: samples.map((s) => (s.disk == null ? 0 : s.disk)) },
+    ],
+    fixedMax: 100,
+  });
+  const legend = document.getElementById("sys-trend-legend");
+  if (legend) legend.innerHTML = `<span style="color:#3b82f6">● CPU</span><span style="color:#f59e0b">● ${t("sys.mem")}</span><span style="color:#10b981">● ${t("sys.disk")}</span>`;
+}
+
+async function loadSysOps() {
+  const el = document.getElementById("sys-ops-list");
+  if (!el) return;
+  try {
+    const res = await fetch("api/system/ops");
+    const data = await res.json();
+    const ops = Array.isArray(data.ops) ? data.ops.slice(-8).reverse() : [];
+    if (!ops.length) { el.innerHTML = `<pre class="sys-list hint">${t("sys.none")}</pre>`; return; }
+    const labels = { update: t("sys.opUpdate"), clean: t("sys.opClean"), reboot: t("sys.opReboot"), shutdown: t("sys.opShutdown") };
+    const rows = ops.map((o) => {
+      const d = new Date(o.ts);
+      const ts = `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      return `<tr><td>${ts}</td><td>${escapeHtml(labels[o.op] || o.op)}</td><td class="${o.ok ? "ok" : "bad"}">${o.ok ? t("mon.ok") : t("mon.bad")}</td></tr>`;
+    }).join("");
+    el.innerHTML = `<table class="svc-table"><tbody>${rows}</tbody></table>`;
+  } catch { el.innerHTML = `<pre class="sys-list hint">${t("fs.loadFail").replace("{e}", "")}</pre>`; }
 }
 
 function renderSystemd(m) {
@@ -2283,6 +2428,7 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isNginxSave = kind === "nginx-save";
   const isNginxOp = kind === "nginx-op";
   const isFs = kind === "fs";
+  const isSys = kind === "sys";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
@@ -2311,7 +2457,7 @@ document.getElementById("proc-confirm").onclick = async () => {
       fd.append("file", procTarget.body.file, procTarget.body.file.name);
       res = await fetch("api/fs/upload", { method: "POST", body: fd });
     } else {
-      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : "api/process";
+      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isSys ? `api/system/${procTarget.op}` : "api/process";
       const payload = isFw
         ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
         : isFwCtl
@@ -2322,7 +2468,9 @@ document.getElementById("proc-confirm").onclick = async () => {
               ? { action: procTarget.action, password }
               : isFs
                 ? { ...(procTarget.body || {}), password }
-                : { ...procTarget, password };
+                : isSys
+                  ? { ...(procTarget.body || {}), password }
+                  : { ...procTarget, password };
       res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       data = await res.json();
       if (res.status === 403 || res.status === 400) {
@@ -2336,6 +2484,7 @@ document.getElementById("proc-confirm").onclick = async () => {
     if (isFs && fsOp === "write") fsEditMask.classList.remove("show");
     procMask.classList.remove("show");
     if (isFwCtl) showSaveMsg(t("fw.controlDone").replace("{action}", procTarget.action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn")), "ok");
+    if (isSys) showSaveMsg(t("sys.opDone"), "ok");
     refreshMetrics();
     if (isFs) fsRefresh();
   } catch (e2) {
@@ -2345,9 +2494,28 @@ document.getElementById("proc-confirm").onclick = async () => {
   }
 };
 
-// 新增开放端口弹窗
-const fwOpenMask = document.getElementById("fw-open-mask");
+// 系统操作（更新/清理/重启/关机）密码验证弹窗
 document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-sys-op]");
+  if (!btn || btn.disabled) return;
+  const op = btn.dataset.sysOp;
+  const action = btn.dataset.sysAction || "";
+  procTarget = { kind: "sys", op, body: op === "power" ? { action } : {} };
+  const isReboot = action === "reboot";
+  const titles = { update: t("sys.updateTitle"), clean: t("sys.cleanTitle"), power: isReboot ? t("sys.rebootTitle") : t("sys.shutdownTitle") };
+  const texts = { update: t("sys.updateConfirm"), clean: t("sys.cleanConfirm"), power: isReboot ? t("sys.rebootConfirm") : t("sys.shutdownConfirm") };
+  document.getElementById("proc-title").textContent = titles[op];
+  document.getElementById("proc-text").textContent = texts[op];
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
+
+// 新增开放端口弹窗
+const fwOpenMask = document.getElementById("fw-open-mask");document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-fw-open]");
   if (!btn) return;
   document.getElementById("fw-open-port").value = "";

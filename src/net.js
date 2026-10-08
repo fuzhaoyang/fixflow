@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, statfs } from "node:fs/promises";
 
 const netRegex = /^(\S+):\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/;
 
@@ -53,10 +53,30 @@ export function nowTs() {
   return Math.floor(Date.now() / 1000);
 }
 
+export async function readMemInfo(path = "/proc/meminfo") {
+  const raw = await readFile(path, "utf8");
+  const get = (k) => {
+    const m = raw.match(new RegExp(`^${k}:\\s+(\\d+)`, "m"));
+    return m ? Number(m[1]) : 0;
+  };
+  const total = get("MemTotal");
+  const avail = get("MemAvailable");
+  const cache = get("Buffers") + get("Cached") + get("SReclaimable");
+  const used = Math.max(0, total - avail);
+  const real = Math.max(0, used - cache);
+  return { total, usedPct: total ? Math.round((real / total) * 100) : 0 };
+}
+
+async function readDiskPct(mount = "/") {
+  const st = await statfs(mount);
+  return st.blocks ? Math.round(((st.blocks - st.bfree) / st.blocks) * 100) : 0;
+}
+
 export function createMonitor(store = {}) {
   store.net = store.net || { last: null, samples: [] };
   store.io = store.io || { last: null, samples: [] };
   store.cpu = store.cpu || null;
+  store.trend = store.trend || { counter: 0, samples: [] };
   return {
     async tick() {
       const t = nowTs();
@@ -121,10 +141,22 @@ export function createMonitor(store = {}) {
         store.cpu = calcCpuUsage(store.prevCpu, cpu);
         store.prevCpu = cpu;
       } catch { store.cpu = 0; }
+
+      store.trend.counter = (store.trend.counter || 0) + 1;
+      if (store.trend.counter % 5 === 0) {
+        try {
+          const mem = await readMemInfo();
+          let disk = null;
+          try { disk = await readDiskPct("/"); } catch {}
+          store.trend.samples.push({ t, cpu: store.cpu ?? 0, mem: mem.usedPct, disk });
+          trim(store.trend.samples, 360);
+        } catch {}
+      }
     },
     net: () => store.net,
     io: () => store.io,
     cpu: () => store.cpu ?? 0,
+    trend: () => store.trend,
   };
 }
 

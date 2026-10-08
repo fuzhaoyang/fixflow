@@ -24,6 +24,8 @@ const safe = async (fn) => {
   try { return await fn(); } catch { return { error: "N/A" }; }
 };
 
+const updatesCache = createTtlCache(300000);
+
 function formatMb(mb) {
   const n = Number(mb) || 0;
   return n >= 1024 ? `${(n / 1024).toFixed(1)} GB` : `${n} MB`;
@@ -41,7 +43,7 @@ export function parseSshRisk(text = "", emptyPwUsers = []) {
   const pep = get("PermitEmptyPasswords");
   return {
     items: [
-      { name: "PermitRootLogin", ok: prl === "no" || prl === "prohibit-password", detail: prl || "未设置（默认 prohibit-password）" },
+      { name: "PermitRootLogin", ok: prl !== "yes", detail: prl || "未设置（默认 prohibit-password）" },
       { name: "PasswordAuthentication", ok: pwa !== "yes", detail: pwa || "未设置（默认 yes）" },
       { name: "PermitEmptyPasswords", ok: pep !== "yes", detail: pep || "未设置（默认 no）" },
       { name: "空密码账户", ok: emptyPwUsers.length === 0, detail: emptyPwUsers.length ? emptyPwUsers.join(", ") : "无" },
@@ -83,7 +85,7 @@ async function collectSsh() {
 
 export async function collectSystem() {
   const [uptime, mem, disk, diskInode, nproc, osRelease, unameR, unameM, hostname, cpuinfo, tz, procUptime] = await Promise.all([
-    runCommand("uptime"), runCommand("free -m"), runCommand("df -h"), runCommand("df -i"), runCommand("nproc"),
+    runCommand("uptime"), runCommand("LC_ALL=C free -m"), runCommand("df -h"), runCommand("df -i"), runCommand("nproc"),
     runCommand("cat /etc/os-release"), runCommand("uname -r"), runCommand("uname -m"), runCommand("hostname"),
     runCommand("grep -m1 'model name' /proc/cpuinfo"),
     runCommand("timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null"),

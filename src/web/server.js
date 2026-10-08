@@ -213,7 +213,7 @@ export async function startWeb(config = {}, deps = {}) {
   };
   const execCmd = deps.runCommand || runCommand;
   const fwVerify = (password) => verifySudo(password, { run: execCmd });
-  const fwRun = (cmd, password) => runPrivileged(cmd, password, { run: execCmd });
+  const fwRun = (cmd, password, timeout) => runPrivileged(cmd, password, { run: execCmd, timeout });
   const fwOpsPath = join(dirname(configPath), "firewall-ops.json");
   const readFwOps = async () => {
     try { return JSON.parse(await readFile(fwOpsPath, "utf8")); } catch { return []; }
@@ -223,6 +223,17 @@ export async function startWeb(config = {}, deps = {}) {
       const ops = await readFwOps();
       ops.push({ ts: Date.now(), ...op });
       await writeFile(fwOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
+    } catch {}
+  };
+  const sysOpsPath = join(dirname(configPath), "system-ops.json");
+  const readSysOps = async () => {
+    try { return JSON.parse(await readFile(sysOpsPath, "utf8")); } catch { return []; }
+  };
+  const appendSysOp = async (op) => {
+    try {
+      const ops = await readSysOps();
+      ops.push({ ts: Date.now(), ...op });
+      await writeFile(sysOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
     } catch {}
   };
 
@@ -534,6 +545,7 @@ export async function startWeb(config = {}, deps = {}) {
           nics,
           net: net.samples,
           io: io.samples,
+          trend: monitor.trend().samples,
           usage: usageStore.daily(30),
         });
       } else if (url.pathname === "/api/usage" && req.method === "GET") {
@@ -983,6 +995,43 @@ export async function startWeb(config = {}, deps = {}) {
         }
       } else if (url.pathname === "/api/firewall/ops" && req.method === "GET") {
         sendJson(res, { ops: await readFwOps() });
+      } else if (url.pathname === "/api/system/update" && req.method === "POST") {
+        const body = await readBody(req);
+        const { password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else {
+          const cmd = "DEBIAN_FRONTEND=noninteractive apt-get -y upgrade";
+          const r = await fwRun(cmd, password, 300000);
+          if (r.exitCode === 0) await appendSysOp({ op: "update", ok: true });
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
+      } else if (url.pathname === "/api/system/clean" && req.method === "POST") {
+        const body = await readBody(req);
+        const { password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else {
+          const cmd = "journalctl --vacuum-time=7d 2>&1; apt-get clean 2>&1; find /tmp -mindepth 1 -atime +7 -exec rm -rf {} + 2>/dev/null; echo done";
+          const r = await fwRun(cmd, password, 120000);
+          if (r.exitCode === 0) await appendSysOp({ op: "clean", ok: true });
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
+      } else if (url.pathname === "/api/system/power" && req.method === "POST") {
+        const body = await readBody(req);
+        const { action, password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else if (!["reboot", "shutdown"].includes(action)) {
+          sendJson(res, { error: "不支持的操作" }, 400);
+        } else {
+          const cmd = action === "reboot" ? "shutdown -r +1" : "shutdown -h +1";
+          const r = await fwRun(cmd, password);
+          if (r.exitCode === 0) await appendSysOp({ op: action, ok: true });
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
+      } else if (url.pathname === "/api/system/ops" && req.method === "GET") {
+        sendJson(res, { ops: await readSysOps() });
       } else if (url.pathname === "/api/nginx/confs" && req.method === "GET") {
         sendJson(res, await listNginxConfs());
       } else if (url.pathname === "/api/nginx/conf" && req.method === "GET") {
