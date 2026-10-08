@@ -1000,8 +1000,17 @@ function fwServiceTag(portStr) {
   return name ? `<span class="fw-svc">${escapeHtml(name)}</span>` : "";
 }
 
+function renderFirewallSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  const stat = (label) => `<div class="fw-stat"><span class="k">${label}</span><div class="skel-line" style="width:70%"></div></div>`;
+  const riskRow = `<div class="fw-risk-row"><div class="skel-line" style="width:150px;margin:0"></div><div class="skel-line" style="width:80px;margin:0"></div><div class="skel-line" style="width:110px;margin:0"></div></div>`;
+  const summary = `<div class="fw-summary">${stat(t("fw.state"))}${stat(t("fw.rules"))}${stat(t("fw.open"))}</div><div class="fw-policy"><div class="skel-line" style="width:200px;margin:0"></div></div>`;
+  return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3><div class="card-body">${skel(5)}</div><h3 class="fw-sub">${t("fw.riskSection")}</h3><div class="fw-risk">${riskRow}${riskRow}${riskRow}</div><h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops">${skel(2)}</div>`;
+}
+
 function renderFirewall(m) {
-  if (!m || m.error) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
+  if (!m) return renderFirewallSkeleton();
+  if (m.error) return `<pre>${escapeHtml(m.error)}</pre>`;
   const rules = Array.isArray(m.rules) ? m.rules : [];
   const risky = Array.isArray(m.riskyPorts) ? m.riskyPorts : [];
   const dangerCount = risky.filter((p) => p.dangerous).length;
