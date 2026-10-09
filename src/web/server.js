@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats } from "../metrics.js";
-import { loadConfig, normalizeSslSites, readJsonFile } from "../config.js";
+import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection } from "../metrics.js";
+import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
 import { createAlertsManager } from "../alerts.js";
@@ -184,6 +184,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.lang = config.lang === "en" ? "en" : "zh";
   config.theme = config.theme === "light" ? "light" : "dark";
   config.fsCollapsed = config.fsCollapsed === true;
+  config.dbConnections = normalizeDbConnections(config.dbConnections);
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -206,7 +207,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, dbConnections: config.dbConnections };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
     await chmod(configPath, 0o600).catch(() => {});
@@ -250,6 +251,17 @@ export async function startWeb(config = {}, deps = {}) {
       await writeFile(sysOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
     } catch {}
   };
+  const DB_DEFAULT_PORT = { postgres: "5432", mysql: "3306", redis: "6379", mongodb: "27017", sqlite: "" };
+  const DB_TYPES = new Set(["postgres", "mysql", "redis", "mongodb", "sqlite"]);
+  const sanitizeConn = (c) => ({ ...c, password: "", hasPass: Boolean(c.password) });
+  const validateDbConn = ({ type, host, user, path }) => {
+    if (!DB_TYPES.has(type)) return "不支持的数据库类型";
+    if (type === "sqlite") return path ? null : "缺少数据库文件路径";
+    if (!host) return "缺少主机";
+    if (!user) return "缺少用户名";
+    return null;
+  };
+  const dbTest = (conn, password) => testDbConnection(conn, { run: execCmd });
 
   const authHeader = (req) => {
     const cookie = parseCookie(req.headers.cookie || "");
@@ -722,6 +734,56 @@ export async function startWeb(config = {}, deps = {}) {
         config.sslSites = config.sslSites.filter((e) => e.id !== id);
         await persistConfig();
         sendJson(res, { ok: true });
+      } else if (url.pathname === "/api/db/connections" && req.method === "GET") {
+        sendJson(res, { connections: config.dbConnections.map(sanitizeConn) });
+      } else if (url.pathname === "/api/db/connections" && req.method === "POST") {
+        const body = await readBody(req);
+        const { name, type, host, port, database, user, password, path, enabled } = JSON.parse(body || "{}");
+        const err = validateDbConn({ type, host, user, path });
+        if (err) { sendJson(res, { error: err }, 400); return; }
+        const entry = {
+          id: `db${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+          name: String(name || ""), type: String(type),
+          host: host || "", port: String(port || DB_DEFAULT_PORT[type]),
+          database: database || "", user: user || "", password: password || "",
+          path: path || "", enabled: enabled !== false,
+        };
+        config.dbConnections.push(entry);
+        await persistConfig();
+        sendJson(res, { ok: true, entry: sanitizeConn(entry) });
+      } else if (url.pathname === "/api/db/connections" && req.method === "PATCH") {
+        const body = await readBody(req);
+        const { id, name, type, host, port, database, user, password, path, enabled } = JSON.parse(body || "{}");
+        const entry = config.dbConnections.find((c) => c.id === id);
+        if (!entry) { sendJson(res, { error: "连接不存在" }, 404); return; }
+        if (type !== undefined && !DB_TYPES.has(type)) { sendJson(res, { error: "不支持的数据库类型" }, 400); return; }
+        if (name !== undefined) entry.name = String(name);
+        if (type !== undefined) entry.type = String(type);
+        if (host !== undefined) entry.host = host;
+        if (port !== undefined) entry.port = String(port);
+        if (database !== undefined) entry.database = database;
+        if (user !== undefined) entry.user = user;
+        if (password === null) entry.password = "";
+        else if (password) entry.password = String(password);
+        if (path !== undefined) entry.path = path;
+        if (enabled !== undefined) entry.enabled = Boolean(enabled);
+        await persistConfig();
+        sendJson(res, { ok: true });
+      } else if (url.pathname === "/api/db/connections" && req.method === "DELETE") {
+        const body = await readBody(req);
+        const { id } = JSON.parse(body || "{}");
+        const before = config.dbConnections.length;
+        config.dbConnections = config.dbConnections.filter((c) => c.id !== id);
+        if (config.dbConnections.length === before) { sendJson(res, { error: "连接不存在" }, 404); return; }
+        await persistConfig();
+        sendJson(res, { ok: true });
+      } else if (url.pathname === "/api/db/test" && req.method === "POST") {
+        const body = await readBody(req);
+        const { id, password } = JSON.parse(body || "{}");
+        const entry = config.dbConnections.find((c) => c.id === id);
+        if (!entry) { sendJson(res, { error: "连接不存在" }, 404); return; }
+        const r = await dbTest(entry, password === undefined ? entry.password : String(password || ""));
+        sendJson(res, r);
       } else if (url.pathname === "/api/ssl/renew" && req.method === "POST") {
         const body = await readBody(req);
         const { id, password } = JSON.parse(body || "{}");

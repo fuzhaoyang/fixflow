@@ -1340,3 +1340,47 @@ test("panelPath 前缀路由：带前缀可访问，无前缀 404", async () => 
   assert.equal((await fetch(`${base}/app.js`)).status, 404);
   w.close();
 });
+
+test("数据库连接 CRUD 与测试接口", async () => {
+  const runCommand = async (cmd) => {
+    if (cmd.startsWith("command -v psql")) return { exitCode: 0, stdout: "/usr/bin/psql", stderr: "" };
+    if (cmd.startsWith("psql")) return { exitCode: 0, stdout: "1\n", stderr: "" };
+    return { exitCode: 1, stdout: "", stderr: "" };
+  };
+  const w = await makeServer({}, { runCommand });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const add = await fetch(`${base}/api/db/connections`, { method: "POST", headers: H, body: JSON.stringify({ name: "pg1", type: "postgres", host: "127.0.0.1", user: "postgres", password: "pw" }) });
+  assert.equal(add.status, 200);
+  const addData = await add.json();
+  assert.equal(addData.entry.password, "");
+  assert.equal(addData.entry.hasPass, true);
+  const id = addData.entry.id;
+
+  const list = await (await fetch(`${base}/api/db/connections`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.connections.length, 1);
+  assert.equal(list.connections[0].password, "");
+  assert.equal(list.connections[0].hasPass, true);
+
+  const t = await fetch(`${base}/api/db/test`, { method: "POST", headers: H, body: JSON.stringify({ id }) });
+  const td = await t.json();
+  assert.equal(td.ok, true);
+  assert.match(td.detail, /1/);
+
+  const del = await fetch(`${base}/api/db/connections`, { method: "DELETE", headers: H, body: JSON.stringify({ id }) });
+  assert.equal(del.status, 200);
+  const list2 = await (await fetch(`${base}/api/db/connections`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list2.connections.length, 0);
+  w.close();
+});
+
+test("数据库连接接口校验：非法类型 400", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/db/connections`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ name: "x", type: "oracle" }) });
+  assert.equal(res.status, 400);
+  w.close();
+});
