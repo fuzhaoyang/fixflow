@@ -5,8 +5,13 @@ const I18N_ZH = {
   "group.monitor": "监控", "group.actions": "操作",
   "menu.overview": "总览", "menu.system": "系统", "menu.network": "网络", "menu.nginx": "Nginx",
   "menu.firewall": "防火墙", "menu.databases": "数据库",
-  "menu.docker": "Docker", "menu.processes": "进程", "menu.ssl": "SSL 证书", "menu.systemd": "服务", "menu.logs": "日志",
+  "menu.docker": "Docker", "menu.ssl": "SSL 证书", "menu.systemd": "服务", "menu.logs": "日志",
   "menu.chat": "Agent 对话",
+  "docker.containers": "容器列表", "docker.name": "名称", "docker.image": "镜像", "docker.state": "状态", "docker.status": "状态详情", "docker.ports": "端口", "docker.created": "创建时间",
+  "docker.stats": "资源占用", "docker.images": "镜像列表", "docker.repo": "仓库", "docker.tag": "标签", "docker.id": "镜像ID", "docker.size": "大小", "docker.since": "创建时间",
+  "docker.prune": "清理悬空镜像", "docker.start": "启动", "docker.stop": "停止", "docker.restart": "重启", "docker.rm": "删除", "docker.detail": "详情", "docker.logs": "日志",
+  "docker.detailTitle": "容器详情", "docker.detailIp": "IP 地址", "docker.detailMounts": "挂载卷", "docker.detailRestarts": "重启次数", "docker.detailRunning": "运行状态", "docker.cpu": "CPU", "docker.mem": "内存", "docker.running": "运行中", "docker.stopped": "已停止",
+  "docker.noContainers": "无容器", "docker.loading": "加载中…", "docker.opTitle": "Docker 操作", "docker.opText": "输入密码确认：{label} {name}", "docker.opDone": "操作完成", "docker.pruneDone": "悬空镜像清理完成", "docker.inspectFail": "获取容器详情失败",
   "brand.name": "Fixflow 运维管家",
   "brand.sub": "服务器运维 AI Agent",
   "title.overview": "监控总览", "title.chat": "Agent 对话", "title.logs": "日志",
@@ -21,9 +26,7 @@ const I18N_ZH = {
   "mon.item": "项目", "mon.status": "状态", "mon.value": "数值", "mon.advice": "建议",
   "mon.ok": "正常", "mon.warn": "警告", "mon.bad": "异常",
   "mon.proto": "协议", "mon.state": "状态", "mon.local": "本地地址", "mon.proc": "进程", "mon.notConfigured": "（未配置）",
-  "proc.thCpu": "按 CPU", "proc.thMem": "按内存", "proc.anomalyPrefix": "", "proc.zombie": "僵尸进程 {n} 个：{d}",
-  "proc.restart": "重启", "proc.close": "关闭",
-  "proc.pid": "PID", "proc.user": "用户", "proc.cpu": "CPU%", "proc.memPct": "内存%", "proc.mem": "内存", "proc.svc": "systemd 服务", "proc.cmd": "命令", "proc.ops": "操作",
+  "proc.ops": "操作",
   "srv.service": "服务", "srv.state": "状态", "srv.path": "服务路径", "srv.cpu": "占用cpu", "srv.mem": "占用内存%", "srv.memMb": "内容大小", "srv.started": "启动时间",
   "srv.noMatch": "未找到匹配「{q}」的服务", "srv.none": "（无服务）",
   "srv.type": "类型", "srv.name": "名称", "srv.svc": "服务", "srv.proc": "进程", "srv.running": "运行中", "srv.noMatchQ": "未找到匹配「{q}」的服务", "srv.noMatchCfg": "（无匹配服务，可在设置中配置服务白名单）",
@@ -53,9 +56,6 @@ const I18N_ZH = {
   "logout.confirm": "确认退出", "logout.cancel": "取消",
   "proc.title": "密码验证", "proc.pwdLabel": "登录密码", "proc.pwdPh": "请输入登录密码以验证身份",
   "proc.confirm": "确认执行", "proc.cancel": "取消", "proc.pwdRequired": "请输入登录密码", "proc.pwdErr": "密码错误，操作未执行",
-  "proc.restartTitle": "重启进程", "proc.killTitle": "关闭进程",
-  "proc.restartText": "确认重启进程 {pid}（服务 {svc}）吗？此操作需输入登录密码验证。",
-  "proc.killText": "确认关闭进程 PID {pid} 吗？此操作需输入登录密码验证。",
   "fw.closeTitle": "关闭端口", "fw.closeText": "确认关闭端口 {port}/{proto}（{mode}）吗？此操作需输入 root 密码验证。",
   "fw.state": "防火墙状态", "fw.enabled": "已启用", "fw.disabled": "未启用 / 降级", "fw.rules": "放行规则", "fw.open": "对全网开放", "fw.danger": "（危险 {n}）",
   "fw.closeBtn": "关闭端口", "fw.noRules": "未检测到防火墙规则", "fw.noRisk": "未发现对全网开放的端口",
@@ -171,8 +171,13 @@ const I18N_EN = {
   "group.monitor": "Monitoring", "group.actions": "Actions",
   "menu.overview": "Overview", "menu.system": "System", "menu.network": "Network", "menu.nginx": "Nginx",
   "menu.firewall": "Firewall", "menu.databases": "Databases",
-  "menu.docker": "Docker", "menu.processes": "Processes", "menu.ssl": "SSL Certificates", "menu.systemd": "Services", "menu.logs": "Logs",
+  "menu.docker": "Docker", "menu.ssl": "SSL Certificates", "menu.systemd": "Services", "menu.logs": "Logs",
   "menu.chat": "Agent Chat",
+  "docker.containers": "Containers", "docker.name": "Name", "docker.image": "Image", "docker.state": "State", "docker.status": "Status", "docker.ports": "Ports", "docker.created": "Created",
+  "docker.stats": "Resource usage", "docker.images": "Images", "docker.repo": "Repository", "docker.tag": "Tag", "docker.id": "Image ID", "docker.size": "Size", "docker.since": "Created",
+  "docker.prune": "Prune dangling images", "docker.start": "Start", "docker.stop": "Stop", "docker.restart": "Restart", "docker.rm": "Remove", "docker.detail": "Details", "docker.logs": "Logs",
+  "docker.detailTitle": "Container Details", "docker.detailIp": "IP address", "docker.detailMounts": "Mounts", "docker.detailRestarts": "Restart count", "docker.detailRunning": "Status", "docker.cpu": "CPU", "docker.mem": "Memory", "docker.running": "Running", "docker.stopped": "Stopped",
+  "docker.noContainers": "No containers", "docker.loading": "Loading…", "docker.opTitle": "Docker Operation", "docker.opText": "Enter password to confirm: {label} {name}", "docker.opDone": "Operation done", "docker.pruneDone": "Dangling images pruned", "docker.inspectFail": "Failed to fetch container details",
   "brand.name": "Fixflow Ops Assistant",
   "brand.sub": "Server Ops AI Agent",
   "title.overview": "Monitoring Overview", "title.chat": "Agent Chat", "title.logs": "Logs",
@@ -187,9 +192,7 @@ const I18N_EN = {
   "mon.item": "Item", "mon.status": "Status", "mon.value": "Value", "mon.advice": "Advice",
   "mon.ok": "OK", "mon.warn": "Warning", "mon.bad": "Error",
   "mon.proto": "Protocol", "mon.state": "State", "mon.local": "Local Address", "mon.proc": "Process", "mon.notConfigured": "(Not configured)",
-  "proc.thCpu": "By CPU", "proc.thMem": "By Memory", "proc.anomalyPrefix": "", "proc.zombie": "Zombie processes {n}: {d}",
-  "proc.restart": "Restart", "proc.close": "Kill",
-  "proc.pid": "PID", "proc.user": "User", "proc.cpu": "CPU%", "proc.memPct": "Mem%", "proc.mem": "Memory", "proc.svc": "systemd service", "proc.cmd": "Command", "proc.ops": "Action",
+  "proc.ops": "Action",
   "srv.service": "Service", "srv.state": "State", "srv.path": "Path", "srv.cpu": "CPU", "srv.mem": "Mem%", "srv.memMb": "Size", "srv.started": "Started",
   "srv.noMatch": "No services matching 「{q}」", "srv.none": "(no services)",
   "srv.type": "Type", "srv.name": "Name", "srv.svc": "Service", "srv.proc": "Process", "srv.running": "Running", "srv.noMatchQ": "No services matching 「{q}」", "srv.noMatchCfg": "(No matching services. Configure the service whitelist in settings.)",
@@ -219,9 +222,6 @@ const I18N_EN = {
   "logout.confirm": "Logout", "logout.cancel": "Cancel",
   "proc.title": "Password Verify", "proc.pwdLabel": "Login password", "proc.pwdPh": "Enter login password to verify",
   "proc.confirm": "Confirm", "proc.cancel": "Cancel", "proc.pwdRequired": "Please enter login password", "proc.pwdErr": "Wrong password, operation not executed",
-  "proc.restartTitle": "Restart Process", "proc.killTitle": "Kill Process",
-  "proc.restartText": "Confirm restarting process {pid} (service {svc})? Login password required.",
-  "proc.killText": "Confirm killing PID {pid}? Login password required.",
   "fw.closeTitle": "Close Port", "fw.closeText": "Confirm closing port {port}/{proto} ({mode})? Root password required.",
   "fw.state": "Firewall Status", "fw.enabled": "Enabled", "fw.disabled": "Disabled / Fallback", "fw.rules": "Rules", "fw.open": "Open to all", "fw.danger": "(dangerous {n})",
   "fw.closeBtn": "Close Port", "fw.noRules": "No firewall rules detected", "fw.noRisk": "No open-to-all ports",
@@ -401,7 +401,6 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>防火墙</td><td>状态、放行规则、对全网开放端口风险、一键关闭端口</td></tr>
   <tr><td>数据库</td><td>数据库探活</td></tr>
   <tr><td>Docker</td><td>容器状态</td></tr>
-  <tr><td>进程</td><td>进程列表（按 CPU / 内存排序），可重启 / 关闭进程</td></tr>
   <tr><td>SSL 证书</td><td>自动发现 + 手动添加，到期进度与 SAN，一键续签，到期告警</td></tr>
   <tr><td>服务</td><td>systemd 服务状态</td></tr>
 </table>
@@ -435,7 +434,7 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>apply_fix</td><td>执行修复命令</td><td>必须确认</td></tr>
   <tr><td>clear_history</td><td>清空会话历史</td><td>自动执行</td></tr>
 </table>
-<p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。面板里的敏感操作（关端口、进程操作、改配置、文件写操作、证书续签等）还需重输登录密码。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
+<p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。面板里的敏感操作（关端口、改配置、文件写操作、证书续签等）还需重输登录密码。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
 
 <h3>六、配置与进阶</h3>
 <ul>
@@ -522,7 +521,6 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>Firewall</td><td>Status, allow rules, open-to-all port risks, one-click close port</td></tr>
   <tr><td>Databases</td><td>Database liveness</td></tr>
   <tr><td>Docker</td><td>Container status</td></tr>
-  <tr><td>Processes</td><td>Process list (sort by CPU / memory), restart / kill</td></tr>
   <tr><td>SSL Certificates</td><td>Auto-discovery + manual add, expiry bar and SAN, one-click renew, expiry alerts</td></tr>
   <tr><td>Services</td><td>systemd service status</td></tr>
 </table>
@@ -556,7 +554,7 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>apply_fix</td><td>Apply fix commands</td><td>Always confirm</td></tr>
   <tr><td>clear_history</td><td>Clear session history</td><td>Auto</td></tr>
 </table>
-<p>Every write / delete / modify operation asks for confirmation first: type <code>y</code> in the CLI, or click "Confirm" in the panel. Sensitive panel actions (close port, process actions, config changes, file writes, certificate renewal, etc.) also require re-entering the login password. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
+<p>Every write / delete / modify operation asks for confirmation first: type <code>y</code> in the CLI, or click "Confirm" in the panel. Sensitive panel actions (close port, config changes, file writes, certificate renewal, etc.) also require re-entering the login password. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
 
 <h3>6. Configuration &amp; Advanced</h3>
 <ul>

@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
@@ -249,25 +249,6 @@ export async function startWeb(config = {}, deps = {}) {
       ops.push({ ts: Date.now(), ...op });
       await writeFile(sysOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
     } catch {}
-  };
-
-  const procGuard = async (pid) => {
-    if (!Number.isInteger(pid) || pid <= 1) return "系统级进程，禁止操作";
-    try {
-      const [stat, status] = await Promise.all([
-        readFile(`/proc/${pid}/stat`, "utf8"),
-        readFile(`/proc/${pid}/status`, "utf8"),
-      ]);
-      const m = stat.match(/\(([^)]*)\)\s*(\w)/);
-      const name = m ? m[1] : "";
-      const state = m ? m[2] : "";
-      const uid = (status.match(/^Uid:\s+(\d+)/m) || [])[1];
-      if (state === "D" || state === "Z") return "该进程状态不可操作（D/Z）";
-      if (uid === "0" && /(daemon|systemd|dbus)/.test(name)) return "系统服务进程，禁止操作";
-      if (/(^dde-|kwin|Xorg|lightdm)/.test(name)) return "系统组件进程，禁止操作";
-      if (/^k/.test(name)) return "内核线程，禁止操作";
-      return null;
-    } catch { return "进程不存在或不可访问"; }
   };
 
   const authHeader = (req) => {
@@ -549,6 +530,7 @@ export async function startWeb(config = {}, deps = {}) {
         }
         if (q.get("port")) data.portScan = await collectPorts(q.get("port"));
         if (q.get("ping")) data.pingResult = await collectConnectivity([q.get("ping")]);
+        if (q.get("probe")) data.probeResult = await collectRemoteProbe(q.get("probe"));
         sendJson(res, data);
       } else if (url.pathname === "/api/logs/sources" && req.method === "GET") {
         sendJson(res, await collectLogSources({ run: execCmd }));
@@ -941,32 +923,6 @@ export async function startWeb(config = {}, deps = {}) {
             }
           }
         }
-      } else if (url.pathname === "/api/process" && req.method === "POST") {
-        const body = await readBody(req);
-        const { action, pid, service, password } = JSON.parse(body || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(password || "", auth)) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
-        } else if (!Number.isInteger(pid) || pid <= 0) {
-          sendJson(res, { error: "无效的 PID" }, 400);
-        } else {
-          const cmd = action === "restart" && service
-            ? `systemctl restart ${service}`
-            : action === "kill"
-              ? `kill ${pid}`
-              : "";
-          if (!cmd) {
-            sendJson(res, { error: "不支持的操作或缺少服务名" }, 400);
-          } else {
-            const guardErr = action === "kill" ? await procGuard(pid) : null;
-            if (guardErr) {
-              sendJson(res, { error: guardErr }, 403);
-            } else {
-              const r = await execCmd(cmd, { timeout: 15000 });
-              sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
-            }
-          }
-        }
       } else if (url.pathname === "/api/firewall/open" && req.method === "POST") {
         const body = await readBody(req);
         const { port, proto = "tcp", from = "", password } = JSON.parse(body || "{}");
@@ -1102,6 +1058,49 @@ export async function startWeb(config = {}, deps = {}) {
           const cmd = cmds[action] || cmds.reload;
           const r = await execCmd(cmd, { timeout: 15000 });
           sendJson(res, { ok: r.exitCode === 0, output: (r.stdout || r.stderr || "").trim() });
+        }
+      } else if (url.pathname === "/api/docker/stats" && req.method === "GET") {
+        const d = await collectDockerStats({ run: execCmd });
+        sendJson(res, d);
+      } else if (url.pathname === "/api/docker/op" && req.method === "POST") {
+        const body = await readBody(req);
+        const { name, action, password } = JSON.parse(body || "{}");
+        const ops = { start: "start", stop: "stop", restart: "restart", rm: "rm -f" };
+        if (!name || !ops[action]) { sendJson(res, { error: "不支持的参数" }, 400); }
+        else if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
+        else {
+          const r = await fwRun(`docker ${ops[action]} ${name}`, password, 60000);
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
+      } else if (url.pathname === "/api/docker/prune" && req.method === "POST") {
+        const body = await readBody(req);
+        const { password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
+        else {
+          const r = await fwRun("docker image prune -f", password, 120000);
+          sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        }
+      } else if (url.pathname === "/api/docker/inspect" && req.method === "GET") {
+        const q = new URL(req.url, "http://x").searchParams;
+        const name = q.get("name") || "";
+        const r = await execCmd(`docker inspect ${name}`);
+        if (r.exitCode !== 0) { sendJson(res, { error: r.stderr || "容器不存在" }, 400); }
+        else {
+          try {
+            const [c] = JSON.parse(r.stdout || "[]");
+            sendJson(res, {
+              ok: true,
+              detail: {
+                name: String(c.Name || "").replace(/^\//, ""),
+                image: c.Config?.Image || "—",
+                running: Boolean(c.State?.Running),
+                restarts: c.RestartCount ?? 0,
+                ip: Object.values(c.NetworkSettings?.Networks || {}).map((n) => n.IPAddress || "").filter(Boolean).join(", ") || "—",
+                mounts: (c.Mounts || []).map((m) => `${m.Source} → ${m.Destination}`),
+                ports: Object.entries(c.NetworkSettings?.Ports || {}).map(([k, v]) => `${k} → ${(v || []).map((x) => x.HostPort).join(",") || "动态"}`).join("\n") || "—",
+              },
+            });
+          } catch { sendJson(res, { error: "解析容器信息失败" }, 500); }
         }
       } else if (url.pathname === "/api/restart" && req.method === "POST") {
         sendJson(res, { ok: true });

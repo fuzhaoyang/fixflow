@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectDatabases, collectSystemd, collectUserProcs, collectProcesses, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ databases: [] });
@@ -53,19 +53,6 @@ test("collectDatabases 支持 postgres/mysql/redis", async () => {
   const r = await collectDatabases({ databases: dbs });
   assert.equal(r.length, 2);
   assert.equal(typeof r[0].ok, "boolean");
-});
-
-test("collectProcesses 返回结构化进程与异常列表", async () => {
-  const r = await collectProcesses();
-  assert.ok("top" in r && "anomalies" in r || "error" in r);
-  if (r.top) {
-    assert.ok(Array.isArray(r.top));
-    for (const p of r.top) {
-      assert.equal(typeof p.pid, "number");
-      assert.ok("cpu" in p && "mem" in p && "memKb" in p && "cmd" in p);
-      assert.ok("service" in p);
-    }
-  }
 });
 
 test("collectSslAll 对空列表返回空 results，不抛错", async () => {

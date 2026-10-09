@@ -318,96 +318,6 @@ test("自绘图表：页面不再加载 echarts", async () => {
   w.close();
 });
 
-test("/api/process 未登录返回 401", async () => {
-  const w = await makeServer();
-  const base = `http://127.0.0.1:${w.server.address().port}`;
-  const res = await fetch(`${base}/api/process`, {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "x" }),
-  });
-  assert.equal(res.status, 401);
-  w.close();
-});
-
-test("/api/process 密码错误返回 403 且不执行命令", async () => {
-  const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
-  const base = `http://127.0.0.1:${w.server.address().port}`;
-  const cookie = await registerAndLogin(base);
-  const res = await fetch(`${base}/api/process`, {
-    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
-    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "wrong" }),
-  });
-  assert.equal(res.status, 403);
-  const data = await res.json();
-  assert.match(data.error, /密码错误/);
-  assert.equal(calls.length, 0);
-  w.close();
-});
-
-test("/api/process 正确密码执行 kill 与 restart", async () => {
-  const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; } });
-  const base = `http://127.0.0.1:${w.server.address().port}`;
-  const cookie = await registerAndLogin(base);
-  const headers = { "Content-Type": "application/json", Cookie: cookie };
-  const kill = await fetch(`${base}/api/process`, {
-    method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: process.pid, service: "", password: "Secret123!" }),
-  });
-  assert.equal(kill.status, 200);
-  assert.equal((await kill.json()).ok, true);
-  assert.equal(calls[0], `kill ${process.pid}`);
-  const restart = await fetch(`${base}/api/process`, {
-    method: "POST", headers,
-    body: JSON.stringify({ action: "restart", pid: 42, service: "nginx.service", password: "Secret123!" }),
-  });
-  assert.equal(restart.status, 200);
-  assert.equal(calls[1], "systemctl restart nginx.service");
-  w.close();
-});
-
-test("/api/process 禁止操作系统级与受保护进程", async () => {
-  const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
-  const base = `http://127.0.0.1:${w.server.address().port}`;
-  const cookie = await registerAndLogin(base);
-  const headers = { "Content-Type": "application/json", Cookie: cookie };
-  const pid1 = await fetch(`${base}/api/process`, {
-    method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: 1, service: "", password: "Secret123!" }),
-  });
-  assert.equal(pid1.status, 403);
-  const missing = await fetch(`${base}/api/process`, {
-    method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: 999999999, service: "", password: "Secret123!" }),
-  });
-  assert.equal(missing.status, 403);
-  assert.match((await missing.json()).error, /不存在|不可访问/);
-  assert.equal(calls.length, 0);
-  w.close();
-});
-
-test("/api/process 无效参数返回 400", async () => {
-  const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "", stderr: "" }; } });
-  const base = `http://127.0.0.1:${w.server.address().port}`;
-  const cookie = await registerAndLogin(base);
-  const headers = { "Content-Type": "application/json", Cookie: cookie };
-  const badPid = await fetch(`${base}/api/process`, {
-    method: "POST", headers,
-    body: JSON.stringify({ action: "kill", pid: -5, service: "", password: "Secret123!" }),
-  });
-  assert.equal(badPid.status, 400);
-  const noSvc = await fetch(`${base}/api/process`, {
-    method: "POST", headers,
-    body: JSON.stringify({ action: "restart", pid: 1, service: "", password: "Secret123!" }),
-  });
-  assert.equal(noSvc.status, 400);
-  assert.equal(calls.length, 0);
-  w.close();
-});
-
 test("/api/firewall/close 未登录返回 401", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
@@ -686,6 +596,138 @@ test("/api/firewall/ops 返回操作记录且成功操作写入审计", async ()
   const ops = await (await fetch(`${base}/api/firewall/ops`, { headers: { Cookie: cookie } })).json();
   assert.ok(Array.isArray(ops.ops));
   assert.ok(ops.ops.some((o) => o.op === "open" && o.target.includes("8080")));
+  w.close();
+});
+
+test("/api/docker/op 未登录返回 401", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/docker/op`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: "web", action: "stop", password: "x" }),
+  });
+  assert.equal(res.status, 401);
+  w.close();
+});
+
+test("/api/docker/op 密码错误返回 403 且不执行命令", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 1, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/docker/op`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ name: "web", action: "stop", password: "wrong" }),
+  });
+  assert.equal(res.status, 403);
+  assert.match((await res.json()).error, /密码错误/);
+  assert.ok(!calls.some((c) => c.includes("docker stop")));
+  w.close();
+});
+
+test("/api/docker/op 正确密码执行 docker 命令", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "ok", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const stop = await fetch(`${base}/api/docker/op`, {
+    method: "POST", headers,
+    body: JSON.stringify({ name: "web", action: "stop", password: "Secret123!" }),
+  });
+  assert.equal(stop.status, 200);
+  assert.equal((await stop.json()).ok, true);
+  assert.ok(calls.some((c) => c.includes("docker stop web")));
+  const rm = await fetch(`${base}/api/docker/op`, {
+    method: "POST", headers,
+    body: JSON.stringify({ name: "web", action: "rm", password: "Secret123!" }),
+  });
+  assert.equal(rm.status, 200);
+  assert.ok(calls.some((c) => c.includes("docker rm -f web")));
+  w.close();
+});
+
+test("/api/docker/op 无效参数返回 400", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const bad = await fetch(`${base}/api/docker/op`, {
+    method: "POST", headers,
+    body: JSON.stringify({ name: "web", action: "kill", password: "Secret123!" }),
+  });
+  assert.equal(bad.status, 400);
+  assert.ok(!calls.some((c) => c.includes("docker")));
+  w.close();
+});
+
+test("/api/docker/prune 密码错误 403 / 正确执行清理", async () => {
+  const calls = [];
+  const mock = (failSudo = false) => async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: failSudo ? 1 : 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "Deleted sha256:abc", stderr: "" };
+  };
+  const w1 = await makeServer({}, { runCommand: mock(true) });
+  const base1 = `http://127.0.0.1:${w1.server.address().port}`;
+  const cookie1 = await registerAndLogin(base1);
+  const bad = await fetch(`${base1}/api/docker/prune`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie1 },
+    body: JSON.stringify({ password: "wrong" }),
+  });
+  assert.equal(bad.status, 403);
+  w1.close();
+  const w = await makeServer({}, { runCommand: mock(false) });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const ok = await fetch(`${base}/api/docker/prune`, {
+    method: "POST", headers,
+    body: JSON.stringify({ password: "Secret123!" }),
+  });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).ok, true);
+  assert.ok(calls.some((c) => c.includes("docker image prune -f")));
+  w.close();
+});
+
+test("/api/docker/stats 返回解析后的资源行", async () => {
+  const w = await makeServer({}, { runCommand: async (cmd) => cmd.includes("docker stats")
+    ? { exitCode: 0, stdout: "NAME\tCPU %\tMEM USAGE / LIMIT\nweb\t0.10%\t12.3MiB / 1GiB\n", stderr: "" }
+    : { exitCode: 0, stdout: "", stderr: "" } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const data = await (await fetch(`${base}/api/docker/stats`, { headers: { Cookie: cookie } })).json();
+  assert.ok(Array.isArray(data.rows));
+  assert.equal(data.rows.length, 1);
+  assert.equal(data.rows[0].name, "web");
+  assert.match(data.rows[0].mem, /12\.3MiB \/ 1GiB/);
+  w.close();
+});
+
+test("/api/docker/inspect 返回容器详情（不含环境变量）", async () => {
+  const w = await makeServer({}, { runCommand: async (cmd) => cmd.includes("docker inspect")
+    ? { exitCode: 0, stdout: JSON.stringify([{ Name: "/web", Config: { Image: "nginx:latest", Env: ["SECRET=abc123"] }, State: { Running: true }, RestartCount: 2, NetworkSettings: { Networks: { bridge: { IPAddress: "172.17.0.2" } } }, Mounts: [{ Source: "/data", Destination: "/var/data" }] }]), stderr: "" }
+    : { exitCode: 0, stdout: "", stderr: "" } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const data = await (await fetch(`${base}/api/docker/inspect?name=web`, { headers: { Cookie: cookie } })).json();
+  assert.equal(data.ok, true);
+  assert.equal(data.detail.name, "web");
+  assert.equal(data.detail.running, true);
+  assert.equal(data.detail.restarts, 2);
+  assert.equal(data.detail.ip, "172.17.0.2");
+  assert.equal(data.detail.mounts[0], "/data → /var/data");
+  assert.ok(!JSON.stringify(data).includes("SECRET"));
   w.close();
 });
 

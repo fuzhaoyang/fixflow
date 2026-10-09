@@ -140,10 +140,61 @@ function parseSs(stdout) {
   }).filter(Boolean);
 }
 
-export async function collectNetwork() {
-  const ss = await runCommand("ss -tulnp");
+export async function collectNetwork({ run = runCommand } = {}) {
+  const ss = await run("ss -tulnp");
   if (ss.exitCode !== 0) return { listeners: { ok: false, detail: ss.stderr || "ss 不可用" } };
   return { listeners: { ok: true, items: parseSs(ss.stdout) } };
+}
+
+export async function collectConnectionSummary({ run = runCommand } = {}) {
+  const r = await run("ss -tan");
+  return { est: parseConnections(r.stdout || "") };
+}
+
+export async function collectNicHealth({ run = runCommand } = {}) {
+  const [dev, link] = await Promise.all([
+    run("cat /proc/net/dev 2>/dev/null"),
+    run("ip -o link show 2>/dev/null"),
+  ]);
+  const nics = [];
+  const linkStates = {};
+  for (const line of (link.stdout || "").split("\n")) {
+    const m = line.match(/^\d+:\s+(\S+)[:@].*state\s+(\w+)/);
+    if (m) linkStates[m[1]] = m[2];
+  }
+  for (const line of (dev.stdout || "").split("\n")) {
+    const m = line.match(/^\s*(\S+):\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
+    if (!m) continue;
+    const name = m[1].replace(":", "");
+    if (name === "lo") continue;
+    nics.push({
+      name,
+      rxBytes: Number(m[2]), rxPackets: Number(m[3]), rxErr: Number(m[4]), rxDrop: Number(m[5]),
+      txBytes: Number(m[10]), txPackets: Number(m[11]), txErr: Number(m[12]), txDrop: Number(m[13]),
+      state: linkStates[name] || "unknown",
+    });
+  }
+  return { nics };
+}
+
+export async function collectDnsRoute({ run = runCommand } = {}) {
+  const [dns, route, ip] = await Promise.all([
+    run("cat /etc/resolv.conf 2>/dev/null | grep -E '^(nameserver|search)'"),
+    run("ip route 2>/dev/null | head -10"),
+    run("hostname -I 2>/dev/null"),
+  ]);
+  return {
+    nameservers: (dns.stdout || "").split("\n").filter(Boolean),
+    routes: (route.stdout || "").split("\n").filter(Boolean),
+    addrs: (ip.stdout || "").trim().split(/\s+/).filter(Boolean),
+  };
+}
+
+export async function collectRemoteProbe(target, { run = runCommand } = {}) {
+  const [host, port] = String(target || "").split(":").map((s) => s.trim());
+  if (!host || !port) return { ok: false, error: "格式应为 host:port" };
+  const r = await run(`nc -z -w 3 ${host} ${port} 2>&1 || echo "closed"`);
+  return { host, port, ok: r.exitCode === 0, detail: (r.stdout || r.stderr || "").trim() };
 }
 
 const nginxMetaCache = createTtlCache(30000);
@@ -486,11 +537,30 @@ export async function collectDatabases({ databases = [] }) {
 }
 
 export async function collectDocker() {
-  const r = await runCommand("docker ps -a --format '{{.Names}} | {{.Status}}'");
-  return {
-    ok: r.exitCode === 0,
-    detail: r.stdout || r.stderr || "docker 不可用",
-  };
+  const [ps, img] = await Promise.all([
+    runCommand("docker ps -a --format '{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}\t{{.Ports}}\t{{.CreatedAt}}'"),
+    runCommand("docker image ls --format '{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}\t{{.CreatedSince}}'"),
+  ]);
+  if (ps.exitCode !== 0) return { error: ps.stderr || "docker 不可用" };
+  const containers = (ps.stdout || "").split("\n").filter(Boolean).map((line) => {
+    const [name, image, state, status, ports, created] = line.split("\t");
+    return { name: name || "?", image: image || "?", state, status: status || "?", ports: ports || "—", created: String(created || "").slice(0, 19) };
+  });
+  const images = (img.stdout || "").split("\n").filter(Boolean).map((line) => {
+    const [repository, tag, id, size, created] = line.split("\t");
+    return { repository, tag, id, size, created, dangling: repository === "<none>" };
+  });
+  return { ok: ps.exitCode === 0, containers, images };
+}
+
+export async function collectDockerStats({ run = runCommand } = {}) {
+  const r = await run("docker stats --no-stream --format 'table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'");
+  if (r.exitCode !== 0) return { error: r.stderr || "docker 不可用" };
+  const rows = (r.stdout || "").split("\n").slice(1).filter(Boolean).map((line) => {
+    const [name, cpu, mem] = line.split("\t");
+    return { name, cpu, mem };
+  });
+  return { rows };
 }
 
 export async function collectSystemd(keywords = []) {
@@ -557,41 +627,6 @@ function formatMemMb(v) {
 export function formatDateTime(d) {
   if (Number.isNaN(d.getTime())) return "—";
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-}
-
-const parsePsLine = (line) => {
-  const parts = line.trim().split(/\s+/);
-  if (parts.length < 11) return null;
-  return {
-    user: parts[0],
-    pid: parseInt(parts[1], 10),
-    cpu: parseFloat(parts[2]),
-    mem: parseFloat(parts[3]),
-    memKb: parseInt(parts[5], 10),
-    state: parts[8],
-    cmd: parts.slice(10).join(" "),
-  };
-};
-
-export async function collectProcesses() {
-  const [top, zombie, memtotal] = await Promise.all([
-    runCommand("ps aux --sort=-%cpu | head -21"),
-    runCommand("ps -eo stat,comm | awk '$1 ~ /Z/ {print $2}'"),
-    runCommand("awk '/MemTotal/ {print $2}' /proc/meminfo"),
-  ]);
-  if (top.exitCode !== 0) return { error: top.stderr || "ps 不可用" };
-  const totalMemKb = parseInt(memtotal.stdout.trim(), 10) || 0;
-  const list = (top.stdout || "").split("\n").slice(1).map(parsePsLine).filter(Boolean).slice(0, 20);
-  const anomalies = [];
-  for (const p of list) {
-    const cgroup = await runCommand(`cat /proc/${p.pid}/cgroup 2>/dev/null`);
-    const m = (cgroup.stdout || "").match(/([\w-]+\.service)/);
-    p.service = m ? m[1] : "";
-    if (p.cpu > 100) anomalies.push(`进程 ${p.cmd} (PID ${p.pid}) CPU ${p.cpu}% 超阈值`);
-    if (totalMemKb && p.memKb > totalMemKb * 0.1) anomalies.push(`进程 ${p.cmd} (PID ${p.pid}) 内存占用异常`);
-  }
-  const zombies = (zombie.stdout || "").split("\n").filter((l) => l.trim()).length;
-  return { top: list, zombies, zombieDetail: zombie.stdout.trim(), anomalies };
 }
 
 export async function collectConnectivity(targets = []) {
@@ -707,13 +742,15 @@ export async function collectAll(config) {
   return {
     system: await safe(collectSystem),
     network: await safe(collectNetwork),
+    connSummary: await safe(collectConnectionSummary),
+    nicHealth: await safe(collectNicHealth),
+    dnsRoute: await safe(collectDnsRoute),
     nginx: await safe(collectNginx),
     firewall: await safe(collectFirewall),
     databases: await safe(() => collectDatabases(config)),
     docker: await safe(collectDocker),
     systemd: await safe(() => collectSystemd(config.serviceKeywords)),
     userProcs: await safe(() => collectUserProcs(config.serviceKeywords)),
-    processes: await safe(collectProcesses),
     ssl: await safe(() => collectSslAll(config)),
     connectivity: await safe(() => collectConnectivity(config.pingTargets || [])),
     nginxLogs: await safe(collectNginxLogs),

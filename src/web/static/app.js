@@ -78,7 +78,6 @@ const MODULES = [
   ["firewall", "menu.firewall"],
   ["databases", "menu.databases"],
   ["docker", "menu.docker"],
-  ["processes", "menu.processes"],
   ["ssl", "menu.ssl"],
   ["systemd", "menu.systemd"],
 ];
@@ -682,23 +681,8 @@ function renderCards() {
     if (key === "systemd") {
       card.innerHTML = `<h2>${label}</h2>${renderSystemd({ ...m, userProcs: metrics.userProcs })}`;
     } else if (key === "network") {
-      const scan = metrics.portScan;
-      const ping = metrics.pingResult;
-      const items = m?.listeners?.items;
-      let netHtml = "";
-      if (items?.length) {
-        const rows = items.map((i) => `<tr><td>${escapeHtml(i.proto)}</td><td>${escapeHtml(i.state)}</td><td>${escapeHtml(i.local)}</td><td>${escapeHtml(i.process || "—")}</td><td>${i.pid ? `<a href="javascript:void(0)" onclick="return false" title="${i.pid}">${i.pid}</a>` : "—"}</td></tr>`).join("");
-        netHtml = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("mon.proto")}</th><th>${t("mon.state")}</th><th>${t("mon.local")}</th><th>${t("mon.proc")}</th><th>PID</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-      } else {
-        netHtml = `<pre>${escapeHtml(detail(m))}</pre>`;
-      }
-      let scanHtml = "";
-      if (scan?.results?.length) {
-        scanHtml = `<pre>${t("net.scanTitle")}${scan.results.map((p) => `${p.port} (${p.service}): ${p.ok ? t("net.listening") : t("net.notListening")}\n${p.detail}`).join("\n----\n")}</pre>`;
-      }
-      card.innerHTML = `<h2>${label}</h2>${netHtml}${scanHtml}${ping ? `<pre>${t("net.pingTitle")}${escapeHtml(JSON.stringify(ping.results || ping, null, 2))}</pre>` : ""}`;
-    } else if (key === "processes") {
-      card.innerHTML = `<h2>${label}</h2>${renderProcesses(m)}`;
+      card.classList.add("net-card");
+      card.innerHTML = renderNetwork(m, metrics);
     } else if (key === "ssl") {
       card.innerHTML = `<h2>${label}</h2>${renderSsl(m)}`;
     } else if (key === "nginx") {
@@ -709,6 +693,9 @@ function renderCards() {
       lastFwMetrics = m;
       card.innerHTML = `<h2>${label}</h2>${renderFirewall(m)}`;
       loadFwOps();
+    } else if (key === "docker") {
+      card.innerHTML = `<h2>${label}</h2>${renderDocker(m)}`;
+      refreshDockerStats();
     } else {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
     }
@@ -733,10 +720,6 @@ function renderCards() {
         };
       };
     }
-    const sortCpu = card.querySelector("#sort-cpu");
-    const sortMem = card.querySelector("#sort-mem");
-    if (sortCpu) sortCpu.onclick = () => { procSort = "cpu"; renderCards(); };
-    if (sortMem) sortMem.onclick = () => { procSort = "mem"; renderCards(); };
     const dot = document.querySelector(`.menu-item[data-filter="${key}"] .dot`);
     if (dot) {
       const ok = Array.isArray(m) ? m.every((x) => x.ok) : m?.ok;
@@ -974,33 +957,6 @@ async function loadNginxConfs() {
   }
 }
 
-let procSort = "cpu";
-
-function renderProcesses(m) {
-  if (!m?.top) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
-  const anomalies = (m.anomalies || []).map((a) => `<div style="color:var(--bad);font-size:12px">${t("proc.anomalyPrefix")}${escapeHtml(a)}</div>`).join("");
-  const zombie = m.zombies > 0
-    ? `<div style="color:var(--bad);margin-bottom:6px;font-size:12px">${t("proc.zombie").replace("{n}", m.zombies).replace("{d}", escapeHtml(m.zombieDetail || ""))}</div>`
-    : "";
-  const sortBtns = `<div style="margin-bottom:6px;display:flex;gap:6px">
-    <button class="btn small ${procSort === "cpu" ? "report-active" : ""}" id="sort-cpu">${t("proc.thCpu")}</button>
-    <button class="btn small ${procSort === "mem" ? "report-active" : ""}" id="sort-mem">${t("proc.thMem")}</button></div>`;
-  const list = [...m.top].sort((a, b) => procSort === "mem" ? b.memKb - a.memKb : b.cpu - a.cpu);
-  const rows = list.map((p) => {
-    const bad = p.cpu > 100;
-    const style = bad ? " style='background:rgba(248,113,113,0.15);color:var(--bad)'" : "";
-    const svc = escapeHtml(p.service || "");
-    const name = String(p.cmd || "").trim().split(/\s+/)[0]?.split("/").pop() || "";
-    const protectedProc = p.pid === 1 || /^[DZ]/.test(p.state || "") || (p.user === "root" && /(daemon|systemd|dbus)/.test(name)) || /(^dde-|kwin|Xorg|lightdm)/.test(name) || /^k/.test(name);
-    const btns = protectedProc ? "—"
-      : p.service
-        ? `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="restart" data-proc-pid="${p.pid}" data-proc-service="${svc}">${t("proc.restart")}</a><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="${svc}" class="danger">${t("proc.close")}</a></span>`
-        : `<span class="proc-ops"><a href="javascript:void(0)" data-proc-action="kill" data-proc-pid="${p.pid}" data-proc-service="" class="danger">${t("proc.close")}</a></span>`;
-    return `<tr${style}><td>${p.pid}</td><td>${escapeHtml(p.user || "")}</td><td>${p.cpu}%</td><td>${p.mem}%</td><td>${p.memKb ? Math.round(p.memKb / 1024) + "MB" : "—"}</td><td>${svc || "—"}</td><td>${escapeHtml(p.cmd || "")}</td><td>${btns}</td></tr>`;
-  }).join("");
-  return `${anomalies}${zombie}${sortBtns}<div class="card-body"><table class="svc-table"><thead><tr><th>${t("proc.pid")}</th><th>${t("proc.user")}</th><th>${t("proc.cpu")}</th><th>${t("proc.memPct")}</th><th>${t("proc.mem")}</th><th>${t("proc.svc")}</th><th>${t("proc.cmd")}</th><th>${t("proc.ops")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-}
-
 function sslLevel(daysLeft) {
   if (typeof daysLeft !== "number") return "na";
   if (daysLeft <= 7) return "bad";
@@ -1132,6 +1088,75 @@ function renderFirewallSkeleton() {
   const riskRow = `<div class="fw-risk-row"><div class="skel-line" style="width:150px;margin:0"></div><div class="skel-line" style="width:80px;margin:0"></div><div class="skel-line" style="width:110px;margin:0"></div></div>`;
   const summary = `<div class="fw-summary">${stat(t("fw.state"))}${stat(t("fw.rules"))}${stat(t("fw.open"))}</div><div class="fw-policy"><div class="skel-line" style="width:200px;margin:0"></div></div>`;
   return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3><div class="card-body">${skel(5)}</div><h3 class="fw-sub">${t("fw.riskSection")}</h3><div class="fw-risk">${riskRow}${riskRow}${riskRow}</div><h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops">${skel(2)}</div>`;
+}
+
+function renderDocker(m) {
+  if (!m) return `<pre>${t("docker.loading")}</pre>`;
+  if (m.error) return `<pre>${escapeHtml(m.error)}</pre>`;
+  const containers = Array.isArray(m.containers) ? m.containers : [];
+  const images = Array.isArray(m.images) ? m.images : [];
+  const opBtn = (action, label, danger = false) => (name) => `<button class="btn small${danger ? " danger" : ""}" data-docker-op="${action}" data-docker-name="${escapeHtml(name)}">${label}</button>`;
+  const start = opBtn("start", t("docker.start"));
+  const stop = opBtn("stop", t("docker.stop"));
+  const restart = opBtn("restart", t("docker.restart"));
+  const rm = opBtn("rm", t("docker.rm"), true);
+  const cRows = containers.map((c) => `<tr>
+    <td>${escapeHtml(c.name)}</td><td>${escapeHtml(c.image)}</td>
+    <td class="${c.state === "running" ? "ok" : "na"}">${escapeHtml(c.state)}</td>
+    <td>${escapeHtml(c.status)}</td><td>${escapeHtml(c.ports)}</td><td>${escapeHtml(c.created)}</td>
+    <td><div class="docker-ops">${c.state === "running" ? stop(c.name) : start(c.name)}${restart(c.name)}${rm(c.name)}<button class="btn small" data-docker-detail="${escapeHtml(c.name)}">${t("docker.detail")}</button><button class="btn small" data-docker-log="${escapeHtml(c.name)}">${t("docker.logs")}</button></div></td>
+  </tr>`).join("");
+  const cHtml = containers.length
+    ? `<div class="docker-table-wrap"><table class="svc-table"><thead><tr><th>${t("docker.name")}</th><th>${t("docker.image")}</th><th>${t("docker.state")}</th><th>${t("docker.status")}</th><th>${t("docker.ports")}</th><th>${t("docker.created")}</th><th></th></tr></thead><tbody>${cRows}</tbody></table></div>`
+    : `<pre>${t("docker.noContainers")}</pre>`;
+  const statsHtml = `<h3 style="font-size:14px;margin:14px 0 6px">${t("docker.stats")}</h3><div id="docker-stats"><pre>${t("docker.loading")}</pre></div>`;
+  const iRows = images.map((i) => `<tr><td>${escapeHtml(i.repository)}</td><td>${escapeHtml(i.tag)}</td><td>${escapeHtml(i.id)}</td><td>${escapeHtml(i.size)}</td><td>${escapeHtml(i.created)}</td></tr>`).join("");
+  const iHtml = `<h3 style="font-size:14px;margin:14px 0 6px">${t("docker.images")}</h3>
+    <div style="margin:0 0 8px"><button class="btn small danger" id="docker-prune">${t("docker.prune")}</button></div>
+    <div class="docker-table-wrap"><table class="svc-table"><thead><tr><th>${t("docker.repo")}</th><th>${t("docker.tag")}</th><th>${t("docker.id")}</th><th>${t("docker.size")}</th><th>${t("docker.since")}</th></tr></thead><tbody>${iRows}</tbody></table></div>`;
+  return `${cHtml}${statsHtml}${iHtml}`;
+}
+
+async function refreshDockerStats() {
+  const box = document.getElementById("docker-stats");
+  if (!box) return;
+  try {
+    const res = await fetch("api/docker/stats");
+    const d = await res.json();
+    if (d.error) { box.innerHTML = `<pre>${escapeHtml(d.error)}</pre>`; return; }
+    const rows = (d.rows || []).map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.cpu)}</td><td>${escapeHtml(r.mem)}</td></tr>`).join("");
+    box.innerHTML = rows ? `<div class="docker-table-wrap"><table class="svc-table"><thead><tr><th>${t("docker.name")}</th><th>${t("docker.cpu")}</th><th>${t("docker.mem")}</th></tr></thead><tbody>${rows}</tbody></table></div>` : `<pre>${t("docker.noContainers")}</pre>`;
+  } catch {}
+}
+
+async function openDockerDetail(name) {
+  const mask = document.getElementById("docker-info-mask");
+  const body = document.getElementById("docker-info-body");
+  body.innerHTML = `<pre>${t("docker.loading")}</pre>`;
+  mask.classList.add("show");
+  try {
+    const res = await fetch(`api/docker/inspect?name=${encodeURIComponent(name)}`);
+    const d = await res.json();
+    if (!res.ok || !d.ok) { body.innerHTML = `<pre>${escapeHtml(d.error || t("docker.inspectFail"))}</pre>`; return; }
+    const it = d.detail;
+    const kv = (k, v) => `<div class="kv-item"><span class="k">${k}</span><span class="v">${escapeHtml(v)}</span></div>`;
+    body.innerHTML = kv(t("docker.name"), it.name)
+      + kv(t("docker.detailRunning"), it.running ? t("docker.running") : t("docker.stopped"))
+      + kv(t("docker.image"), it.image)
+      + kv(t("docker.detailIp"), it.ip)
+      + kv(t("docker.detailRestarts"), String(it.restarts))
+      + kv(t("docker.detailMounts"), it.mounts.join("\n") || "—");
+  } catch { body.innerHTML = `<pre>${t("docker.inspectFail")}</pre>`; }
+}
+
+function openContainerLog(name) {
+  logTarget = { source: "docker", target: name };
+  location.hash = "/logs";
+  const iv = setInterval(() => {
+    const hit = (logSources.docker || []).some((c) => c.name === name);
+    if (hit) { clearInterval(iv); loadLog(); }
+  }, 200);
+  setTimeout(() => clearInterval(iv), 5000);
 }
 
 function renderFirewall(m) {
@@ -2081,14 +2106,17 @@ pingBtn.onclick = async () => {
 };
 let metricsTimer = null;
 let overviewTimer = null;
+let dockerStatsTimer = null;
 function stopPolling() {
   if (metricsTimer) clearInterval(metricsTimer);
   if (overviewTimer) clearInterval(overviewTimer);
+  if (dockerStatsTimer) clearInterval(dockerStatsTimer);
 }
 function startPolling() {
   stopPolling();
   metricsTimer = setInterval(() => { if (!chatView && !logsView) refreshMetrics(); }, 10000);
   overviewTimer = setInterval(() => { if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); }, 3000);
+  dockerStatsTimer = setInterval(() => { if (currentFilter === "docker") refreshDockerStats(); }, 3000);
 }
 let curTheme = "dark";
 function applyTheme(theme) {
@@ -2515,22 +2543,6 @@ function setProcPwdLabel(kind) {
 }
 let procTarget = null;
 document.addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-proc-action]");
-  if (!btn) return;
-  procTarget = { action: btn.dataset.procAction, pid: Number(btn.dataset.procPid), service: btn.dataset.procService };
-  const isRestart = procTarget.action === "restart";
-  document.getElementById("proc-title").textContent = isRestart ? t("proc.restartTitle") : t("proc.killTitle");
-  document.getElementById("proc-text").textContent = isRestart
-    ? t("proc.restartText").replace("{pid}", procTarget.pid).replace("{svc}", procTarget.service)
-    : t("proc.killText").replace("{pid}", procTarget.pid);
-  document.getElementById("proc-err").textContent = "";
-  const pw = document.getElementById("proc-password");
-  pw.value = "";
-  setProcPwdLabel("proc");
-  procMask.classList.add("show");
-  setTimeout(() => pw.focus(), 50);
-});
-document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-fw-close]");
   if (!btn) return;
   const row = btn.closest(".fw-risk-row");
@@ -2623,6 +2635,8 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isNginxOp = kind === "nginx-op";
   const isFs = kind === "fs";
   const isSys = kind === "sys";
+  const isDockerOp = kind === "docker-op";
+  const isDockerPrune = kind === "docker-prune";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
@@ -2651,7 +2665,7 @@ document.getElementById("proc-confirm").onclick = async () => {
       fd.append("file", procTarget.body.file, procTarget.body.file.name);
       res = await fetch("api/fs/upload", { method: "POST", body: fd });
     } else {
-      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isSys ? `api/system/${procTarget.op}` : "api/process";
+      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : `api/system/${procTarget.op}`;
       const payload = isFw
         ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
         : isFwCtl
@@ -2662,9 +2676,11 @@ document.getElementById("proc-confirm").onclick = async () => {
               ? { action: procTarget.action, password }
               : isFs
                 ? { ...(procTarget.body || {}), password }
-                : isSys
-                  ? { ...(procTarget.body || {}), password }
-                  : { ...procTarget, password };
+                : isDockerOp
+                  ? { name: procTarget.name, action: procTarget.action, password }
+                  : isDockerPrune
+                    ? { password }
+                    : { ...(procTarget.body || {}), password };
       res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       data = await res.json();
       if (res.status === 403 || res.status === 400) {
@@ -2679,6 +2695,7 @@ document.getElementById("proc-confirm").onclick = async () => {
     procMask.classList.remove("show");
     if (isFwCtl) showSaveMsg(t("fw.controlDone").replace("{action}", procTarget.action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn")), "ok");
     if (isSys) showSaveMsg(t("sys.opDone"), "ok");
+    if (isDockerOp || isDockerPrune) showSaveMsg(isDockerOp ? t("docker.opDone") : t("docker.pruneDone"), "ok");
     refreshMetrics();
     if (isFs) fsRefresh();
   } catch (e2) {
@@ -2708,7 +2725,43 @@ document.addEventListener("click", (e) => {
   setTimeout(() => pw.focus(), 50);
 });
 
-// 新增开放端口弹窗
+// Docker 操作 / 详情 / 日志跳转
+document.addEventListener("click", (e) => {
+  const op = e.target.closest("[data-docker-op]");
+  if (op && !op.disabled) {
+    const name = op.dataset.dockerName;
+    const action = op.dataset.dockerOp;
+    procTarget = { kind: "docker-op", name, action };
+    const labels = { start: t("docker.start"), stop: t("docker.stop"), restart: t("docker.restart"), rm: t("docker.rm") };
+    document.getElementById("proc-title").textContent = t("docker.opTitle");
+    document.getElementById("proc-text").textContent = t("docker.opText").replace("{label}", labels[action] || action).replace("{name}", name);
+    document.getElementById("proc-err").textContent = "";
+    const pw = document.getElementById("proc-password");
+    pw.value = "";
+    setProcPwdLabel("fw");
+    procMask.classList.add("show");
+    setTimeout(() => pw.focus(), 50);
+    return;
+  }
+  const detail = e.target.closest("[data-docker-detail]");
+  if (detail) { openDockerDetail(detail.dataset.dockerDetail); return; }
+  const logBtn = e.target.closest("[data-docker-log]");
+  if (logBtn) { openContainerLog(logBtn.dataset.dockerLog); return; }
+  if (e.target.closest("#docker-prune")) {
+    procTarget = { kind: "docker-prune" };
+    document.getElementById("proc-title").textContent = t("docker.prune");
+    document.getElementById("proc-text").textContent = t("docker.opText").replace("{label}", t("docker.prune")).replace("{name}", "");
+    document.getElementById("proc-err").textContent = "";
+    const pw = document.getElementById("proc-password");
+    pw.value = "";
+    setProcPwdLabel("fw");
+    procMask.classList.add("show");
+    setTimeout(() => pw.focus(), 50);
+  }
+});
+const dockerInfoMask = document.getElementById("docker-info-mask");
+document.getElementById("docker-info-close").onclick = () => dockerInfoMask.classList.remove("show");
+dockerInfoMask.addEventListener("click", (e) => { if (e.target === dockerInfoMask) dockerInfoMask.classList.remove("show"); });
 const fwOpenMask = document.getElementById("fw-open-mask");document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-fw-open]");
   if (!btn) return;
