@@ -423,8 +423,8 @@
             <button class="btn small" id="logs-copy" data-i18n="logs.copy">复制</button>
             <button class="btn small" id="logs-export" data-i18n="logs.export">导出</button>
           </div>
+          <button class="ai-analyze-btn" id="ai-analyze" title="AI 帮我分析" data-i18n="logs.aiAnalyze" data-i18n-attr="title" style="display:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><span data-i18n="logs.aiAnalyze">AI 帮我分析</span></button>
           <div class="logs-body" id="logs-body"><pre class="logs-empty" data-i18n="logs.selectHint">选择一个服务查看日志</pre></div>
-          <button class="ai-analyze-btn" id="ai-analyze" title="AI 分析" data-i18n="logs.aiAnalyze" data-i18n-attr="title" style="display:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><span data-i18n="logs.aiAnalyze">AI 分析</span></button>
         </div>
       </div>
     </div>
@@ -878,7 +878,6 @@ Nginx 配置有问题吗，帮我看看
   <div class="ai-popup-head" id="ai-popup-head">
     <span class="ai-popup-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/></svg><span data-i18n="ai.title">提问AI？</span></span>
     <button class="clear-btn ai-max" id="ai-fullscreen" title="全屏" data-i18n="ai.fullscreen" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg></button>
-    <button class="clear-btn" id="mini-clear" title="清空聊天历史" data-i18n="chat.clearTitle" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
     <button class="clear-btn ai-close" id="ai-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
   </div>
   <div class="mini-log" id="mini-log">

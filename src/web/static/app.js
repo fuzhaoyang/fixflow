@@ -15,14 +15,13 @@ const miniInput = document.getElementById("mini-input");
 const miniSend = document.getElementById("mini-send");
 const miniStop = document.getElementById("mini-stop");
 const miniCount = document.getElementById("mini-count");
-const miniClear = document.getElementById("mini-clear");
 const miniFullscreen = document.getElementById("ai-fullscreen");
 const miniClose = document.getElementById("ai-close");
 const aiFab = document.getElementById("ai-fab");
 const aiPopup = document.getElementById("ai-popup");
 const aiPopupHead = document.getElementById("ai-popup-head");
 const chatCtx = { log, welcome, input, sendBtn, stopBtn, charCount, preview, clearBtn };
-const miniCtx = { log: miniLog, welcome: miniWelcome, input: miniInput, sendBtn: miniSend, stopBtn: miniStop, charCount: miniCount, preview: null, clearBtn: miniClear };
+const miniCtx = { log: miniLog, welcome: miniWelcome, input: miniInput, sendBtn: miniSend, stopBtn: miniStop, charCount: miniCount, preview: null, clearBtn: clearBtn };
 let ctx = chatCtx;
 let stickToBottom = true;
 const scrollLog = () => { if (stickToBottom) ctx.log.scrollTop = ctx.log.scrollHeight; };
@@ -255,8 +254,8 @@ aiAnalyze.onclick = () => {
   const txt = logsBody.querySelector("pre")?.textContent || "";
   if (!txt.trim()) return;
   const prompt = t("logs.aiAnalyzePrompt");
-  input.value = prompt + txt.slice(0, 5000 - prompt.length);
-  location.hash = "/chat";
+  miniInput.value = prompt + txt.slice(0, 5000 - prompt.length);
+  openAiPopup();
   send();
 };
 document.getElementById("logs-export").onclick = () => {
@@ -2683,7 +2682,6 @@ function closeAiPopup() {
 
 aiFab.addEventListener("click", openAiPopup);
 miniClose.addEventListener("click", closeAiPopup);
-miniClear.addEventListener("click", () => { clearHistory(); addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true }); });
 miniFullscreen.addEventListener("click", () => { closeAiPopup(); location.hash = "/chat"; });
 miniSend.addEventListener("click", send);
 miniStop.addEventListener("click", () => fetch("api/abort", { method: "POST" }));
