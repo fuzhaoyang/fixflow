@@ -48,6 +48,16 @@ export const HELP_TEXT = `=== Fixflow 帮助 ===
    - 防火墙开了哪些端口
    - 帮我清理 /var/log 下 30 天前的日志
 
+【常用子命令】
+   fixflow                 进入对话（未配置时进入配置向导）
+   fixflow web             启动网页面板
+   fixflow default         查看面板访问地址（忘记端口 / 入口时用）
+   fixflow doctor          自检（Node / 配置 / 模型连通 / 面板服务）
+   fixflow restart         重启面板服务
+   fixflow reset-password  重置面板登录密码
+   fixflow uninstall       卸载（停止服务 + 卸载全局包，配置保留）
+   fixflow --version       查看版本
+
 【内置命令】
    help / ?          显示本帮助
    clear / 清空历史  清空当前会话对话

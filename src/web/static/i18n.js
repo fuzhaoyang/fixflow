@@ -478,15 +478,17 @@ Nginx 配置有问题吗，帮我看看
 <h4>监控（自动刷新：总览约 3 秒、卡片约 10 秒）</h4>
 <table>
   <tr><th>页面</th><th>内容</th></tr>
-  <tr><td>总览</td><td>负载 / CPU / 内存 / 磁盘环形图；流量 / 磁盘IO / Token 用量图表</td></tr>
+  <tr><td>总览</td><td>负载 / CPU / 内存 / 磁盘环形图；面板内存；流量 / 磁盘IO / Token 用量图表</td></tr>
   <tr><td>系统</td><td>健康检查明细，可一键生成报告（复制 / 下载 .md）</td></tr>
   <tr><td>网络</td><td>端口监听、端口占用查询、连通性检测（ping）</td></tr>
   <tr><td>Nginx</td><td>运行状态、配置校验、错误日志、配置文件查看 / 编辑 / 保存重载、服务操作</td></tr>
   <tr><td>防火墙</td><td>状态、放行规则、对全网开放端口风险、一键关闭端口</td></tr>
-  <tr><td>数据库</td><td>数据库探活</td></tr>
-  <tr><td>Docker</td><td>容器状态</td></tr>
+  <tr><td>黑白名单</td><td>面板端口 IP 访问控制（黑 / 白名单，需 UFW 防火墙）</td></tr>
+  <tr><td>数据库</td><td>连接管理（PostgreSQL / MySQL / Redis / MongoDB / SQLite，增删改、启用停用、测试连接）</td></tr>
+  <tr><td>Docker</td><td>容器列表与资源占用、镜像列表、启停 / 重启 / 删除容器、详情、日志、清理悬空镜像</td></tr>
   <tr><td>SSL 证书</td><td>自动发现 + 手动添加，到期进度与 SAN，一键续签，到期告警</td></tr>
-  <tr><td>服务</td><td>systemd 服务状态</td></tr>
+  <tr><td>服务</td><td>systemd 服务管理：启停 / 重启 / 重载 / 开机自启、详情与依赖、内嵌日志、状态与类型筛选、failed 告警</td></tr>
+  <tr><td>日志</td><td>系统服务 / Docker 容器日志检索、搜索、跟随、复制 / 导出、AI 分析</td></tr>
 </table>
 <h4>AI 对话</h4>
 <ul>
@@ -504,10 +506,11 @@ Nginx 配置有问题吗，帮我看看
 <ul>
   <li><b>日报告警</b>：配置 SMTP 邮箱，设定每日时间与指令，模型自动生成报表并发送。</li>
   <li><b>指标告警</b>：设置面板外网地址 / Webhook；按 CPU / 内存 / 磁盘 / 网络流量 / TCP 会话数设阈值、持续时间与级别（P1–P5）；事件可认领、恢复。</li>
+  <li><b>面板内存</b>：在「设置」里配置面板进程内存上限，超出时页面顶部弹横幅提示（仅提示，不中断服务）。</li>
 </ul>
 <h4>设置</h4>
 <ul>
-  <li>左下角「设置」→ 模型设置（改 API 地址 / Key / 模型），保存即生效；也可重启服务、退出登录。</li>
+  <li>左下角「设置」→ 模型设置（改 API 地址 / Key / 模型）与面板内存上限，保存即生效；也可重启服务、退出登录。</li>
 </ul>
 
 <h3>五、工具与安全</h3>
@@ -522,7 +525,7 @@ Nginx 配置有问题吗，帮我看看
 
 <h3>六、配置与进阶</h3>
 <ul>
-  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>lang</code> / <code>theme</code>。</li>
+  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>。</li>
   <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
   <li>面板监听 <code>0.0.0.0</code>，用「随机端口 + 随机入口路径」保护（无入口前缀的请求返回 404）；启动时会尝试自动放行本机防火墙端口。可用 nginx 反代绑定域名，或启用内置 HTTPS（自签证书）。</li>
   <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
@@ -598,15 +601,17 @@ Clean logs older than 30 days under /var/log</pre>
 <h4>Monitoring (auto-refresh: overview ~3s, cards ~10s)</h4>
 <table>
   <tr><th>Page</th><th>Content</th></tr>
-  <tr><td>Overview</td><td>Load / CPU / memory / disk rings; traffic / disk IO / token charts</td></tr>
+  <tr><td>Overview</td><td>Load / CPU / memory / disk rings; panel memory; traffic / disk IO / token charts</td></tr>
   <tr><td>System</td><td>Health-check details, one-click report (copy / download .md)</td></tr>
   <tr><td>Network</td><td>Listening ports, port lookup, connectivity check (ping)</td></tr>
   <tr><td>Nginx</td><td>Status, config check, error log, view / edit / save-and-reload configs, service actions</td></tr>
   <tr><td>Firewall</td><td>Status, allow rules, open-to-all port risks, one-click close port</td></tr>
-  <tr><td>Databases</td><td>Database liveness</td></tr>
-  <tr><td>Docker</td><td>Container status</td></tr>
+  <tr><td>Blacklist/Whitelist</td><td>Panel port IP access control (black / white lists, UFW only)</td></tr>
+  <tr><td>Databases</td><td>Connection management (PostgreSQL / MySQL / Redis / MongoDB / SQLite; add / edit / delete, enable / disable, test)</td></tr>
+  <tr><td>Docker</td><td>Containers with resource usage, images, start / stop / restart / remove, details, logs, prune dangling images</td></tr>
   <tr><td>SSL Certificates</td><td>Auto-discovery + manual add, expiry bar and SAN, one-click renew, expiry alerts</td></tr>
-  <tr><td>Services</td><td>systemd service status</td></tr>
+  <tr><td>Services</td><td>systemd service management: start / stop / restart / reload / auto-start, details &amp; dependencies, inline logs, status &amp; type filters, failed alerts</td></tr>
+  <tr><td>Logs</td><td>System service / Docker container log search, filtering, follow, copy / export, AI analysis</td></tr>
 </table>
 <h4>AI Chat</h4>
 <ul>
@@ -624,10 +629,11 @@ Clean logs older than 30 days under /var/log</pre>
 <ul>
   <li><b>Daily alerts</b>: configure SMTP, set a daily time and instruction; the model generates and emails a report.</li>
   <li><b>Metric alerts</b>: set panel URL / webhook; rules on CPU / memory / disk / network / TCP sessions with threshold, duration and level (P1–P5); incidents can be claimed / resolved.</li>
+  <li><b>Panel memory</b>: set the panel process memory limit in "Settings"; a banner appears at the top when exceeded (alert only, no service interruption).</li>
 </ul>
 <h4>Settings</h4>
 <ul>
-  <li>Bottom-left "Settings" → model settings (API URL / Key / model), takes effect on save; also restart service and log out.</li>
+  <li>Bottom-left "Settings" → model settings (API URL / Key / model) and panel memory limit, takes effect on save; also restart service and log out.</li>
 </ul>
 
 <h3>5. Tools &amp; Security</h3>
@@ -642,7 +648,7 @@ Clean logs older than 30 days under /var/log</pre>
 
 <h3>6. Configuration &amp; Advanced</h3>
 <ul>
-  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>lang</code> / <code>theme</code>.</li>
+  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>.</li>
   <li>Environment overrides: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
   <li>The panel listens on <code>0.0.0.0</code>, protected by a random port + random entry path (requests without the entry prefix return 404); it tries to open the local firewall port on startup. Bind a domain via an nginx reverse proxy, or enable built-in HTTPS (self-signed).</li>
   <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; log at <code>~/.config/fixflow/cli.log</code>.</li>
