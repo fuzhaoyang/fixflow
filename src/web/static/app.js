@@ -135,6 +135,7 @@ function applyRoute() {
     overviewEl.style.display = currentFilter === "all" ? "flex" : "none";
     cards.style.display = currentFilter === "all" ? "none" : "";
     if (currentFilter === "all" || currentFilter === "system") refreshOverview();
+    if (currentFilter === "network") { refreshOverview(); setTimeout(drawNetTraffic, 100); }
     if (currentFilter !== "all") renderCards();
     refreshMetrics();
   }
@@ -501,6 +502,22 @@ function drawLineChart(canvas, { labels, series, fixedMax = null }) {
   attachChartTip(canvas);
 }
 
+function drawNetTraffic() {
+  const canvas = document.getElementById("net-traffic-chart");
+  if (!canvas || !overviewData?.net?.length) return;
+  const points = overviewData.net;
+  const labels = points.map((p) => { const d = new Date(p.t * 1000); return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`; });
+  let up = points.map((p) => { let v = 0; for (const x of Object.values(p.up || {})) v += x; return v / (1024 * 1024); });
+  let down = points.map((p) => { let v = 0; for (const x of Object.values(p.down || {})) v += x; return v / (1024 * 1024); });
+  drawLineChart(canvas, {
+    labels,
+    series: [
+      { name: t("ov.down"), color: "#3b82f6", data: down },
+      { name: t("ov.up"), color: "#f97316", data: up },
+    ],
+  });
+}
+
 function hexToRgba(hex, a) {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
@@ -665,6 +682,7 @@ function initOverview() {
 function renderCards() {
   cards.innerHTML = "";
   cards.classList.toggle("system-mode", currentFilter === "system");
+  cards.classList.toggle("net-mode", currentFilter === "network");
   const items = currentFilter === "all" ? MODULES : MODULES.filter(([k]) => k === currentFilter);
   for (const [key, lkey] of items) {
     const label = t(lkey);
@@ -1068,6 +1086,7 @@ document.getElementById("ssl-renew-confirm").onclick = async () => {
 };
 
 const FIREWALL_MODES = { delete: "删除放行规则", deny: "添加拒绝规则" };
+const PORT_SERVICES = { 22: "ssh", 25: "smtp", 53: "dns", 80: "http", 110: "pop3", 143: "imap", 443: "https", 3306: "mysql", 5432: "postgres", 6379: "redis", 8080: "http-alt", 8443: "https-alt", 9090: "prometheus", 27017: "mongodb", 9000: "php-fpm", 9418: "git", 5000: "docker-registry", 2375: "docker", 11211: "memcached" };
 const FW_PAGE_SIZE = 10;
 let fwRiskPage = 0;
 let fwRulesPage = 0;
@@ -1080,6 +1099,67 @@ function fwServiceTag(portStr) {
   const n = Number(String(portStr).split(",")[0].split("-")[0]);
   const name = FW_SERVICE_NAMES[n];
   return name ? `<span class="fw-svc">${escapeHtml(name)}</span>` : "";
+}
+
+function renderNetwork(m, all) {
+  if (!m) return `<pre>${escapeHtml(t("mon.notConfigured"))}</pre>`;
+  const items = m?.listeners?.items || [];
+  const conns = all?.connSummary?.est || {};
+  const nics = all?.nicHealth?.nics || [];
+  const dns = all?.dnsRoute || {};
+  const scan = all?.portScan?.results;
+  const ping = all?.pingResult?.results;
+  const probe = all?.probeResult;
+  const card = (title, inner) => `<div class="card wide"><h2>${title}</h2>${inner}</div>`;
+  const out = [];
+
+  // 1. 流量曲线
+  out.push(card(t("net.trafficTitle"), `<div class="chart-wrap" style="height:220px"><canvas id="net-traffic-chart" style="width:100%;height:220px;display:block"></canvas></div>`));
+
+  // 2. 端口连接数（汇总级）
+  const listenerPorts = [];
+  for (const it of items) {
+    const mm = it.local.match(/:(\d+)$/);
+    if (mm) listenerPorts.push(Number(mm[1]));
+  }
+  const portConns = [...new Set(listenerPorts)].map((p) => ({ port: p, n: conns[p] || 0 })).sort((a, b) => b.n - a.n).slice(0, 15);
+  const connTotal = Object.values(conns).reduce((a, b) => a + b, 0);
+  const connRows = portConns.map((c) => `<tr><td>${c.port}</td><td>${PORT_SERVICES[c.port] || "—"}</td><td>${c.n}</td></tr>`).join("");
+  out.push(card(t("net.connTitle"), `<div class="fw-summary">
+    <div class="fw-stat"><span class="k">${t("net.listenCount")}</span><span class="v">${listenerPorts.length}</span></div>
+    <div class="fw-stat"><span class="k">${t("net.estTotal")}</span><span class="v">${connTotal}</span></div>
+    <div class="fw-stat"><span class="k">${t("net.topConn")}</span><span class="v">${portConns[0]?.port ?? "—"}</span></div>
+  </div>${connRows ? `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("net.port")}</th><th>${t("net.svcLabel")}</th><th>${t("net.conn")}</th></tr></thead><tbody>${connRows}</tbody></table></div>` : `<pre>${t("net.noConn")}</pre>`}`));
+
+  // 3. 网卡健康
+  const nicRows = nics.map((n) => `<tr><td>${escapeHtml(n.name)}</td><td>${escapeHtml(n.state)}</td><td>${fmtBytes(n.rxBytes)}</td><td>${fmtBytes(n.txBytes)}</td><td>${n.rxErr} / ${n.txErr}</td><td>${n.rxDrop} / ${n.txDrop}</td></tr>`).join("");
+  out.push(card(t("net.nicTitle"), nicRows
+    ? `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("net.nic")}</th><th>${t("net.state")}</th><th>${t("net.rx")}</th><th>${t("net.tx")}</th><th>${t("net.err")}</th><th>${t("net.drop")}</th></tr></thead><tbody>${nicRows}</tbody></table></div>`
+    : `<pre>${t("net.noNic")}</pre>`));
+
+  // 4. 远端端口探测
+  out.push(card(t("net.probeTitle"), probe
+    ? `<pre>${escapeHtml(probe.host)}:${escapeHtml(probe.port)} → ${probe.ok ? t("net.probeOk") : t("net.probeFail")}${probe.detail ? "\n" + escapeHtml(probe.detail) : ""}</pre>`
+    : `<pre>${t("net.probeHint")}</pre>`));
+
+  // 5. DNS / 路由
+  const dnsLines = (dns.nameservers || []).map((l) => escapeHtml(l)).join("\n");
+  const routeLines = (dns.routes || []).map((l) => escapeHtml(l)).join("\n");
+  out.push(card(t("net.dnsTitle"), `<pre>${dnsLines || t("net.noDns")}\n${t("net.routes")}\n${routeLines || t("net.noRoute")}</pre>`));
+
+  // 6. 监听端口 + 端口扫描 + 连通性
+  const listenHtml = items.length
+    ? `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("mon.proto")}</th><th>${t("mon.state")}</th><th>${t("mon.local")}</th><th>${t("mon.proc")}</th><th>PID</th></tr></thead><tbody>${items.map((i) => `<tr><td>${escapeHtml(i.proto)}</td><td>${escapeHtml(i.state)}</td><td>${escapeHtml(i.local)}</td><td>${escapeHtml(i.process || "—")}</td><td>${i.pid || "—"}</td></tr>`).join("")}</tbody></table></div>`
+    : `<pre>${escapeHtml(m?.listeners?.detail || t("net.noListen"))}</pre>`;
+  const scanHtml = scan?.length
+    ? `<pre>${t("net.scanTitle")}${scan.map((p) => `${p.port} (${p.service}): ${p.ok ? t("net.listening") : t("net.notListening")}\n${p.detail}`).join("\n----\n")}</pre>`
+    : "";
+  const pingHtml = ping?.length
+    ? `<pre>${t("net.pingTitle")}${ping.map((p) => `${escapeHtml(p.target)}: ${p.pingOk ? t("net.pingOk") : t("net.pingFail")} · ${escapeHtml(p.dns || "")}`).join("\n")}</pre>`
+    : "";
+  out.push(card(t("net.listenTitle"), listenHtml + scanHtml + pingHtml));
+
+  return out.join("");
 }
 
 function renderFirewallSkeleton() {
@@ -2103,6 +2183,28 @@ pingBtn.onclick = async () => {
   const res = await fetch(`api/metrics?ping=${encodeURIComponent(target)}`);
   metrics.pingResult = (await res.json()).pingResult;
   renderCards();
+};
+const probeBtn = document.getElementById("probe-btn");
+probeBtn.onclick = async () => {
+  const target = document.getElementById("probe-input").value.trim();
+  if (!target) return;
+  const res = await fetch(`api/metrics?probe=${encodeURIComponent(target)}`);
+  metrics.probeResult = (await res.json()).probeResult;
+  renderCards();
+};
+document.getElementById("net-ai").onclick = () => {
+  const parts = [];
+  const conn = metrics?.connSummary?.est || {};
+  const items = metrics?.network?.listeners?.items || [];
+  const nics = metrics?.nicHealth?.nics || [];
+  parts.push(t("net.aiPrompt"));
+  parts.push(t("net.aiListen") + items.map((i) => `${i.proto} ${i.local} (${i.process || "?"})`).join("; "));
+  const tops = Object.entries(conn).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, n]) => `${p}:${n}`).join(", ");
+  parts.push(t("net.aiConn") + (tops || t("net.aiNone")));
+  parts.push(t("net.aiNic") + nics.map((n) => `${n.name}(${n.state})`).join(", "));
+  input.value = parts.join("\n");
+  location.hash = "/chat";
+  send();
 };
 let metricsTimer = null;
 let overviewTimer = null;

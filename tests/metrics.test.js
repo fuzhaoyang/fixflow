@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ databases: [] });
@@ -310,4 +310,44 @@ test("collectLogs 缺参返回错误", async () => {
   const r = await collectLogs({}, { run: async () => ({ exitCode: 0, stdout: "", stderr: "" }) });
   assert.equal(r.exitCode, 1);
   assert.match(r.content, /缺少服务名/);
+});
+
+test("collectConnectionSummary 解析 ESTAB 连接数", async () => {
+  const run = async () => ({ exitCode: 0, stdout: "State  Recv-Q Send-Q Local\nESTAB  0      0      0.0.0.0:80\nESTAB  0      0      0.0.0.0:80\nLISTEN 0      128    0.0.0.0:443\n", stderr: "" });
+  const r = await collectConnectionSummary({ run });
+  assert.deepEqual(r.est, { 80: 2 });
+});
+
+test("collectNicHealth 解析网卡数据与状态", async () => {
+  const run = async (cmd) => cmd.includes("ip -o link")
+    ? { exitCode: 0, stdout: "1: lo: <LOOPBACK,UP> state UNKNOWN\n2: eth0: <BROADCAST,MULTICAST,UP> state UP\n", stderr: "" }
+    : { exitCode: 0, stdout: "Inter-|Receive|Transmit\n eth0: 100 1 2 3 0 0 0 0 200 2 3 4 0 0 0 0\n", stderr: "" };
+  const r = await collectNicHealth({ run });
+  assert.equal(r.nics.length, 1);
+  assert.equal(r.nics[0].name, "eth0");
+  assert.equal(r.nics[0].state, "UP");
+  assert.equal(r.nics[0].rxBytes, 100);
+  assert.equal(r.nics[0].txErr, 3);
+});
+
+test("collectDnsRoute 解析 nameserver 与路由", async () => {
+  const run = async (cmd) => {
+    if (cmd.includes("resolv.conf")) return { exitCode: 0, stdout: "nameserver 8.8.8.8\nsearch example.com\n", stderr: "" };
+    if (cmd.includes("ip route")) return { exitCode: 0, stdout: "default via 192.168.1.1 dev eth0\n", stderr: "" };
+    return { exitCode: 0, stdout: "192.168.1.5\n", stderr: "" };
+  };
+  const r = await collectDnsRoute({ run });
+  assert.ok(r.nameservers.some((l) => l.includes("8.8.8.8")));
+  assert.ok(r.routes.some((l) => l.includes("default")));
+  assert.ok(r.addrs.includes("192.168.1.5"));
+});
+
+test("collectRemoteProbe 探测结果", async () => {
+  const run = async () => ({ exitCode: 0, stdout: "open", stderr: "" });
+  const ok = await collectRemoteProbe("example.com:443", { run });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.host, "example.com");
+  const bad = await collectRemoteProbe("bad", { run });
+  assert.equal(bad.ok, false);
+  assert.match(bad.error, /host:port/);
 });
