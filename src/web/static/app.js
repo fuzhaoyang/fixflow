@@ -697,14 +697,14 @@ function renderCards() {
     const card = document.createElement("div");
     card.className = "card";
     if (key === "systemd") {
-      card.innerHTML = `<h2>${label}</h2>${renderSystemd({ ...m, userProcs: metrics.userProcs })}`;
+      card.innerHTML = `<h2>${label}</h2>${m ? renderSystemd({ ...m, userProcs: metrics.userProcs }) : renderSystemdSkeleton()}`;
     } else if (key === "network") {
       card.classList.add("net-card");
       card.innerHTML = renderNetwork(m, metrics);
     } else if (key === "ssl") {
-      card.innerHTML = `<h2>${label}</h2>${renderSsl(m)}`;
+      card.innerHTML = `<h2>${label}</h2>${m ? renderSsl(m) : renderSslSkeleton()}`;
     } else if (key === "nginx") {
-      card.innerHTML = `<h2>${label}</h2>${renderNginx(m, metrics.nginxLogs)}`;
+      card.innerHTML = `<h2>${label}</h2>${m ? renderNginx(m, metrics.nginxLogs) : renderNginxSkeleton()}`;
       setTimeout(loadNginxConfs, 0);
     } else if (key === "firewall") {
       card.classList.add("fw-card");
@@ -715,7 +715,8 @@ function renderCards() {
       card.innerHTML = `<h2>${label}</h2>${renderDocker(m)}`;
       refreshDockerStats();
     } else if (key === "databases") {
-      card.innerHTML = `<h2>${label} <button class="btn small" data-db-add style="margin-left:8px">${t("db.addBtn")}</button></h2><div id="db-list"><pre>${t("fs.loading")}</pre></div>`;
+      const dbSkel = `<div class="db-grid">${Array.from({ length: 3 }, () => `<div class="db-card"><div class="db-head"><div class="skel-line" style="width:80px;margin:0"></div></div><div class="skel-line" style="width:100%"></div><div class="skel-line" style="width:60%"></div><div class="skel-line" style="width:45%"></div></div>`).join("")}</div>`;
+      card.innerHTML = `<h2>${label} <button class="btn small" data-db-add style="margin-left:8px">${t("db.addBtn")}</button></h2><div id="db-list">${dbSkel}</div>`;
       loadDbConnections();
     } else {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
@@ -899,6 +900,11 @@ async function loadSysOps() {
   } catch { el.innerHTML = `<pre class="sys-list hint">${t("fs.loadFail").replace("{e}", "")}</pre>`; }
 }
 
+function renderSystemdSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  return `<div class="card-body">${skel(6)}</div>`;
+}
+
 function renderSystemd(m) {
   if (!m?.services && !m?.userProcs) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
   const q = searchBox.value.trim().toLowerCase();
@@ -916,6 +922,11 @@ function renderSystemd(m) {
   if (!rows.length) return `<pre>${escapeHtml(q ? t("srv.noMatchQ").replace("{q}", q) : t("srv.noMatchCfg"))}</pre>`;
   const filtered = q ? rows.filter((r) => r.toLowerCase().includes(q)) : rows;
   return `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th>${t("srv.started")}</th></tr></thead><tbody>${filtered.join("")}</tbody></table></div>`;
+}
+
+function renderNginxSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  return `<div class="card-body">${skel(2)}</div><h3 style="font-size:14px;margin:12px 0 4px">${t("nginx.confsTitle")}</h3><div class="card-body">${skel(4)}</div>`;
 }
 
 function renderNginx(m, logs) {
@@ -1131,6 +1142,12 @@ document.getElementById("db-add-save").onclick = async () => {
   loadDbConnections();
 };
 
+function renderSslSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  const summary = `<div class="ssl-summary">${Array.from({ length: 4 }, () => `<div class="skel-line" style="width:90px;margin:0"></div>`).join("")}</div>`;
+  return summary + `<div class="card-body">${skel(5)}</div>`;
+}
+
 function renderSsl(m) {
   const list = m?.results;
   if (!list) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
@@ -1244,8 +1261,28 @@ function fwServiceTag(portStr) {
   return name ? `<span class="fw-svc">${escapeHtml(name)}</span>` : "";
 }
 
+function renderNetworkSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  const cell = (w = "100%") => `<td><div class="skel-line" style="width:${w};margin:0"></div></td>`;
+  const tableSkel = (cols, n) => {
+    const th = Array.from({ length: cols }, () => "<th></th>").join("");
+    const tr = Array.from({ length: n }, () => `<tr>${Array.from({ length: cols }, (_, i) => cell(i === 0 ? "100%" : "60%")).join("")}</tr>`).join("");
+    return `<div class="card-body"><table class="svc-table"><thead><tr>${th}</tr></thead><tbody>${tr}</tbody></table></div>`;
+  };
+  const card = (title, inner) => `<div class="card wide"><h2>${title}</h2>${inner}</div>`;
+  const stat = (label) => `<div class="fw-stat"><span class="k">${label}</span><div class="skel-line" style="width:70%"></div></div>`;
+  return [
+    card(t("net.trafficTitle"), `<div class="chart-wrap" style="height:220px"><div class="skel-block" style="height:220px"></div></div>`),
+    card(t("net.connTitle"), `<div class="fw-summary">${stat(t("net.listenCount"))}${stat(t("net.estTotal"))}${stat(t("net.topConn"))}</div>${tableSkel(3, 5)}`),
+    card(t("net.nicTitle"), tableSkel(6, 3)),
+    card(t("net.probeTitle"), `<div class="card-body">${skel(2)}</div>`),
+    card(t("net.dnsTitle"), `<div class="card-body">${skel(3)}</div>`),
+    card(t("net.listenTitle"), tableSkel(5, 6) + `<div class="card-body">${skel(2)}</div>`),
+  ].join("");
+}
+
 function renderNetwork(m, all) {
-  if (!m) return `<pre>${escapeHtml(t("mon.notConfigured"))}</pre>`;
+  if (!m) return renderNetworkSkeleton();
   const items = m?.listeners?.items || [];
   const conns = all?.connSummary?.est || {};
   const nics = all?.nicHealth?.nics || [];
@@ -1313,8 +1350,21 @@ function renderFirewallSkeleton() {
   return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3><div class="card-body">${skel(5)}</div><h3 class="fw-sub">${t("fw.riskSection")}</h3><div class="fw-risk">${riskRow}${riskRow}${riskRow}</div><h3 class="fw-sub">${t("fw.opSection")}</h3><div id="fw-ops">${skel(2)}</div>`;
 }
 
+function renderDockerSkeleton() {
+  const cell = (w = "100%") => `<td><div class="skel-line" style="width:${w};margin:0"></div></td>`;
+  const row = (cols) => `<tr>${cols}</tr>`;
+  const cRows = Array.from({ length: 5 }, () => row(cell() + cell() + cell("60%") + cell("70%") + cell("50%") + cell("60%") + cell("80%"))).join("");
+  const cHtml = `<div class="docker-table-wrap"><table class="svc-table"><thead><tr><th>${t("docker.name")}</th><th>${t("docker.image")}</th><th>${t("docker.state")}</th><th>${t("docker.status")}</th><th>${t("docker.ports")}</th><th>${t("docker.created")}</th><th></th></tr></thead><tbody>${cRows}</tbody></table></div>`;
+  const statsHtml = `<h3 style="font-size:14px;margin:14px 0 6px">${t("docker.stats")}</h3><div id="docker-stats"><div class="card-body">${Array.from({ length: 3 }, () => `<div class="skel-line"></div>`).join("")}</div></div>`;
+  const iRows = Array.from({ length: 3 }, () => row(cell() + cell("50%") + cell("70%") + cell("50%") + cell("60%"))).join("");
+  const iHtml = `<h3 style="font-size:14px;margin:14px 0 6px">${t("docker.images")}</h3>
+    <div style="margin:0 0 8px"><button class="btn small danger" id="docker-prune" disabled>${t("docker.prune")}</button></div>
+    <div class="docker-table-wrap"><table class="svc-table"><thead><tr><th>${t("docker.repo")}</th><th>${t("docker.tag")}</th><th>${t("docker.id")}</th><th>${t("docker.size")}</th><th>${t("docker.since")}</th></tr></thead><tbody>${iRows}</tbody></table></div>`;
+  return `${cHtml}${statsHtml}${iHtml}`;
+}
+
 function renderDocker(m) {
-  if (!m) return `<pre>${t("docker.loading")}</pre>`;
+  if (!m) return renderDockerSkeleton();
   if (m.error) return `<pre>${escapeHtml(m.error)}</pre>`;
   const containers = Array.isArray(m.containers) ? m.containers : [];
   const images = Array.isArray(m.images) ? m.images : [];
