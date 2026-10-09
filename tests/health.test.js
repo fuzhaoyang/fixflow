@@ -38,6 +38,15 @@ test("parseFree 排除 buffer/cache 计算 usedPct 并解析 swap", () => {
   assert.equal(r.swapTotal, 2000000);
 });
 
+test("parseFree 兼容中文 locale 的 free 输出", () => {
+  const r = parseFree(`              total        used        free      shared  buff/cache   available
+内存：       16000000    10000000     2000000      100000    4000000     5000000
+交换：       2000000      500000     1500000`);
+  assert.equal(Math.round(r.usedPct), 38);
+  assert.equal(r.swapUsedPct, 25);
+  assert.equal(r.swapTotal, 2000000);
+});
+
 test("assessHealth 分级与建议", () => {
   const r = assessHealth({ df: [{ mount: "/", usedPct: 91 }, { mount: "/data", usedPct: 20 }], free: 82, load: 3, cpuCount: 8 });
   const disk = r.items.find((i) => i.name.includes("/"));

@@ -41,8 +41,8 @@ export function parseDfInodes(stdout) {
 }
 
 export function parseFree(stdout) {
-  const m = (stdout || "").match(/Mem:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
-  const s = (stdout || "").match(/Swap:\s+(\d+)\s+(\d+)\s+(\d+)/);
+  const m = (stdout || "").match(/(?:Mem|内存)[^0-9\n]*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)/);
+  const s = (stdout || "").match(/(?:Swap|交换)[^0-9\n]*(\d+)\s+(\d+)\s+(\d+)/);
   const swapTotal = s ? Number(s[1]) : 0;
   const swapUsed = s ? Number(s[2]) : 0;
   const base = { usedPct: 0, total: 0, used: 0, swapTotal, swapUsed, swapUsedPct: swapTotal ? Math.round((swapUsed / swapTotal) * 100) : 0 };
