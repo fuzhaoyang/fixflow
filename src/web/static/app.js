@@ -714,6 +714,9 @@ function renderCards() {
     } else if (key === "docker") {
       card.innerHTML = `<h2>${label}</h2>${renderDocker(m)}`;
       refreshDockerStats();
+    } else if (key === "databases") {
+      card.innerHTML = `<h2>${label} <button class="btn small" data-db-add style="margin-left:8px">${t("db.addBtn")}</button></h2><div id="db-list"><pre>${t("fs.loading")}</pre></div>`;
+      loadDbConnections();
     } else {
       card.innerHTML = `<h2>${label}</h2><pre>${escapeHtml(detail(m))}</pre>`;
     }
@@ -987,6 +990,146 @@ function sslBar(daysLeft) {
   const cls = sslLevel(daysLeft);
   return `<div class="ssl-bar"><div class="ssl-bar-fill ${cls}" style="width:${pct}%"></div></div>`;
 }
+
+async function loadDbConnections() {
+  const el = document.getElementById("db-list");
+  if (!el) return;
+  try {
+    const res = await fetch("api/db/connections");
+    const data = await res.json();
+    renderDbConnections(data.connections || []);
+  } catch { el.innerHTML = `<pre>${t("fs.loadFail").replace("{e}", "")}</pre>`; }
+}
+
+function renderDbConnections(list) {
+  const el = document.getElementById("db-list");
+  if (!el) return;
+  if (!list.length) { el.innerHTML = `<pre class="hint">${t("db.empty")}</pre>`; return; }
+  const typeLabel = { postgres: t("db.typePostgres"), mysql: t("db.typeMysql"), redis: t("db.typeRedis"), mongodb: t("db.typeMongo"), sqlite: t("db.typeSqlite") };
+  el.innerHTML = `<div class="db-grid">` + list.map((c) => {
+    const addr = c.type === "sqlite" ? escapeHtml(c.path) : `${escapeHtml(c.host)}:${escapeHtml(c.port)}`;
+    const db = c.type === "sqlite" ? "" : `<span class="db-sub">${t("db.database")} ${escapeHtml(c.database || "—")}</span>`;
+    const user = c.type === "sqlite" ? "" : `<span class="db-sub">${t("db.user")} ${escapeHtml(c.user || "—")}</span>`;
+    const pass = c.hasPass ? `<span class="tag ok">${t("db.hasPass")}</span>` : `<span class="tag">${t("db.noPass")}</span>`;
+    const state = c.enabled ? "" : ` class="na"`;
+    const ops = `<span class="proc-ops">
+      <a href="javascript:void(0)" data-db-action="test" data-db-id="${escapeHtml(c.id)}">${t("db.testBtn")}</a>
+      <a href="javascript:void(0)" data-db-action="edit" data-db-id="${escapeHtml(c.id)}">${t("db.editBtn")}</a>
+      <a href="javascript:void(0)" data-db-action="toggle" data-db-id="${escapeHtml(c.id)}" data-db-enabled="${c.enabled !== false}">${c.enabled === false ? t("db.enableBtn") : t("db.disableBtn")}</a>
+      <a href="javascript:void(0)" data-db-action="del" data-db-id="${escapeHtml(c.id)}" class="danger">${t("db.delBtn")}</a>
+    </span>`;
+    return `<div class="db-card"><div class="db-head"><b${state}>${escapeHtml(c.name)}</b><span class="tag">${typeLabel[c.type] || c.type}</span>${pass}</div>
+      <div class="db-addr">${addr}</div>${db}${user}
+      <div class="db-ops">${ops}</div>
+      <div class="db-result" id="db-result-${escapeHtml(c.id)}"></div></div>`;
+  }).join("") + `</div>`;
+}
+
+document.addEventListener("click", async (e) => {
+  const add = e.target.closest("[data-db-add]");
+  if (add) { openDbModal(); return; }
+  const a = e.target.closest("[data-db-action]");
+  if (!a) return;
+  const id = a.dataset.dbId;
+  const action = a.dataset.dbAction;
+  if (action === "test") {
+    const conn = await fetchDbConn(id);
+    if (!conn) return;
+    if (conn.hasPass) { runDbTest(id, ""); }
+    else {
+      procTarget = { kind: "db-test", id };
+      document.getElementById("proc-title").textContent = t("db.testBtn");
+      document.getElementById("proc-text").textContent = t("db.testingHint");
+      document.getElementById("proc-err").textContent = "";
+      const pw = document.getElementById("proc-password");
+      pw.value = "";
+      setProcPwdLabel("proc");
+      procMask.classList.add("show");
+      setTimeout(() => pw.focus(), 50);
+    }
+  } else if (action === "edit") {
+    const conn = await fetchDbConn(id);
+    if (conn) openDbModal(conn);
+  } else if (action === "toggle") {
+    await fetch("api/db/connections", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, enabled: a.dataset.dbEnabled !== "true" }) });
+    loadDbConnections();
+  } else if (action === "del") {
+    if (!confirm(t("db.delConfirm"))) return;
+    await fetch("api/db/connections", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id }) });
+    loadDbConnections();
+  }
+});
+
+async function fetchDbConn(id) {
+  try {
+    const res = await fetch("api/db/connections");
+    const data = await res.json();
+    return (data.connections || []).find((c) => c.id === id);
+  } catch { return null; }
+}
+
+async function runDbTest(id, password) {
+  const resEl = document.getElementById(`db-result-${id}`);
+  if (resEl) resEl.innerHTML = `<span class="na">${t("db.testing")}</span>`;
+  try {
+    const res = await fetch("api/db/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(password ? { id, password } : { id }) });
+    const d = await res.json();
+    if (resEl) resEl.innerHTML = d.ok ? `<span class="ok">✓ ${t("db.testOk")}${Number.isFinite(d.latencyMs) ? `（${d.latencyMs}ms）` : ""}</span>` : `<span class="bad">✗ ${escapeHtml(d.detail || d.error || t("db.testFail"))}</span>`;
+  } catch (err) {
+    if (resEl) resEl.innerHTML = `<span class="bad">✗ ${escapeHtml(String(err))}</span>`;
+  }
+}
+
+const dbAddMask = document.getElementById("db-add-mask");
+function openDbModal(conn) {
+  document.getElementById("db-add-id").value = conn?.id || "";
+  document.getElementById("db-add-name").value = conn?.name || "";
+  document.getElementById("db-add-type").value = conn?.type || "postgres";
+  document.getElementById("db-add-host").value = conn?.host || "";
+  document.getElementById("db-add-port").value = conn?.port || "";
+  document.getElementById("db-add-database").value = conn?.database || "";
+  document.getElementById("db-add-user").value = conn?.user || "";
+  document.getElementById("db-add-password").value = "";
+  document.getElementById("db-add-path").value = conn?.path || "";
+  document.getElementById("db-add-err").textContent = "";
+  document.getElementById("db-add-title").textContent = conn ? t("db.editBtn") : t("db.addBtn");
+  dbSyncTypeFields();
+  dbAddMask.classList.add("show");
+  setTimeout(() => document.getElementById("db-add-name").focus(), 50);
+}
+function dbSyncTypeFields() {
+  const isSqlite = document.getElementById("db-add-type").value === "sqlite";
+  for (const f of ["db-add-host-field", "db-add-port-field", "db-add-database-field", "db-add-user-field", "db-add-password-field"]) {
+    document.getElementById(f).style.display = isSqlite ? "none" : "";
+  }
+  document.getElementById("db-add-path-field").style.display = isSqlite ? "" : "none";
+}
+document.getElementById("db-add-close").onclick = () => dbAddMask.classList.remove("show");
+document.getElementById("db-add-cancel").onclick = () => dbAddMask.classList.remove("show");
+dbAddMask.addEventListener("click", (e) => { if (e.target === dbAddMask) dbAddMask.classList.remove("show"); });
+document.getElementById("db-add-type").onchange = dbSyncTypeFields;
+document.getElementById("db-add-save").onclick = async () => {
+  const id = document.getElementById("db-add-id").value;
+  const body = { name: document.getElementById("db-add-name").value.trim() };
+  const isSqlite = document.getElementById("db-add-type").value === "sqlite";
+  if (isSqlite) { body.type = "sqlite"; body.path = document.getElementById("db-add-path").value.trim(); }
+  else {
+    body.type = document.getElementById("db-add-type").value;
+    body.host = document.getElementById("db-add-host").value.trim();
+    body.port = document.getElementById("db-add-port").value.trim();
+    body.database = document.getElementById("db-add-database").value.trim();
+    body.user = document.getElementById("db-add-user").value.trim();
+    const pw = document.getElementById("db-add-password").value;
+    if (pw) body.password = pw;
+  }
+  const method = id ? "PATCH" : "POST";
+  const payload = id ? { ...body, id } : body;
+  const res = await fetch("api/db/connections", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+  const data = await res.json();
+  if (!res.ok) { document.getElementById("db-add-err").textContent = data.error || t("db.errSave"); return; }
+  dbAddMask.classList.remove("show");
+  loadDbConnections();
+};
 
 function renderSsl(m) {
   const list = m?.results;
@@ -2739,6 +2882,7 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isSys = kind === "sys";
   const isDockerOp = kind === "docker-op";
   const isDockerPrune = kind === "docker-prune";
+  const isDbTest = kind === "db-test";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
@@ -2767,7 +2911,7 @@ document.getElementById("proc-confirm").onclick = async () => {
       fd.append("file", procTarget.body.file, procTarget.body.file.name);
       res = await fetch("api/fs/upload", { method: "POST", body: fd });
     } else {
-      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : `api/system/${procTarget.op}`;
+      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : isDbTest ? "api/db/test" : `api/system/${procTarget.op}`;
       const payload = isFw
         ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
         : isFwCtl
@@ -2782,7 +2926,9 @@ document.getElementById("proc-confirm").onclick = async () => {
                   ? { name: procTarget.name, action: procTarget.action, password }
                   : isDockerPrune
                     ? { password }
-                    : { ...(procTarget.body || {}), password };
+                    : isDbTest
+                      ? { id: procTarget.id, password }
+                      : { ...(procTarget.body || {}), password };
       res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       data = await res.json();
       if (res.status === 403 || res.status === 400) {
@@ -2790,7 +2936,7 @@ document.getElementById("proc-confirm").onclick = async () => {
         if (isNginxSave) document.getElementById("nginx-conf-err").textContent = data.error || "";
         return;
       }
-      if (!data.ok) { errEl.textContent = data.stderr || data.error || t("op.fail"); return; }
+      if (!data.ok && !isDbTest) { errEl.textContent = data.stderr || data.error || t("op.fail"); return; }
     }
     if (isNginxSave) nginxConfMask.classList.remove("show");
     if (isFs && fsOp === "write") fsEditMask.classList.remove("show");
@@ -2798,7 +2944,7 @@ document.getElementById("proc-confirm").onclick = async () => {
     if (isFwCtl) showSaveMsg(t("fw.controlDone").replace("{action}", procTarget.action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn")), "ok");
     if (isSys) showSaveMsg(t("sys.opDone"), "ok");
     if (isDockerOp || isDockerPrune) showSaveMsg(isDockerOp ? t("docker.opDone") : t("docker.pruneDone"), "ok");
-    refreshMetrics();
+    if (isDbTest) { runDbTest(procTarget.id, password); } else { refreshMetrics(); }
     if (isFs) fsRefresh();
   } catch (e2) {
     errEl.textContent = String(e2);

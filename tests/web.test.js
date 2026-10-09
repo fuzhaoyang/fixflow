@@ -1384,3 +1384,17 @@ test("数据库连接接口校验：非法类型 400", async () => {
   assert.equal(res.status, 400);
   w.close();
 });
+
+test("数据库页前端：renderDb 相关钩子存在", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const js = await (await fetch(`${base}/app.js`)).text();
+  const html = await (await fetch(`${base}/`)).text();
+  assert.match(js, /loadDbConnections/);
+  assert.match(js, /renderDbConnections/);
+  assert.match(js, /api\/db\/connections/);
+  assert.match(js, /api\/db\/test/);
+  assert.match(html, /id="db-add-mask"/);
+  assert.match(html, /id="db-add-type"/);
+  w.close();
+});
