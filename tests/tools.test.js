@@ -109,3 +109,9 @@ test("runCommand 输出自动脱敏敏感凭证", async () => {
   assert.ok(!r.stdout.includes("sk-abcdef1234567890"));
   assert.match(r.stdout, /\*\*\*\*\*\*/);
 });
+
+test("runCommand 支持 env 注入且不回显到命令串", async () => {
+  const r = await runCommand('echo "$DB_PASS"', { env: { DB_PASS: "s3cret!" } });
+  assert.equal(r.exitCode, 0);
+  assert.match(r.stdout, /s3cret!/);
+});

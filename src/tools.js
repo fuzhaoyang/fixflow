@@ -92,9 +92,9 @@ const release = () => {
   else activeExec--;
 };
 
-function runExec(command, { timeout = 30000, signal } = {}) {
+function runExec(command, { timeout = 30000, signal, env = {} } = {}) {
   return new Promise((resolve) => {
-    const child = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
     let stdout = "", stderr = "";
     let done = false, overflow = false, aborted = false;
     let timer;
