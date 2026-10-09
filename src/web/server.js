@@ -185,6 +185,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.lang = config.lang === "en" ? "en" : "zh";
   config.theme = config.theme === "light" ? "light" : "dark";
   config.fsCollapsed = config.fsCollapsed === true;
+  config.memLimitMB = Number.isFinite(config.memLimitMB) && config.memLimitMB > 0 ? config.memLimitMB : 1024;
   config.dbConnections = normalizeDbConnections(config.dbConnections);
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
@@ -208,7 +209,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, dbConnections: config.dbConnections };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
     await chmod(configPath, 0o600).catch(() => {});
@@ -416,6 +417,19 @@ export async function startWeb(config = {}, deps = {}) {
   if (!deps.noAlertsTimer && config.apiKey) {
     metricAlertTimer = setInterval(() => metricAlerts.tick(), 60000);
   }
+  let memAlerting = false;
+  const memTimer = setInterval(() => {
+    const rssMB = Math.round(process.memoryUsage().rss / 1024 / 1024);
+    const over = rssMB > config.memLimitMB;
+    if (over && !memAlerting) {
+      memAlerting = true;
+      console.warn(`[fixflow] 面板进程内存 ${rssMB}MB 已超过上限 ${config.memLimitMB}MB`);
+      broadcast({ type: "memAlert", usedMB: rssMB, limitMB: config.memLimitMB });
+    } else if (!over && memAlerting) {
+      memAlerting = false;
+      broadcast({ type: "memOk", usedMB: rssMB, limitMB: config.memLimitMB });
+    }
+  }, 10000);
   let lastFailedSet = null;
   const checkFailedServices = async () => {
     try {
@@ -595,6 +609,7 @@ export async function startWeb(config = {}, deps = {}) {
           io: io.samples,
           trend: monitor.trend().samples,
           usage: usageStore.daily(30),
+          panelMem: { usedMB: Math.round(process.memoryUsage().rss / 1024 / 1024), limitMB: config.memLimitMB },
         });
       } else if (url.pathname === "/api/usage" && req.method === "GET") {
         const days = parseInt(url.searchParams.get("days") || "30", 10);
@@ -835,10 +850,10 @@ export async function startWeb(config = {}, deps = {}) {
         const result = await renewCert({ ...entry, cn: live.cn });
         sendJson(res, result);
       } else if (url.pathname === "/api/config" && req.method === "GET") {
-        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed });
+        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         const body = await readBody(req);
-        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme, fsCollapsed } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme, fsCollapsed, memLimitMB } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
@@ -848,12 +863,13 @@ export async function startWeb(config = {}, deps = {}) {
         if (lang === "en" || lang === "zh") config.lang = lang;
         if (theme === "light" || theme === "dark") config.theme = theme;
         if (typeof fsCollapsed === "boolean") config.fsCollapsed = fsCollapsed;
+        if (Number.isFinite(memLimitMB) && memLimitMB > 0) config.memLimitMB = memLimitMB;
         let existing = {};
         existing = await readJsonFile(configPath);
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed };
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
-        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed });
+        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         sendJson(res, { messages: await readHistoryFile(historyPath) });
       } else if (url.pathname === "/api/history" && req.method === "POST") {
@@ -1373,6 +1389,6 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(failedTimer); clearInterval(sseGuard); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(sseGuard); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

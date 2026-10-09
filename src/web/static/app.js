@@ -318,6 +318,20 @@ function renderRings(status) {
   }
 }
 
+function renderPanelMem(pm) {
+  if (!pm || !pm.limitMB) return;
+  const used = pm.usedMB || 0;
+  const pct = Math.min(100, Math.max(0, used / pm.limitMB * 100));
+  const el = document.getElementById("ring-panelmem");
+  if (!el) return;
+  el.style.setProperty("--pct", pct);
+  el.style.setProperty("--rc", ringColor(pct));
+  const val = document.getElementById("val-panelmem");
+  val.textContent = `${used}MB`;
+  val.style.color = ringColor(pct);
+  document.getElementById("sub-panelmem").textContent = `${t("ov.panelMemLimit")} ${pm.limitMB}MB · ${ringLabel(pct)}`;
+}
+
 function nicTotals() {
   if (!overviewData?.net?.length) return {};
   const last = overviewData.net[overviewData.net.length - 1];
@@ -600,6 +614,7 @@ async function refreshOverview() {
     overviewData = await res.json();
     renderSysInfo(overviewData.status?.sys);
     renderRings(overviewData.status);
+    renderPanelMem(overviewData.panelMem);
     const sel = document.getElementById("nic-select");
     const prev = sel.value;
     const nics = (overviewData.nics || []).filter((n) => n !== "lo");
@@ -2473,8 +2488,25 @@ function connectStream() {
       setBusy(false);
       hideTyping();
       addSimpleMsg(ev.text, "error");
+    } else if (ev.type === "memAlert") {
+      showMemAlert(ev.usedMB, ev.limitMB);
+    } else if (ev.type === "memOk") {
+      hideMemAlert();
     }
   };
+}
+
+let memAlertEl = null;
+function showMemAlert(usedMB, limitMB) {
+  if (memAlertEl) return;
+  memAlertEl = document.createElement("div");
+  memAlertEl.className = "mem-alert";
+  memAlertEl.innerHTML = `<span>${t("mem.alertText").replace("{used}", usedMB).replace("{limit}", limitMB)}</span><button class="btn small">${t("mem.close")}</button>`;
+  memAlertEl.querySelector("button").onclick = () => hideMemAlert();
+  document.body.appendChild(memAlertEl);
+}
+function hideMemAlert() {
+  if (memAlertEl) { memAlertEl.remove(); memAlertEl = null; }
 }
 
 function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
@@ -2830,6 +2862,7 @@ const cfgApiKey = document.getElementById("cfg-api-key");
 const cfgKeyHint = document.getElementById("cfg-key-hint");
 const cfgModel = document.getElementById("cfg-model");
 const cfgModelStatus = document.getElementById("cfg-model-status");
+const cfgMemLimit = document.getElementById("cfg-mem-limit");
 
 let currentKey = "";
 let apiKeyTouched = false;
@@ -2875,6 +2908,7 @@ async function openSettings() {
   apiKeyTouched = false;
   cfgKeyHint.textContent = cfg.apiKey ? t("settings.keySet").replace("{key}", cfg.apiKey) : t("settings.keyUnset");
   currentKey = cfg.apiKey || "";
+  cfgMemLimit.value = cfg.memLimitMB || 1024;
   settingsMask.classList.add("show");
   await loadModels();
   if (cfg.model) cfgModel.value = cfg.model;
@@ -3407,6 +3441,8 @@ document.getElementById("cfg-save").onclick = async () => {
   if (newBaseUrl) body.baseUrl = newBaseUrl;
   const newKey = cfgApiKey.value.trim();
   if (newKey) body.apiKey = newKey;
+  const memLimit = Number(cfgMemLimit.value);
+  if (Number.isFinite(memLimit) && memLimit > 0) body.memLimitMB = memLimit;
   const res = await fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   const data = await res.json();
   if (!res.ok) { alert(t("op.saveFail") + "：" + (data.error || res.status)); return; }

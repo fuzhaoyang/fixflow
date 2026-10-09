@@ -348,7 +348,7 @@
     .sys-info .sys-os { font-weight: 600; }
     .sys-info .sep { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
     .sys-info .sys-uptime { color: var(--muted); }
-    .status-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .status-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
     .ring-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; display: flex; align-items: center; gap: 14px; }
     .ring { width: 92px; height: 92px; flex-shrink: 0; border-radius: 50%; background: conic-gradient(var(--rc, #34d399) calc(var(--pct, 0) * 1%), var(--panel2) 0); position: relative; }
     .ring::after { content: ""; position: absolute; inset: 10px; background: var(--panel); border-radius: 50%; }
@@ -875,3 +875,11 @@
     html[data-theme="light"] .auth-scene .orbit-ring { stroke: color-mix(in srgb, var(--accent) 22%, transparent); }
     html[data-theme="light"] .auth-scene .nn-node, html[data-theme="light"] .auth-scene .nn-signal,
     html[data-theme="light"] .auth-scene .flow-packet { opacity: .5; }
+    /* 内存超限告警横幅 */
+    .mem-alert {
+      position: fixed; top: 0; left: 50%; transform: translateX(-50%); z-index: 2000;
+      display: flex; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 16px;
+      background: var(--bad-bg); border: 1px solid var(--bad); border-radius: var(--r-md);
+      color: var(--bad-fg); font-size: 13px; box-shadow: var(--shadow-pop);
+    }
+    .mem-alert .btn { color: var(--bad-fg); border-color: var(--bad); }

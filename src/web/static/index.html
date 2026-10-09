@@ -264,6 +264,7 @@
           <div class="ring-card"><div class="ring" id="ring-cpu"></div><div class="ring-info"><span class="label">CPU 使用率</span><span class="value" id="val-cpu">--</span><span class="sub" id="sub-cpu"></span></div></div>
           <div class="ring-card"><div class="ring" id="ring-mem"></div><div class="ring-info"><span class="label">内存使用率</span><span class="value" id="val-mem">--</span><span class="sub" id="sub-mem"></span></div></div>
           <div class="ring-card"><div class="ring" id="ring-disk"></div><div class="ring-info"><span class="label">磁盘使用率</span><span class="value" id="val-disk">--</span><span class="sub" id="sub-disk"></span></div></div>
+          <div class="ring-card"><div class="ring" id="ring-panelmem"></div><div class="ring-info"><span class="label" data-i18n="ov.panelMem">面板内存</span><span class="value" id="val-panelmem">--</span><span class="sub" id="sub-panelmem"></span></div></div>
         </div>
         <div class="traffic-card">
           <div class="traffic-head">
@@ -550,6 +551,11 @@
       <label data-i18n="settings.model">模型</label>
       <select id="cfg-model"></select>
       <div class="model-loading" id="cfg-model-status"></div>
+    </div>
+    <div class="field">
+      <label data-i18n="settings.memLimit">内存上限（MB）</label>
+      <input id="cfg-mem-limit" type="number" min="128" step="64" placeholder="1024">
+      <div class="hint" data-i18n="settings.memLimitHint">面板进程内存超过该值时仅提示告警，不中断服务</div>
     </div>
     <div class="modal-actions">
       <button class="btn" id="cfg-cancel" data-i18n="settings.cancel">取消</button>
