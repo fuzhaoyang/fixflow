@@ -70,6 +70,16 @@ export async function testDbConnection(conn, { password = "", run = runCommand, 
   return { ok, detail, latencyMs: now() - start };
 }
 
+export function parseFailedServices(stdout) {
+  return String(stdout || "").split("\n").map((l) => l.trim().split(/\s+/)[0]).filter(Boolean);
+}
+
+export function diffFailedServices(prev, now) {
+  const p = new Set(prev || []);
+  const n = new Set(now || []);
+  return { newFailures: (now || []).filter((s) => !p.has(s)), recoveries: (prev || []).filter((s) => !n.has(s)) };
+}
+
 function formatMb(mb) {
   const n = Number(mb) || 0;
   return n >= 1024 ? `${(n / 1024).toFixed(1)} GB` : `${n} MB`;

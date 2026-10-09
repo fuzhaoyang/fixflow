@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
@@ -415,6 +415,27 @@ export async function startWeb(config = {}, deps = {}) {
   if (!deps.noAlertsTimer && config.apiKey) {
     metricAlertTimer = setInterval(() => metricAlerts.tick(), 60000);
   }
+  let lastFailedSet = null;
+  const checkFailedServices = async () => {
+    try {
+      const r = await execCmd("systemctl --state=failed --no-legend --no-pager");
+      const failed = parseFailedServices(r.stdout || "");
+      if (lastFailedSet === null) { lastFailedSet = failed; return; }
+      const { newFailures, recoveries } = diffFailedServices(lastFailedSet, failed);
+      lastFailedSet = failed;
+      const hook = config.sslAlerts.webhook || config.metricAlertWebhook;
+      for (const s of newFailures) {
+        await sendWebhook(hook, { kind: "service-failed", unit: s });
+        await sendEmail(config.sslAlerts.smtp, `[Fixflow] 服务进入失败状态：${s}`, `服务 ${s} 已进入 failed 状态，请检查。`);
+      }
+      for (const s of recoveries) {
+        await sendWebhook(hook, { kind: "service-recovered", unit: s });
+        await sendEmail(config.sslAlerts.smtp, `[Fixflow] 服务已恢复：${s}`, `服务 ${s} 已恢复正常。`);
+      }
+    } catch {}
+  };
+  let failedTimer = null;
+  if (!deps.noAlertsTimer && config.apiKey) failedTimer = setInterval(checkFailedServices, 60000);
 
   async function collectStatus() {
     const [uptime, mem, df, nproc, osRelease, uname, procUptime] = await Promise.all([
@@ -1351,6 +1372,6 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(sseGuard); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(failedTimer); clearInterval(sseGuard); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

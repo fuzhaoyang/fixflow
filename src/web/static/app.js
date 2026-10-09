@@ -1008,13 +1008,15 @@ function sslBar(daysLeft) {
 }
 
 async function loadDbConnections() {
-  const el = document.getElementById("db-list");
-  if (!el) return;
+  let data;
   try {
     const res = await fetch("api/db/connections");
-    const data = await res.json();
-    renderDbConnections(data.connections || []);
-  } catch { el.innerHTML = `<pre>${t("fs.loadFail").replace("{e}", "")}</pre>`; }
+    data = await res.json();
+  } catch { data = null; }
+  const el = document.getElementById("db-list");
+  if (!el) return;
+  if (data === null) { el.innerHTML = `<pre>${t("fs.loadFail").replace("{e}", "")}</pre>`; return; }
+  renderDbConnections(data.connections || []);
 }
 
 function renderDbConnections(list) {
@@ -1534,6 +1536,7 @@ function renderAclSkeleton() {
 }
 function renderAcl() {
   if (!aclData) return renderAclSkeleton();
+  if (aclData.error) return `<pre class="hint">${escapeHtml(aclData.error)}</pre>`;
   const { whitelist = [], blacklist = [], ports = [], backend } = aclData;
   const canEdit = backend === "ufw";
   const disabled = canEdit ? "" : " disabled";
@@ -1565,8 +1568,8 @@ function renderAcl() {
 async function loadAcl() {
   try {
     const res = await fetch("api/acl/list");
-    aclData = await res.json();
-  } catch {}
+    aclData = res.ok ? await res.json() : { error: t("acl.loadFail") };
+  } catch { aclData = { error: t("acl.loadFail") }; }
   refreshAclCard();
 }
 function refreshAclCard() {

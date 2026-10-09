@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf, buildDbTestCommand, testDbConnection } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf, buildDbTestCommand, testDbConnection, parseFailedServices, diffFailedServices } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ databases: [] });
@@ -443,4 +443,14 @@ UnitFileState=static
   assert.equal(nginx.unitFileState, "enabled");
   assert.equal(r.services.find((s) => s.name === "cron").unitType, "timer");
   assert.equal(r.services.find((s) => s.name === "ssh").unitType, "socket");
+});
+
+test("parseFailedServices / diffFailedServices", () => {
+  const now = parseFailedServices("nginx.service loaded failed failed Failed with result 'exit-code'.\ncron.timer loaded failed failed Failed with result 'timeout'.\n");
+  assert.deepEqual(now, ["nginx.service", "cron.timer"]);
+  const d = diffFailedServices(["nginx.service", "old.service"], ["nginx.service", "cron.timer"]);
+  assert.deepEqual(d.newFailures, ["cron.timer"]);
+  assert.deepEqual(d.recoveries, ["old.service"]);
+  assert.deepEqual(diffFailedServices(null, ["x"]).newFailures, ["x"]);
+  assert.deepEqual(diffFailedServices(["x"], ["x"]).newFailures, []);
 });
