@@ -1,6 +1,6 @@
 import { runCommand } from "./tools.js";
 import { assessHealth, parseDf, parseDfInodes, parseFree, parseLoad, realDisks } from "./health.js";
-import { collectSslAll } from "./ssl.js";
+import { collectSslAll, shellQuote } from "./ssl.js";
 import { readFile, writeFile, readdir, unlink } from "node:fs/promises";
 import { resolve, dirname, basename, join } from "node:path";
 import { pad2 } from "./util.js";
@@ -25,6 +25,50 @@ const safe = async (fn) => {
 };
 
 const updatesCache = createTtlCache(300000);
+
+export function buildDbTestCommand(conn, password = "") {
+  const q = shellQuote;
+  const env = {};
+  let command = "";
+  switch (conn.type) {
+    case "postgres":
+      if (password) env.PGPASSWORD = password;
+      command = `psql -h ${q(conn.host)} -p ${q(conn.port)} -U ${q(conn.user)} -d ${q(conn.database)} -tAc 'select 1'`;
+      break;
+    case "mysql":
+      if (password) env.MYSQL_PWD = password;
+      command = `mysql -h ${q(conn.host)} -P ${q(conn.port)} -u ${q(conn.user)} ${q(conn.database)} -e 'select 1'`;
+      break;
+    case "redis":
+      if (password) env.REDISCLI_AUTH = password;
+      command = `redis-cli -h ${q(conn.host)} -p ${q(conn.port)} ping`;
+      break;
+    case "mongodb":
+      env.MONGODB_URI = `mongodb://${encodeURIComponent(conn.user)}:${encodeURIComponent(password)}@${conn.host}:${conn.port}/${conn.database}`;
+      command = "mongosh --quiet $MONGODB_URI --eval 'db.runCommand({ ping: 1 })'";
+      break;
+    case "sqlite":
+      command = `sqlite3 ${q(conn.path)} 'select 1'`;
+      break;
+  }
+  return { command, env };
+}
+
+const DB_CLI = { postgres: "psql", mysql: "mysql", redis: "redis-cli", mongodb: "mongosh", sqlite: "sqlite3" };
+
+export async function testDbConnection(conn, { password = "", run = runCommand, now = Date.now } = {}) {
+  const start = now();
+  const cli = DB_CLI[conn.type];
+  const probe = await run(`command -v ${cli} 2>/dev/null`);
+  if (probe.exitCode !== 0 || !String(probe.stdout || "").trim()) {
+    return { ok: false, detail: `未检测到 ${cli} 客户端，请先安装`, latencyMs: now() - start };
+  }
+  const { command, env } = buildDbTestCommand(conn, password);
+  const r = await run(command, { env, timeout: 15000 });
+  const ok = conn.type === "redis" ? /PONG/.test(r.stdout || "") : r.exitCode === 0;
+  const detail = String(r.stdout || r.stderr || "无输出").trim().slice(0, 300);
+  return { ok, detail, latencyMs: now() - start };
+}
 
 function formatMb(mb) {
   const n = Number(mb) || 0;

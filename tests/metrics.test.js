@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf, buildDbTestCommand, testDbConnection } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ databases: [] });
@@ -350,4 +350,32 @@ test("collectRemoteProbe 探测结果", async () => {
   const bad = await collectRemoteProbe("bad", { run });
   assert.equal(bad.ok, false);
   assert.match(bad.error, /host:port/);
+});
+
+test("buildDbTestCommand 密码进 env 不进命令串", () => {
+  const { command, env } = buildDbTestCommand({ type: "postgres", host: "10.0.0.1", port: "5432", user: "app", database: "mydb" }, "p@ss");
+  assert.match(command, /psql/);
+  assert.ok(!command.includes("p@ss"), "密码不得出现在命令串");
+  assert.equal(env.PGPASSWORD, "p@ss");
+});
+
+test("buildDbTestCommand 特殊字符 shell 转义", () => {
+  const { command } = buildDbTestCommand({ type: "mysql", host: "a'; rm -rf /", port: "3306", user: "u'x", database: "db" }, "p");
+  assert.ok(command.includes("'a'\\''; rm -rf /'"), "内嵌单引号应转义为 \\'");
+});
+
+test("testDbConnection 成功/失败/缺 CLI", async () => {
+  const okRun = async (cmd, opts) => {
+    if (cmd.startsWith("command -v redis-cli")) return { exitCode: 0, stdout: "/usr/bin/redis-cli", stderr: "" };
+    if (cmd.startsWith("redis-cli")) return { exitCode: 0, stdout: "PONG\n", stderr: "" };
+    return { exitCode: 1, stdout: "", stderr: "" };
+  };
+  const ok = await testDbConnection({ type: "redis", host: "h", port: "6379" }, { run: okRun });
+  assert.equal(ok.ok, true);
+  assert.equal(ok.detail.trim(), "PONG");
+  assert.ok(Number.isFinite(ok.latencyMs));
+
+  const noCli = await testDbConnection({ type: "sqlite", path: "/tmp/x.db" }, { run: async () => ({ exitCode: 1, stdout: "", stderr: "" }) });
+  assert.equal(noCli.ok, false);
+  assert.match(noCli.detail, /sqlite3/);
 });
