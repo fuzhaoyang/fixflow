@@ -56,8 +56,7 @@
     body.menu-collapsed aside { width: 52px; }
     body.menu-collapsed .brand-name,
     body.menu-collapsed nav .group,
-    body.menu-collapsed .menu-label,
-    body.menu-collapsed .settings-btn span { display: none; }
+    body.menu-collapsed .menu-label { display: none; }
     body.menu-collapsed .brand { justify-content: center; padding: 4px 0 16px; }
     body.menu-collapsed aside .menu-item { justify-content: center; padding: 8px 0; margin: 0 4px; }
     body.menu-collapsed .settings-btn { justify-content: center; padding: 9px 0; }
@@ -85,17 +84,23 @@
     .settings-btn {
       display: flex; align-items: center; gap: 8px; padding: 9px 12px;
       background: none; border: none; border-radius: 8px;
-      color: var(--muted); cursor: pointer; font-size: 13px; transition: all .2s; white-space: nowrap;
+      color: var(--muted); cursor: pointer; font-size: 13px; transition: all .2s; white-space: nowrap; flex-shrink: 0;
     }
     .settings-btn:hover { color: var(--text); background: var(--panel2); }
     .settings-btn svg { width: 16px; height: 16px; }
-    .settings-wrap { position: relative; margin: 8px; }
+    .settings-wrap { position: relative; margin: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .version-tag { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; padding-left: 12px; }
+    .version-tag #app-version { font-family: var(--font-mono); }
+    body.menu-collapsed .version-tag { display: none; }
     .settings-menu {
       position: absolute; bottom: 100%; left: 0; min-width: 100%;
       background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md);
-      overflow: hidden; display: none; z-index: 50; box-shadow: var(--shadow-pop);
+      overflow: hidden; display: none; z-index: 1000; box-shadow: var(--shadow-pop);
     }
     .settings-menu.show { display: block; }
+    body.menu-collapsed .settings-menu {
+      position: fixed; left: 56px; bottom: 8px; min-width: 140px;
+    }
     .settings-item {
       padding: 10px 14px; cursor: pointer; font-size: 13px; white-space: nowrap;
       display: flex; align-items: center; gap: 8px; color: var(--text);
@@ -722,6 +727,8 @@
     .auth-brand .brand-logo { width: 30px; height: 30px; }
     .auth-brand .ai-logo { font-size: 13px; }
     .auth-foot { position: absolute; left: 0; right: 0; bottom: 20px; padding: 0 24px; text-align: center; color: var(--muted); font-size: 13px; line-height: 1.6; z-index: 1; pointer-events: none; }
+    .auth-version { position: absolute; right: 20px; bottom: 20px; z-index: 1; color: var(--muted); font-size: 12px; pointer-events: none; }
+    .auth-version span:last-child { font-family: var(--font-mono); }
     @media (max-height: 560px) { .auth-foot { display: none; } }
     #boot-mask { position: fixed; inset: 0; background: var(--bg); z-index: 500; display: flex; align-items: center; justify-content: center; }
     #boot-mask .spinner-lg { width: 42px; height: 42px; border: 4px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }

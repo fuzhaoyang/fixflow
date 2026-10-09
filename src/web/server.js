@@ -24,6 +24,7 @@ import { runCommand } from "../tools.js";
 import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules } from "../firewall.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
+const VERSION = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")).version || "0.0.0";
 
 const TLS_CERT_DIR = join(homedir(), ".config", "fixflow", "certs");
 async function ensureTlsCert(dir = TLS_CERT_DIR) {
@@ -1290,7 +1291,7 @@ export async function startWeb(config = {}, deps = {}) {
         clients.add(res);
         req.on("close", () => clients.delete(res));
       } else if (url.pathname === "/") {
-        const html = await readFile(join(STATIC, "index.html"));
+        const html = (await readFile(join(STATIC, "index.html"), "utf8")).replaceAll("__VERSION__", `v${VERSION}`);
         res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache, no-store, must-revalidate" });
         res.end(html);
       } else if (url.pathname === "/app.js") {
