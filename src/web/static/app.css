@@ -286,6 +286,19 @@
     .db-result .ok { color: var(--ok); }
     .db-result .bad { color: var(--bad); }
     .db-result .na { color: var(--muted); }
+    /* 服务页 */
+    .sys-summary { display: flex; gap: 16px; padding: 10px 14px; background: var(--panel2); border: 1px solid var(--border); border-radius: var(--r-md); font-size: 13px; margin-bottom: 10px; }
+    .sys-summary .ok { color: var(--ok); }
+    .sys-summary .bad { color: var(--bad); }
+    .sys-summary .na { color: var(--muted); }
+    .sys-filters { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+    .sys-filters .seg-tabs { border-bottom: none; }
+    .sys-filters select { margin-left: auto; }
+    .sys-row.open td { background: var(--panel2); }
+    .sys-detail-row td { background: var(--panel); border-top: 1px solid var(--border); }
+    .sys-detail { padding: 4px 8px 8px; font-size: 12px; line-height: 1.7; }
+    .sys-detail .sys-sub { color: var(--muted); }
+    .sys-log { max-height: 200px; overflow: auto; margin-top: 6px; }
     .skel-line { height: 12px; border-radius: 6px; margin: 10px 0; background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; }
     .skel-block { height: 180px; border-radius: 8px; background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; }
     @keyframes skel { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
