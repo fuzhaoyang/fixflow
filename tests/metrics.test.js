@@ -379,3 +379,68 @@ test("testDbConnection 成功/失败/缺 CLI", async () => {
   assert.equal(noCli.ok, false);
   assert.match(noCli.detail, /sqlite3/);
 });
+
+test("collectSystemd 解析属性/依赖/类型与 summary", async () => {
+  const show = `Id=nginx.service
+ActiveState=active
+SubState=running
+Description=nginx web server
+LoadState=loaded
+NRestarts=3
+ExecMainStatus=0
+Restart=on-failure
+Requires=basic.target system.slice
+After=network.target systemd-journald.socket
+RequiredBy=
+UnitFileState=enabled
+FragmentPath=/lib/systemd/system/nginx.service
+ActiveEnterTimestamp=Sun 2026-10-04 08:00:00 CST
+MainPID=1234
+MemoryCurrent=1048576
+
+Id=cron.timer
+ActiveState=failed
+SubState=failed
+Description=Cron timer
+LoadState=loaded
+NRestarts=0
+ExecMainStatus=1
+Restart=no
+Requires=
+After=basic.target
+RequiredBy=multi-user.target
+UnitFileState=enabled
+
+Id=ssh.socket
+ActiveState=inactive
+SubState=dead
+Description=SSH socket
+LoadState=loaded
+NRestarts=0
+ExecMainStatus=0
+Restart=no
+Requires=
+After=network.target
+RequiredBy=
+UnitFileState=static
+`;
+  const run = async (cmd) => cmd.startsWith("systemctl show")
+    ? { exitCode: 0, stdout: show, stderr: "" }
+    : { exitCode: 0, stdout: "1234 2.5 3.2\n", stderr: "" };
+  const r = await collectSystemd([], { run });
+  assert.equal(r.services.length, 3);
+  assert.deepEqual(r.summary, { active: 1, failed: 1, inactive: 1, total: 3 });
+  const nginx = r.services.find((s) => s.name === "nginx");
+  assert.equal(nginx.unitType, "service");
+  assert.equal(nginx.desc, "nginx web server");
+  assert.equal(nginx.loadState, "loaded");
+  assert.equal(nginx.nRestarts, 3);
+  assert.equal(nginx.exitStatus, 0);
+  assert.equal(nginx.restartPolicy, "on-failure");
+  assert.deepEqual(nginx.requires, ["basic.target", "system.slice"]);
+  assert.deepEqual(nginx.after, ["network.target", "systemd-journald"]);
+  assert.deepEqual(nginx.requiredBy, []);
+  assert.equal(nginx.unitFileState, "enabled");
+  assert.equal(r.services.find((s) => s.name === "cron").unitType, "timer");
+  assert.equal(r.services.find((s) => s.name === "ssh").unitType, "socket");
+});
