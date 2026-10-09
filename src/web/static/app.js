@@ -749,7 +749,7 @@ function renderCards() {
     }
     const dot = document.querySelector(`.menu-item[data-filter="${key}"] .dot`);
     if (dot) {
-      const ok = Array.isArray(m) ? m.every((x) => x.ok) : m?.ok;
+      const ok = key === "systemd" ? !(m?.summary?.failed) : Array.isArray(m) ? m.every((x) => x.ok) : m?.ok;
       dot.className = "dot " + (ok === true ? "ok" : ok === false ? "bad" : "na");
     }
   }

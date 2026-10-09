@@ -1558,3 +1558,16 @@ test("服务日志接口", async () => {
   assert.match(d.content, /line1/);
   w.close();
 });
+
+test("服务页前端：renderSystemd 交互钩子存在", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const js = await (await fetch(`${base}/app.js`)).text();
+  assert.match(js, /data-sysop/);
+  assert.match(js, /data-systoggle/);
+  assert.match(js, /data-sysfilter-state/);
+  assert.match(js, /api\/systemd\/op/);
+  assert.match(js, /api\/systemd\/logs/);
+  assert.match(js, /SYS_DANGEROUS/);
+  w.close();
+});
