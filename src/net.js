@@ -99,7 +99,7 @@ export function createMonitor(store = {}) {
           point.down = down;
           point.totals = totals;
           store.net.samples.push(point);
-          trim(store.net.samples, 300);
+          trim(store.net.samples, 3600);
         }
         store.net.last = net;
       } catch {}
@@ -131,7 +131,7 @@ export function createMonitor(store = {}) {
           point.iops = totalOps;
           point.latency = totalOps > 0 ? Math.round((ioReadMs + ioWriteMs) / totalOps * 10) / 10 : 0;
           store.io.samples.push(point);
-          trim(store.io.samples, 300);
+          trim(store.io.samples, 3600);
         }
         store.io.last = io;
       } catch {}

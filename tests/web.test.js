@@ -294,6 +294,12 @@ test("overview 接口返回状态与流量/IO 采样结构", async () => {
   assert.ok(typeof data.status.sys.uptime === "string");
   assert.ok(Array.isArray(data.net));
   assert.ok(Array.isArray(data.io));
+  assert.ok(data.extras, "overview 应包含 extras 字段");
+  for (const k of ["swap", "tcp", "procs", "docker", "users", "failedSvcs"]) {
+    assert.ok(k in data.extras, `extras 应包含 ${k}`);
+    assert.ok(data.extras[k] === null || typeof data.extras[k] === "number", `extras.${k} 应为数字或 null`);
+  }
+  assert.ok(Array.isArray(data.extras.sslWarn), "extras.sslWarn 应为数组");
   w.close();
 });
 
@@ -1569,5 +1575,22 @@ test("服务页前端：renderSystemd 交互钩子存在", async () => {
   assert.match(js, /api\/systemd\/op/);
   assert.match(js, /api\/systemd\/logs/);
   assert.match(js, /SYS_DANGEROUS/);
+  w.close();
+});
+
+test("总览页前端：健康/KPI/趋势/时间范围钩子存在", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const js = await (await fetch(`${base}/app.js`)).text();
+  assert.match(js, /function renderHealth/);
+  assert.match(js, /function renderOvKpis/);
+  assert.match(js, /function drawTrendChart/);
+  assert.match(js, /tab-trend/);
+  assert.match(js, /range-select/);
+  const html = await (await fetch(`${base}/`)).text();
+  assert.match(html, /id="health-bar"/);
+  assert.match(html, /id="ov-kpis"/);
+  assert.match(html, /id="attention-card"/);
+  assert.match(html, /id="trend-chart"/);
   w.close();
 });

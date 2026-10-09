@@ -87,11 +87,11 @@ test("io 采样包含 iops 与 latency 字段", async () => {
   assert.ok(s.iops >= 0);
 });
 
-test("createMonitor 采样最多保留 300 条", async () => {
+test("createMonitor 采样最多保留 3600 条", async () => {
   const m = createMonitor();
   await m.tick();
-  for (let i = 0; i < 305; i++) {
+  for (let i = 0; i < 3650; i++) {
     await m.tick();
   }
-  assert.ok(m.net().samples.length <= 300);
+  assert.ok(m.net().samples.length <= 3600);
 });

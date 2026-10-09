@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices, collectSystemd, collectConnectionSummary, collectDocker, parseWho } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
@@ -382,6 +382,7 @@ export async function startWeb(config = {}, deps = {}) {
 
   const monitor = createMonitor();
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
+  setTimeout(() => collectExtras().catch(() => {}), 3000);
   let alertTimer = null;
   if (!deps.noAlertsTimer && config.apiKey) {
     setTimeout(() => alertsManager.tick(), 5000);
@@ -480,6 +481,39 @@ export async function startWeb(config = {}, deps = {}) {
       mem: { pct: memPct },
       disk: { pct: disk },
     };
+  }
+
+  const extrasCache = createTtlCache(15000);
+  async function collectExtras() {
+    return extrasCache("overview-extras", async () => {
+      const [sysd, conn, dock, freeR, whoR, psR] = await Promise.all([
+        collectSystemd().catch(() => null),
+        collectConnectionSummary().catch(() => null),
+        collectDocker().catch(() => null),
+        runCommand("free -m").catch(() => null),
+        runCommand("who").catch(() => null),
+        runCommand("ps -e --no-headers").catch(() => null),
+      ]);
+      const free = freeR?.stdout ? parseFree(freeR.stdout) : null;
+      let sslWarn = [];
+      try {
+        const { results } = await collectSslAll(config);
+        for (const r of results) {
+          if (typeof r.daysLeft !== "number" || r.daysLeft > 30) continue;
+          sslWarn.push({ name: r.cn || r.host || r.path || r.label || "?", daysLeft: r.daysLeft });
+        }
+      } catch {}
+      const est = conn?.est || {};
+      return {
+        swap: free ? { used: free.swapUsed, total: free.swapTotal } : null,
+        tcp: Object.values(est).reduce((s, n) => s + n, 0),
+        procs: psR ? (psR.stdout || "").split("\n").filter((l) => l.trim()).length : null,
+        docker: dock?.containers ? dock.containers.filter((c) => c.state === "running").length : null,
+        users: whoR ? parseWho(whoR.stdout || "").length : null,
+        failedSvcs: sysd?.summary ? sysd.summary.failed : null,
+        sslWarn,
+      };
+    });
   }
 
   const captchaIdFromCookie = (req) => parseCookie(req.headers.cookie || "").fixflow_captcha || "";
@@ -610,6 +644,7 @@ export async function startWeb(config = {}, deps = {}) {
           trend: monitor.trend().samples,
           usage: usageStore.daily(30),
           panelMem: { usedMB: Math.round(process.memoryUsage().rss / 1024 / 1024), limitMB: config.memLimitMB },
+          extras: await collectExtras(),
         });
       } else if (url.pathname === "/api/usage" && req.method === "GET") {
         const days = parseInt(url.searchParams.get("days") || "30", 10);

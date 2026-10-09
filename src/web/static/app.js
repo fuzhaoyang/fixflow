@@ -1,10 +1,5 @@
 const cards = document.getElementById("cards");
 const log = document.getElementById("log");
-let stickToBottom = true;
-const scrollLog = () => { if (stickToBottom) log.scrollTop = log.scrollHeight; };
-log.addEventListener("scroll", () => {
-  stickToBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-});
 const welcome = document.getElementById("welcome");
 const input = document.getElementById("input");
 const sendBtn = document.getElementById("send");
@@ -14,6 +9,29 @@ const attachBtn = document.getElementById("attach");
 const fileInput = document.getElementById("file");
 const preview = document.getElementById("preview");
 const clearBtn = document.getElementById("clear-history");
+const miniLog = document.getElementById("mini-log");
+const miniWelcome = document.getElementById("mini-welcome");
+const miniInput = document.getElementById("mini-input");
+const miniSend = document.getElementById("mini-send");
+const miniStop = document.getElementById("mini-stop");
+const miniCount = document.getElementById("mini-count");
+const miniClear = document.getElementById("mini-clear");
+const miniFullscreen = document.getElementById("ai-fullscreen");
+const miniClose = document.getElementById("ai-close");
+const aiFab = document.getElementById("ai-fab");
+const aiPopup = document.getElementById("ai-popup");
+const aiPopupHead = document.getElementById("ai-popup-head");
+const chatCtx = { log, welcome, input, sendBtn, stopBtn, charCount, preview, clearBtn };
+const miniCtx = { log: miniLog, welcome: miniWelcome, input: miniInput, sendBtn: miniSend, stopBtn: miniStop, charCount: miniCount, preview: null, clearBtn: miniClear };
+let ctx = chatCtx;
+let stickToBottom = true;
+const scrollLog = () => { if (stickToBottom) ctx.log.scrollTop = ctx.log.scrollHeight; };
+log.addEventListener("scroll", () => {
+  stickToBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+});
+miniLog.addEventListener("scroll", () => {
+  stickToBottom = miniLog.scrollHeight - miniLog.scrollTop - miniLog.clientHeight < 40;
+});
 const searchBox = document.getElementById("search");
 const netTools = document.getElementById("net-tools");
 const viewTitle = document.getElementById("view-title");
@@ -261,6 +279,7 @@ let unitDivider = 1;
 let tokenUnit = 1000000;
 let trafficTab = "traffic";
 let unitTouched = false;
+let rangePoints = 900;
 
 function fmtRate(v) {
   const x = (v || 0) / (unitDivider || 1);
@@ -332,6 +351,63 @@ function renderPanelMem(pm) {
   document.getElementById("sub-panelmem").textContent = `${t("ov.panelMemLimit")} ${pm.limitMB}MB · ${ringLabel(pct)}`;
 }
 
+function healthPct(v) {
+  return Math.min(100, Math.max(0, v || 0));
+}
+
+function renderHealth(data) {
+  const status = data?.status || {};
+  const panelMem = data?.panelMem;
+  const extras = data?.extras || {};
+  const items = [];
+  const add = (ok, value, view) => items.push({ ok, value, view });
+  add(healthPct(status.cpu?.pct) < 80, `${t("ov.cpu")} ${Math.round(healthPct(status.cpu?.pct))}%`, "system");
+  add(healthPct(status.mem?.pct) < 80, `${t("ov.mem")} ${Math.round(healthPct(status.mem?.pct))}%`, "system");
+  add(healthPct(status.disk?.pct) < 80, `${t("ov.disk")} ${Math.round(healthPct(status.disk?.pct))}%`, "system");
+  add(healthPct(status.load?.pct) < 80, `${t("ov.load")} ${status.load?.load ?? "—"}`, "system");
+  if (panelMem?.limitMB) add((panelMem.usedMB || 0) <= panelMem.limitMB, `${t("ov.panelMem")} ${panelMem.usedMB || 0}/${panelMem.limitMB}MB`, null);
+  if (extras.failedSvcs > 0) add(false, `${t("ov.failedSvcs")} ${extras.failedSvcs}`, "systemd");
+  const sslCount = (extras.sslWarn || []).length;
+  if (sslCount > 0) add(false, `${t("ov.sslWarn")} ${sslCount}`, "ssl");
+  const bad = items.filter((i) => !i.ok);
+  const st = document.getElementById("health-status");
+  const list = document.getElementById("health-items");
+  st.classList.toggle("ok", bad.length === 0);
+  st.classList.toggle("bad", bad.length > 0);
+  if (bad.length === 0) {
+    st.textContent = t("ov.healthOk");
+    list.innerHTML = "";
+  } else {
+    st.textContent = t("ov.healthWarn").replace("{n}", bad.length);
+    list.innerHTML = bad.map((i) => `<button class="health-item bad" data-view="${i.view || ""}">${escapeHtml(i.value)}</button>`).join("");
+  }
+  const card = document.getElementById("attention-card");
+  if (bad.length) {
+    card.style.display = "";
+    document.getElementById("attention-list").innerHTML = bad.map((i) => `<button class="attention-item bad" data-view="${i.view || ""}"><span class="dot err"></span>${escapeHtml(i.value)}</button>`).join("");
+  } else {
+    card.style.display = "none";
+  }
+}
+
+function renderOvKpis(extras) {
+  const set = (id, v, suffix = "") => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v == null ? "--" : v + suffix;
+  };
+  const swap = extras?.swap;
+  set("ovk-swap", swap && swap.total ? Math.round((swap.used / swap.total) * 100) : null, "%");
+  set("ovk-tcp", extras?.tcp);
+  set("ovk-procs", extras?.procs);
+  set("ovk-docker", extras?.docker);
+  set("ovk-users", extras?.users);
+}
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".health-item, .attention-item");
+  if (btn && btn.dataset.view) location.hash = "/" + btn.dataset.view;
+});
+
 function nicTotals() {
   if (!overviewData?.net?.length) return {};
   const last = overviewData.net[overviewData.net.length - 1];
@@ -386,30 +462,32 @@ function renderKpi() {
 function chartData(mode) {
   const points = mode === "traffic" ? overviewData?.net : overviewData?.io;
   if (!points?.length) return null;
-  const labels = points.map((p) => {
+  const pts = points.slice(-rangePoints);
+  if (!pts.length) return null;
+  const labels = pts.map((p) => {
     const d = new Date(p.t * 1000);
     const pad = (n) => String(n).padStart(2, "0");
     return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   });
   let upData, downData;
   if (mode === "traffic") {
-    upData = points.map((p) => {
+    upData = pts.map((p) => {
       let v = 0;
       for (const [name, x] of Object.entries(p.up || {})) if (nicFilter === "all" || name === nicFilter) v += x;
       return v / (unitDivider || 1);
     });
-    downData = points.map((p) => {
+    downData = pts.map((p) => {
       let v = 0;
       for (const [name, x] of Object.entries(p.down || {})) if (nicFilter === "all" || name === nicFilter) v += x;
       return v / (unitDivider || 1);
     });
   } else {
-    upData = points.map((p) => {
+    upData = pts.map((p) => {
       let v = 0;
       for (const x of Object.values(p.read || {})) v += x;
       return v / (unitDivider || 1);
     });
-    downData = points.map((p) => {
+    downData = pts.map((p) => {
       let v = 0;
       for (const x of Object.values(p.write || {})) v += x;
       return v / (unitDivider || 1);
@@ -539,6 +617,10 @@ function hexToRgba(hex, a) {
 }
 
 function renderChart() {
+  if (trafficTab === "trend") {
+    drawTrendChart(document.getElementById("trend-chart"), overviewData?.trend || [], "ov-trend-legend");
+    return;
+  }
   if (trafficTab === "token") {
     const days = overviewData?.usage || [];
     drawTokenChart(document.getElementById("token-chart"), days);
@@ -615,6 +697,8 @@ async function refreshOverview() {
     renderSysInfo(overviewData.status?.sys);
     renderRings(overviewData.status);
     renderPanelMem(overviewData.panelMem);
+    renderHealth(overviewData);
+    renderOvKpis(overviewData.extras);
     const sel = document.getElementById("nic-select");
     const prev = sel.value;
     const nics = (overviewData.nics || []).filter((n) => n !== "lo");
@@ -635,18 +719,24 @@ function setOverviewLoading(on) {
 document.getElementById("tab-traffic").onclick = () => switchTrafficTab("traffic");
 document.getElementById("tab-io").onclick = () => switchTrafficTab("io");
 document.getElementById("tab-token").onclick = () => switchTrafficTab("token");
+document.getElementById("tab-trend").onclick = () => switchTrafficTab("trend");
 function switchTrafficTab(mode) {
   trafficTab = mode;
   document.getElementById("tab-traffic").classList.toggle("active", mode === "traffic");
   document.getElementById("tab-io").classList.toggle("active", mode === "io");
   document.getElementById("tab-token").classList.toggle("active", mode === "token");
+  document.getElementById("tab-trend").classList.toggle("active", mode === "trend");
   const isTraffic = mode === "traffic";
   const isToken = mode === "token";
+  const isTrend = mode === "trend";
   document.getElementById("traffic-chart").style.display = isTraffic ? "" : "none";
   document.getElementById("io-chart").style.display = mode === "io" ? "" : "none";
   document.getElementById("token-chart").style.display = isToken ? "" : "none";
+  document.getElementById("trend-chart").style.display = isTrend ? "" : "none";
+  document.getElementById("ov-trend-legend").style.display = isTrend ? "" : "none";
   document.getElementById("nic-select").style.display = isTraffic ? "" : "none";
-  document.getElementById("unit-select").style.display = isToken ? "none" : "";
+  document.getElementById("range-select").style.display = isTraffic || mode === "io" ? "" : "none";
+  document.getElementById("unit-select").style.display = isToken || isTrend ? "none" : "";
   document.getElementById("token-unit-select").style.display = isToken ? "" : "none";
   document.getElementById("kpi-row").style.display = mode === "io" ? "" : "none";
   document.getElementById("token-kpi").style.display = isToken ? "" : "none";
@@ -661,7 +751,7 @@ function switchTrafficTab(mode) {
     document.getElementById("kpi-rx-key").textContent = t("ov.rx");
     dots[0].style.background = "#f97316";
     dots[1].style.background = "#3b82f6";
-  } else {
+  } else if (!isTrend) {
     document.getElementById("kpi-up-key").innerHTML = `<span class="dot" style="background:#ec4899"></span>${t("io.read")}`;
     document.getElementById("kpi-down-key").innerHTML = `<span class="dot" style="background:#06b6d4"></span>${t("io.write")}`;
     document.getElementById("kpi-tx-key").textContent = t("io.iops");
@@ -669,7 +759,7 @@ function switchTrafficTab(mode) {
     dots[0].style.background = "#ec4899";
     dots[1].style.background = "#06b6d4";
   }
-  if (!unitTouched && !isToken) {
+  if (!unitTouched && !isToken && !isTrend) {
     const unitSel = document.getElementById("unit-select");
     unitSel.value = "MB/s";
     unitDivider = 1024 * 1024;
@@ -677,6 +767,7 @@ function switchTrafficTab(mode) {
   renderChart();
 }
 document.getElementById("nic-select").onchange = (e) => { nicFilter = e.target.value; renderChart(); };
+document.getElementById("range-select").onchange = (e) => { rangePoints = Number(e.target.value) || 900; renderChart(); };
 document.getElementById("unit-select").onchange = (e) => {
   unitTouched = true;
   unitDivider = e.target.value === "MB/s" ? 1024 * 1024 : 1;
@@ -879,10 +970,8 @@ function bindSystemCards() {
   }
 }
 
-function drawSystemTrend() {
-  const canvas = document.getElementById("sys-trend-chart");
+function drawTrendChart(canvas, samples, legendId) {
   if (!canvas) return;
-  const samples = overviewData?.trend || [];
   if (!samples.length) {
     const { ctx, w, h } = setupCanvas(canvas);
     ctx.fillStyle = cssVar("--muted"); ctx.font = "12px sans-serif"; ctx.textAlign = "center";
@@ -899,8 +988,12 @@ function drawSystemTrend() {
     ],
     fixedMax: 100,
   });
-  const legend = document.getElementById("sys-trend-legend");
+  const legend = document.getElementById(legendId);
   if (legend) legend.innerHTML = `<span style="color:#3b82f6">● CPU</span><span style="color:#f59e0b">● ${t("sys.mem")}</span><span style="color:#10b981">● ${t("sys.disk")}</span>`;
+}
+
+function drawSystemTrend() {
+  drawTrendChart(document.getElementById("sys-trend-chart"), overviewData?.trend || [], "sys-trend-legend");
 }
 
 async function loadSysOps() {
@@ -1873,7 +1966,7 @@ input.addEventListener("paste", (e) => {
 
 // ---------- 欢迎语 ----------
 function renderWelcome() {
-  welcome.innerHTML = `
+  ctx.welcome.innerHTML = `
   <h2>${t("chat.welcomeTitle")}</h2>
   <p>${t("chat.welcomeSub")}</p>
   <div class="tag-list">
@@ -1883,7 +1976,7 @@ function renderWelcome() {
 }
 renderWelcome();
 
-function hideWelcome() { welcome.style.display = "none"; }
+function hideWelcome() { ctx.welcome.style.display = "none"; }
 
 // ---------- 历史记录（服务端文件存储） ----------
 async function loadHistory() {
@@ -1921,7 +2014,7 @@ function renderMsg(text, cls, images) {
   item.querySelector(".bubble").innerHTML = cls === "user"
     ? imgs + (text ? `<div class="msg-text">${escapeHtml(text)}</div>` : "")
     : renderMarkdown(text);
-  log.appendChild(item);
+  ctx.log.appendChild(item);
   scrollLog();
   return item;
 }
@@ -1988,8 +2081,6 @@ function setBusy(b) {
   sendBtn.style.display = b ? "none" : "";
   stopBtn.style.display = b ? "" : "none";
 }
-
-function toolSummary(ev) {
   const args = ev.args || {};
   let cmd = args.command ?? args.path ?? "";
   if (ev.name === "read_file") cmd = `cat ${cmd}`;

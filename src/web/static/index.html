@@ -259,6 +259,10 @@
       </div>
       <div id="overview" style="display:none">
         <div class="sys-info" id="sys-info"><span class="sys-os">—</span><span class="sep"></span><span class="sys-uptime">—</span></div>
+        <div class="health-bar" id="health-bar">
+          <button class="health-status" id="health-status" data-i18n="ov.healthChecking">检查中…</button>
+          <div class="health-items" id="health-items"></div>
+        </div>
         <div class="status-bar">
           <div class="ring-card"><div class="ring" id="ring-load"></div><div class="ring-info"><span class="label">负载状态</span><span class="value" id="val-load">--</span><span class="sub" id="sub-load"></span></div></div>
           <div class="ring-card"><div class="ring" id="ring-cpu"></div><div class="ring-info"><span class="label">CPU 使用率</span><span class="value" id="val-cpu">--</span><span class="sub" id="sub-cpu"></span></div></div>
@@ -266,14 +270,28 @@
           <div class="ring-card"><div class="ring" id="ring-disk"></div><div class="ring-info"><span class="label">磁盘使用率</span><span class="value" id="val-disk">--</span><span class="sub" id="sub-disk"></span></div></div>
           <div class="ring-card"><div class="ring" id="ring-panelmem"></div><div class="ring-info"><span class="label" data-i18n="ov.panelMem">面板内存</span><span class="value" id="val-panelmem">--</span><span class="sub" id="sub-panelmem"></span></div></div>
         </div>
+        <div class="ov-kpis" id="ov-kpis">
+          <div class="ov-kpi"><span class="key" data-i18n="ov.kpiSwap">Swap</span><span class="val" id="ovk-swap">--</span></div>
+          <div class="ov-kpi"><span class="key" data-i18n="ov.kpiTcp">TCP 连接</span><span class="val" id="ovk-tcp">--</span></div>
+          <div class="ov-kpi"><span class="key" data-i18n="ov.kpiProcs">进程数</span><span class="val" id="ovk-procs">--</span></div>
+          <div class="ov-kpi"><span class="key" data-i18n="ov.kpiDocker">运行容器</span><span class="val" id="ovk-docker">--</span></div>
+          <div class="ov-kpi"><span class="key" data-i18n="ov.kpiUsers">在线用户</span><span class="val" id="ovk-users">--</span></div>
+        </div>
         <div class="traffic-card">
           <div class="traffic-head">
             <div class="seg-tabs">
               <button class="seg-tab active" id="tab-traffic" data-i18n="ov.traffic">流量</button>
               <button class="seg-tab" id="tab-io" data-i18n="ov.io">磁盘IO</button>
               <button class="seg-tab" id="tab-token" data-i18n="ov.tabToken">Token 用量</button>
+              <button class="seg-tab" id="tab-trend" data-i18n="ov.tabTrend">系统趋势</button>
             </div>
             <div class="spacer"></div>
+            <select id="range-select" title="时间范围" data-i18n="ov.range" data-i18n-attr="title">
+              <option value="300" data-i18n="ov.range5">5 分钟</option>
+              <option value="900" selected data-i18n="ov.range15">15 分钟</option>
+              <option value="1800" data-i18n="ov.range30">30 分钟</option>
+              <option value="3600" data-i18n="ov.range60">1 小时</option>
+            </select>
             <select id="nic-select" title="网卡" data-i18n="ov.nic" data-i18n-attr="title"><option value="all" data-i18n="ov.all">所有</option></select>
           </div>
             <div class="kpi-row" id="kpi-row">
@@ -288,10 +306,16 @@
             </div>
           <div class="chart-wrap">
             <div class="unit"><select id="unit-select"><option value="KB/s" data-i18n="ov.unitKBs">单位 KB/s</option><option value="MB/s" data-i18n="ov.unitMBs">单位 MB/s</option></select><select id="token-unit-select" style="display:none"><option value="1" data-i18n="ov.unitCnt">单位 个</option><option value="1000" data-i18n="ov.unitK">单位 k</option><option value="1000000" selected data-i18n="ov.unitM">单位 M</option></select></div>
+            <div id="ov-trend-legend" class="trend-legend" style="display:none"></div>
             <canvas id="traffic-chart" style="width:100%;height:578px;display:block"></canvas>
             <canvas id="io-chart" style="width:100%;height:520px;display:none"></canvas>
             <canvas id="token-chart" style="width:100%;height:520px;display:none"></canvas>
+            <canvas id="trend-chart" style="width:100%;height:520px;display:none"></canvas>
           </div>
+        </div>
+        <div class="attention-card" id="attention-card" style="display:none">
+          <div class="attention-title" data-i18n="ov.attention">关注项</div>
+          <div class="attention-list" id="attention-list"></div>
         </div>
       </div>
       <section class="cards" id="cards"></section>
@@ -841,6 +865,32 @@ Nginx 配置有问题吗，帮我看看
       <tr><td>监控显示 N/A</td><td>对应组件没装（如没装 Docker），不影响其他功能</td></tr>
       <tr><td>忘记面板密码</td><td>在服务器运行 <code>fixflow reset-password</code></td></tr>
     </table>
+  </div>
+</div>
+<!-- 提问AI 悬浮入口 -->
+<button class="ai-fab" id="ai-fab" title="提问AI？" data-i18n-attr="title" data-i18n="ai.title">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/></svg>
+  <span data-i18n="ai.title">提问AI？</span>
+</button>
+
+<!-- 迷你 AI 聊天弹窗 -->
+<div class="ai-popup" id="ai-popup">
+  <div class="ai-popup-head" id="ai-popup-head">
+    <span class="ai-popup-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/></svg><span data-i18n="ai.title">提问AI？</span></span>
+    <button class="clear-btn ai-max" id="ai-fullscreen" title="全屏" data-i18n="ai.fullscreen" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 00-2 2v3M16 3h3a2 2 0 012 2v3M8 21H5a2 2 0 01-2-2v-3M16 21h3a2 2 0 002-2v-3"/></svg></button>
+    <button class="clear-btn" id="mini-clear" title="清空聊天历史" data-i18n="chat.clearTitle" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 11v6M14 11v6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+    <button class="clear-btn ai-close" id="ai-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+  </div>
+  <div class="mini-log" id="mini-log">
+    <div class="welcome" id="mini-welcome"></div>
+  </div>
+  <div class="mini-input">
+    <textarea id="mini-input" placeholder="例如：检查磁盘占用，帮我清理旧日志（Enter 发送，Shift+Enter 换行）" data-i18n="chat.inputPh" data-i18n-attr="placeholder"></textarea>
+    <div class="mini-input-bottom">
+      <span class="char-count" id="mini-count"></span>
+      <button class="send-btn" id="mini-send" title="发送" data-i18n="chat.sendTitle" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.4 20.4l17.45-7.48a1 1 0 000-1.84L3.4 3.6a1 1 0 00-1.38 1.21L4.5 12l-2.48 7.19a1 1 0 001.38 1.21z" fill="currentColor" /></svg></button>
+      <button class="stop-btn" id="mini-stop" title="停止生成" style="display:none" data-i18n="chat.stopTitle" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg></button>
+    </div>
   </div>
 </div>
 <script src="i18n.js"></script>

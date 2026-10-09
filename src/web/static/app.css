@@ -348,6 +348,14 @@
     .sys-info .sys-os { font-weight: 600; }
     .sys-info .sep { width: 4px; height: 4px; border-radius: 50%; background: var(--muted); }
     .sys-info .sys-uptime { color: var(--muted); }
+    .health-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; }
+    .health-status { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: default; }
+    .health-status.ok { color: #34d399; border-color: rgba(52, 211, 153, .4); background: rgba(52, 211, 153, .08); }
+    .health-status.bad { color: var(--bad); border-color: rgba(251, 113, 133, .4); background: rgba(251, 113, 133, .08); }
+    .health-items { display: flex; gap: 8px; flex-wrap: wrap; }
+    .health-item { padding: 4px 10px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); background: var(--bg); color: var(--text); cursor: pointer; }
+    .health-item.bad { color: var(--bad); border-color: rgba(251, 113, 133, .35); }
+    .health-item:hover { border-color: var(--accent); }
     .status-bar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
     .ring-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; display: flex; align-items: center; gap: 14px; }
     .ring { width: 92px; height: 92px; flex-shrink: 0; border-radius: 50%; background: conic-gradient(var(--rc, #34d399) calc(var(--pct, 0) * 1%), var(--panel2) 0); position: relative; }
@@ -369,6 +377,16 @@
     .kpi .dot { width: 8px; height: 8px; border-radius: 50%; }
     .kpi .dot.up { background: #f97316; } .kpi .dot.down { background: var(--accent); }
     .kpi .val { font-size: 18px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .ov-kpis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+    .ov-kpi { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 14px; }
+    .ov-kpi .key { font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .ov-kpi .val { font-size: 18px; font-weight: 700; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .attention-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; }
+    .attention-title { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+    .attention-list { display: flex; flex-direction: column; gap: 8px; }
+    .attention-item { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; cursor: pointer; }
+    .attention-item .dot.err { width: 8px; height: 8px; border-radius: 50%; background: var(--bad); flex-shrink: 0; }
+    .attention-item:hover { border-color: var(--bad); }
     .chart-wrap { position: relative; }
     .chart-wrap .unit { position: absolute; top: 4px; right: 4px; z-index: 5; }
     .chart-wrap select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 2px 6px; font-size: 11px; outline: none; }
@@ -378,7 +396,8 @@
     #overview.loading .sys-info .sys-uptime,
     #overview.loading .ring-info .value,
     #overview.loading .ring-info .sub,
-    #overview.loading .kpi .val {
+    #overview.loading .kpi .val,
+    #overview.loading .ov-kpi .val {
       color: transparent;
       background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%);
       background-size: 400% 100%;
@@ -390,6 +409,7 @@
     #overview.loading .ring-info .value { min-width: 72px; }
     #overview.loading .ring-info .sub { min-width: 130px; }
     #overview.loading .kpi .val { min-width: 56px; }
+    #overview.loading .ov-kpi .val { min-width: 56px; }
     #overview.loading .ring { background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%) !important; background-size: 400% 100% !important; animation: skel 1.4s ease infinite; }
     #overview.loading .chart-wrap canvas { visibility: hidden; }
     #overview.loading .chart-wrap::after { content: ""; position: absolute; inset: 8px; border-radius: 8px; background: linear-gradient(90deg, var(--panel2) 25%, var(--hover) 37%, var(--panel2) 63%); background-size: 400% 100%; animation: skel 1.4s ease infinite; }
