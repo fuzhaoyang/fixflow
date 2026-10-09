@@ -620,7 +620,7 @@ export async function collectDockerStats({ run = runCommand } = {}) {
 export async function collectSystemd(keywords = [], { run = runCommand } = {}) {
   const kws = (keywords || []).map((k) => String(k).toLowerCase()).filter(Boolean);
   const [r, ps] = await Promise.all([
-    run("systemctl show --type=service,socket,timer -p Id,ActiveState,SubState,Description,LoadState,NRestarts,ExecMainStatus,Restart,Requires,After,RequiredBy,UnitFileState,FragmentPath,ActiveEnterTimestamp,MainPID,MemoryCurrent --no-pager"),
+    run("systemctl show --type=service,socket,timer -p Id,ActiveState,SubState,Description,LoadState,NRestarts,ExecMainStatus,Restart,Requires,After,RequiredBy,UnitFileState,FragmentPath,ActiveEnterTimestamp,MainPID,MemoryCurrent --no-pager", { maxOutput: 512 * 1024 }),
     run("ps -eo pid,%cpu,%mem --no-headers"),
   ]);
   if (r.exitCode !== 0) return { error: r.stderr || "systemctl 不可用" };

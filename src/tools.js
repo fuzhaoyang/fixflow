@@ -2,7 +2,7 @@ import { exec, spawn } from "node:child_process";
 import { readFile as fsReadFile } from "node:fs/promises";
 
 const MAX_OUTPUT = 50 * 1024;
-const truncate = (s) => (s.length > MAX_OUTPUT ? s.slice(0, MAX_OUTPUT) + "\n...[已截断]" : s);
+const truncate = (s, max = MAX_OUTPUT) => (s.length > max ? s.slice(0, max) + "\n...[已截断]" : s);
 
 const SECRET_PATTERNS = [
   /(sk-[A-Za-z0-9]{16,})/g,
@@ -92,7 +92,7 @@ const release = () => {
   else activeExec--;
 };
 
-function runExec(command, { timeout = 30000, signal, env = {} } = {}) {
+function runExec(command, { timeout = 30000, signal, env = {}, maxOutput = MAX_OUTPUT } = {}) {
   return new Promise((resolve) => {
     const child = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
     let stdout = "", stderr = "";
@@ -104,8 +104,8 @@ function runExec(command, { timeout = 30000, signal, env = {} } = {}) {
       done = true;
       clearTimeout(timer);
       resolve({
-        stdout: redactSecrets(truncate(stdout)),
-        stderr: redactSecrets(truncate(stderr)),
+        stdout: redactSecrets(truncate(stdout, maxOutput)),
+        stderr: redactSecrets(truncate(stderr, maxOutput)),
         exitCode: overflow ? 1 : (typeof code === "number" ? code : 1),
         ...(aborted ? { aborted: true } : {}),
       });
@@ -113,12 +113,12 @@ function runExec(command, { timeout = 30000, signal, env = {} } = {}) {
     child.stdout.on("data", (d) => {
       if (overflow) return;
       stdout += d;
-      if (stdout.length > MAX_OUTPUT) { stdout = stdout.slice(0, MAX_OUTPUT); overflow = true; killTree(); }
+      if (stdout.length > maxOutput) { stdout = stdout.slice(0, maxOutput); overflow = true; killTree(); }
     });
     child.stderr.on("data", (d) => {
       if (overflow) return;
       stderr += d;
-      if (stderr.length > MAX_OUTPUT) { stderr = stderr.slice(0, MAX_OUTPUT); overflow = true; killTree(); }
+      if (stderr.length > maxOutput) { stderr = stderr.slice(0, maxOutput); overflow = true; killTree(); }
     });
     child.on("exit", finish);
     child.on("error", () => finish(1));

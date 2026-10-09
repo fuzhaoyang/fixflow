@@ -115,3 +115,10 @@ test("runCommand 支持 env 注入且不回显到命令串", async () => {
   assert.equal(r.exitCode, 0);
   assert.match(r.stdout, /s3cret!/);
 });
+test("runCommand 支持 maxOutput 提高截断上限", async () => {
+  const small = await runCommand("yes aaaa | head -c 100000");
+  assert.equal(small.exitCode, 1);
+  const big = await runCommand("yes aaaa | head -c 100000", { maxOutput: 256 * 1024 });
+  assert.equal(big.exitCode, 0);
+  assert.ok(big.stdout.length >= 100000);
+});
