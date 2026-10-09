@@ -905,28 +905,119 @@ async function loadSysOps() {
   } catch { el.innerHTML = `<pre class="sys-list hint">${t("fs.loadFail").replace("{e}", "")}</pre>`; }
 }
 
-function renderSystemdSkeleton() {
-  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
-  return `<div class="card-body">${skel(6)}</div>`;
+let sysStateFilter = "all";
+let sysTypeFilter = "all";
+let openSdRows = new Set();
+const SYS_DANGEROUS = /^(systemd|systemd-|dbus|NetworkManager|firewalld|networkd|resolved|journald|logind|udevd|sshd?|ssh|lightdm|gdm|sddm|display-manager|dde-|kwin|plymouth|getty|user@)/;
+
+function opBtn(s, action) {
+  const label = { start: t("srv.opStart"), stop: t("srv.opStop"), restart: t("srv.opRestart"), reload: t("srv.opReload"), enable: t("srv.opEnable"), disable: t("srv.opDisable") }[action];
+  return `<a href="javascript:void(0)" data-sysop="${action}" data-unit="${escapeHtml(s.name)}">${label}</a>`;
+}
+
+function renderSdDetail(s) {
+  const dep = (label, arr) => `<div class="sys-sub">${label}：${(arr || []).length ? arr.map(escapeHtml).join(", ") : "—"}</div>`;
+  return `<div class="sys-detail">
+    <div class="sys-sub">${t("srv.desc")}：${escapeHtml(s.desc || "—")}</div>
+    <div class="sys-sub">${t("srv.loadState")}：${escapeHtml(s.loadState || "—")} · ${t("srv.unitFileState")}：${escapeHtml(s.unitFileState || "—")}</div>
+    <div class="sys-sub">${t("srv.nRestarts")}：${s.nRestarts ?? "—"} · ${t("srv.exitStatus")}：${s.exitStatus ?? "—"} · ${t("srv.restartPolicy")}：${escapeHtml(s.restartPolicy || "—")}</div>
+    ${dep(t("srv.depsAfter"), s.after)}
+    ${dep(t("srv.depsRequires"), s.requires)}
+    ${dep(t("srv.depsRequiredBy"), s.requiredBy)}
+    <div style="margin-top:6px"><select class="fw-mode" data-syslog-lines><option value="50">50</option><option value="200" selected>200</option><option value="500">500</option><option value="1000">1000</option></select> <a href="javascript:void(0)" data-syslog="${escapeHtml(s.name)}">${t("srv.logs")}</a></div>
+    <pre class="sys-log" id="syslog-${escapeHtml(s.name)}" style="display:none">${t("srv.logsHint")}</pre>
+  </div>`;
 }
 
 function renderSystemd(m) {
-  if (!m?.services && !m?.userProcs) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
-  const q = searchBox.value.trim().toLowerCase();
+  if (!m?.services) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
   const services = m.services || [];
+  const summary = m.summary || {};
+  const q = (searchBox.value || "").trim().toLowerCase();
+  const list = services.filter((s) =>
+    (sysStateFilter === "all" || s.state === sysStateFilter) &&
+    (sysTypeFilter === "all" || s.unitType === sysTypeFilter) &&
+    (!q || s.name.toLowerCase().includes(q))
+  );
+  const summaryHtml = `<div class="sys-summary">
+    <span class="ok">${t("srv.summaryActive")} <b>${summary.active ?? 0}</b></span>
+    <span class="bad">${t("srv.summaryFailed")} <b>${summary.failed ?? 0}</b></span>
+    <span class="na">${t("srv.summaryInactive")} <b>${summary.inactive ?? 0}</b></span>
+    <span>${t("srv.sumTotal")} <b>${services.length}</b></span>
+  </div>`;
+  const tabs = [["all", t("srv.filterAll")], ["active", t("srv.filterRunning")], ["failed", t("srv.filterFailed")], ["inactive", t("srv.filterStopped")]]
+    .map(([v, label]) => `<button class="seg-tab${sysStateFilter === v ? " active" : ""}" data-sysfilter-state="${v}">${label}</button>`).join("");
+  const typeOpts = [["all", t("srv.typeAll")], ["service", t("srv.typeService")], ["socket", t("srv.typeSocket")], ["timer", t("srv.typeTimer")]]
+    .map(([v, label]) => `<option value="${v}"${sysTypeFilter === v ? " selected" : ""}>${label}</option>`).join("");
+  const filterHtml = `<div class="sys-filters"><div class="seg-tabs">${tabs}</div><select class="fw-mode" data-sysfilter-type>${typeOpts}</select></div>`;
+  if (!list.length) return summaryHtml + filterHtml + `<pre>${escapeHtml(q ? t("srv.noMatchQ").replace("{q}", q) : t("srv.noMatchCfg"))}</pre>`;
   const svcPids = new Set(services.map((s) => String(s.mainPid)));
   const procs = ((m.userProcs && m.userProcs.procs) || []).filter((p) => !svcPids.has(String(p.pid)));
-  const rows = [];
-  for (const s of services) {
+  const procRows = procs.map((p) => `<tr><td>${t("srv.proc")}</td><td>${escapeHtml(p.name)}</td><td class="ok">${t("srv.running")}</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td><td>—</td></tr>`).join("");
+  const rows = list.map((s) => {
     const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
-    rows.push(`<tr><td>${t("srv.svc")}</td><td>${escapeHtml(s.name)}</td><td class="${cls}">${escapeHtml(s.sub || s.state)}</td><td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td><td>${escapeHtml(s.mainPid || "—")}</td><td>${escapeHtml(s.started)}</td></tr>`);
-  }
-  for (const p of procs) {
-    rows.push(`<tr><td>${t("srv.proc")}</td><td>${escapeHtml(p.name)}</td><td class="ok">${t("srv.running")}</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td></tr>`);
-  }
-  if (!rows.length) return `<pre>${escapeHtml(q ? t("srv.noMatchQ").replace("{q}", q) : t("srv.noMatchCfg"))}</pre>`;
-  const filtered = q ? rows.filter((r) => r.toLowerCase().includes(q)) : rows;
-  return `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th>${t("srv.started")}</th></tr></thead><tbody>${filtered.join("")}</tbody></table></div>`;
+    const dangerous = SYS_DANGEROUS.test(s.name);
+    const ops = [];
+    if (!dangerous) {
+      if (s.state === "active") ops.push(opBtn(s, "stop"), opBtn(s, "restart"), opBtn(s, "reload"));
+      else ops.push(opBtn(s, "start"));
+      ops.push(opBtn(s, s.unitFileState === "enabled" ? "disable" : "enable"));
+    }
+    const opHtml = ops.length ? `<span class="proc-ops">${ops.join("")}</span>` : (dangerous ? `<span class="tag">${t("srv.dangerous")}</span>` : "—");
+    const typeTag = s.unitType === "service" ? "" : `<span class="tag">${s.unitType}</span>`;
+    const open = openSdRows.has(s.name);
+    return `<tr class="sys-row${open ? " open" : ""}">
+      <td>${typeTag || t("srv.svc")}</td>
+      <td><a href="javascript:void(0)" data-systoggle="${escapeHtml(s.name)}">${escapeHtml(s.name)}</a>${dangerous ? ` <span class="tag na">${t("srv.dangerous")}</span>` : ""}</td>
+      <td class="${cls}">${escapeHtml(s.sub || s.state)}</td>
+      <td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td>
+      <td>${escapeHtml(s.mainPid || "—")}</td><td>${escapeHtml(s.started)}</td>
+      <td>${opHtml}</td>
+    </tr>${open ? `<tr class="sys-detail-row"><td colspan="9">${renderSdDetail(s)}</td></tr>` : ""}`;
+  }).join("");
+  return summaryHtml + filterHtml + `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th>${t("srv.started")}</th><th>${t("srv.ops")}</th></tr></thead><tbody>${rows}${procRows}</tbody></table></div>`;
+}
+
+cards.addEventListener("click", (e) => {
+  const stateBtn = e.target.closest("[data-sysfilter-state]");
+  if (stateBtn) { sysStateFilter = stateBtn.dataset.sysfilterState; renderCards(); return; }
+  const typeSel = e.target.closest("[data-sysfilter-type]");
+  if (typeSel) { sysTypeFilter = typeSel.value; renderCards(); return; }
+  const tg = e.target.closest("[data-systoggle]");
+  if (tg) { const n = tg.dataset.systoggle; if (openSdRows.has(n)) openSdRows.delete(n); else openSdRows.add(n); renderCards(); return; }
+  const lg = e.target.closest("[data-syslog]");
+  if (lg) { loadSysLog(lg.dataset.syslog); return; }
+  const op = e.target.closest("[data-sysop]");
+  if (!op) return;
+  const unit = op.dataset.unit, action = op.dataset.sysop;
+  const label = { start: t("srv.opStart"), stop: t("srv.opStop"), restart: t("srv.opRestart"), reload: t("srv.opReload"), enable: t("srv.opEnable"), disable: t("srv.opDisable") }[action];
+  procTarget = { kind: "systemd-op", unit, action };
+  document.getElementById("proc-title").textContent = `${label} ${unit}`;
+  document.getElementById("proc-text").textContent = t("srv.opConfirm").replace("{unit}", unit).replace("{op}", label);
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("proc");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+});
+
+async function loadSysLog(unit) {
+  const pre = document.getElementById(`syslog-${unit}`);
+  if (!pre) return;
+  const lines = pre.closest(".sys-detail")?.querySelector("[data-syslog-lines]")?.value || 200;
+  pre.style.display = "";
+  pre.textContent = t("srv.logsLoading");
+  try {
+    const res = await fetch("api/systemd/logs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ unit, lines: Number(lines) }) });
+    const d = await res.json();
+    pre.textContent = d.content || (d.error || t("srv.logsEmpty"));
+  } catch (err) { pre.textContent = String(err); }
+}
+
+function renderSystemdSkeleton() {
+  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
+  return `<div class="card-body">${skel(6)}</div>`;
 }
 
 function renderNginxSkeleton() {
@@ -2999,6 +3090,7 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isDbTest = kind === "db-test";
   const isAclAdd = kind === "acl-add";
   const isAclDel = kind === "acl-del";
+  const isSdOp = kind === "systemd-op";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
@@ -3027,7 +3119,7 @@ document.getElementById("proc-confirm").onclick = async () => {
       fd.append("file", procTarget.body.file, procTarget.body.file.name);
       res = await fetch("api/fs/upload", { method: "POST", body: fd });
     } else {
-      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : isDbTest ? "api/db/test" : isAclAdd ? "api/acl/add" : isAclDel ? "api/acl/remove" : `api/system/${procTarget.op}`;
+      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : isSdOp ? "api/systemd/op" : isDbTest ? "api/db/test" : isAclAdd ? "api/acl/add" : isAclDel ? "api/acl/remove" : `api/system/${procTarget.op}`;
       const payload = isFw
         ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
         : isFwCtl
@@ -3044,11 +3136,13 @@ document.getElementById("proc-confirm").onclick = async () => {
                     ? { password }
                     : isDbTest
                       ? { id: procTarget.id, password }
-                      : isAclAdd
-                        ? { list: procTarget.list, ip: procTarget.ip, comment: procTarget.comment || "", password }
-                        : isAclDel
-                          ? { list: procTarget.list, ip: procTarget.ip, password }
-                          : { ...(procTarget.body || {}), password };
+                      : isSdOp
+                        ? { unit: procTarget.unit, action: procTarget.action, password }
+                        : isAclAdd
+                          ? { list: procTarget.list, ip: procTarget.ip, comment: procTarget.comment || "", password }
+                          : isAclDel
+                            ? { list: procTarget.list, ip: procTarget.ip, password }
+                            : { ...(procTarget.body || {}), password };
       res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       data = await res.json();
       if (res.status === 403 || res.status === 400) {
@@ -3066,7 +3160,7 @@ document.getElementById("proc-confirm").onclick = async () => {
     if (isDockerOp || isDockerPrune) showSaveMsg(isDockerOp ? t("docker.opDone") : t("docker.pruneDone"), "ok");
     if (isAclAdd || isAclDel) { showSaveMsg(isAclAdd ? t("acl.addDone") : t("acl.delDone"), "ok"); loadAcl(); }
     else if (isDbTest) { runDbTest(procTarget.id, password); }
-    else { refreshMetrics(); }
+    else { if (isSdOp) showSaveMsg(t("srv.opDone"), "ok"); refreshMetrics(); }
     if (isFs) fsRefresh();
   } catch (e2) {
     errEl.textContent = String(e2);
