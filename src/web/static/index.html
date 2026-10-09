@@ -563,6 +563,34 @@
       <button class="btn" id="restart-cancel" data-i18n="restart.cancel">取消</button>
       <button class="btn" id="restart-confirm" data-i18n="restart.confirm">确认重启</button>
     </div>
+    <div class="modal-mask" id="db-add-mask">
+      <div class="modal">
+        <button class="modal-close" id="db-add-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+        <h2><span id="db-add-title" data-i18n="db.addBtn">添加连接</span></h2>
+        <input type="hidden" id="db-add-id">
+        <div class="field"><label data-i18n="db.name">名称</label><input id="db-add-name" type="text" placeholder="如：生产库"></div>
+        <div class="field"><label data-i18n="db.type">类型</label>
+          <select id="db-add-type">
+            <option value="postgres" data-i18n="db.typePostgres">PostgreSQL</option>
+            <option value="mysql" data-i18n="db.typeMysql">MySQL / MariaDB</option>
+            <option value="redis" data-i18n="db.typeRedis">Redis</option>
+            <option value="mongodb" data-i18n="db.typeMongo">MongoDB</option>
+            <option value="sqlite" data-i18n="db.typeSqlite">SQLite</option>
+          </select>
+        </div>
+        <div class="field" id="db-add-host-field"><label data-i18n="db.host">主机</label><input id="db-add-host" type="text" placeholder="127.0.0.1"></div>
+        <div class="field" id="db-add-port-field"><label data-i18n="db.port">端口</label><input id="db-add-port" type="text" placeholder="5432"></div>
+        <div class="field" id="db-add-database-field"><label data-i18n="db.database">库名</label><input id="db-add-database" type="text" placeholder="app"></div>
+        <div class="field" id="db-add-user-field"><label data-i18n="db.user">用户名</label><input id="db-add-user" type="text"></div>
+        <div class="field" id="db-add-password-field"><label data-i18n="db.password">密码</label><div class="pwd-wrap"><input id="db-add-password" type="password" data-i18n="db.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div></div>
+        <div class="field" id="db-add-path-field" style="display:none"><label data-i18n="db.path">数据库文件路径</label><input id="db-add-path" type="text" placeholder="/srv/data/app.db"></div>
+        <div class="hint" id="db-add-err" style="color:var(--bad)"></div>
+        <div class="modal-actions">
+          <button class="btn" id="db-add-cancel" data-i18n="db.cancelBtn">取消</button>
+          <button class="btn" id="db-add-save" data-i18n="db.saveBtn">保存</button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="modal-mask" id="ssl-add-mask">
