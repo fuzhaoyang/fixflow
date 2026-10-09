@@ -1179,6 +1179,14 @@ export async function startWeb(config = {}, deps = {}) {
         const r = await execCmd(cmd, { timeout: 20000 });
         await appendSysOp({ op: `systemd:${action}`, target: unitName, cmd, ok: r.exitCode === 0 });
         sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+      } else if (url.pathname === "/api/systemd/logs" && req.method === "POST") {
+        const body = await readBody(req);
+        const { unit, lines } = JSON.parse(body || "{}");
+        const u = String(unit || "").trim();
+        if (!/^[a-zA-Z0-9_.@-]+$/.test(u)) { sendJson(res, { error: "非法的服务名" }, 400); return; }
+        const n = Math.max(50, Math.min(parseInt(lines, 10) || 200, 2000));
+        const r = await execCmd(`journalctl -u ${sysUnitName(u)} -n ${n} --no-pager -o cat`, { timeout: 20000 });
+        sendJson(res, { ok: r.exitCode === 0, content: r.stdout });
       } else if (url.pathname === "/api/nginx/confs" && req.method === "GET") {
         sendJson(res, await listNginxConfs());
       } else if (url.pathname === "/api/nginx/conf" && req.method === "GET") {

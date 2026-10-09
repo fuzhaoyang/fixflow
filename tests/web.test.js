@@ -1543,3 +1543,18 @@ test("服务操作接口：鉴权/危险保护/执行", async () => {
   assert.equal((await ok.json()).ok, true);
   w.close();
 });
+
+test("服务日志接口", async () => {
+  const runCommand = async (cmd) => cmd.startsWith("journalctl -u nginx.service")
+    ? { exitCode: 0, stdout: "line1\nline2\n", stderr: "" }
+    : { exitCode: 1, stdout: "", stderr: "" };
+  const w = await makeServer({}, { runCommand });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/systemd/logs`, { method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" }, body: JSON.stringify({ unit: "nginx", lines: 500 }) });
+  assert.equal(res.status, 200);
+  const d = await res.json();
+  assert.equal(d.ok, true);
+  assert.match(d.content, /line1/);
+  w.close();
+});
