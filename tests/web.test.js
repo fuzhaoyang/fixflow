@@ -1524,3 +1524,22 @@ test("数据库页前端：renderDb 相关钩子存在", async () => {
   assert.match(html, /id="db-add-type"/);
   w.close();
 });
+
+test("服务操作接口：鉴权/危险保护/执行", async () => {
+  const runCommand = async (cmd) => ({ exitCode: cmd.startsWith("systemctl restart nginx.service") ? 0 : 1, stdout: "", stderr: "" });
+  const w = await makeServer({}, { runCommand });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const bad = await fetch(`${base}/api/systemd/op`, { method: "POST", headers: H, body: JSON.stringify({ unit: "nginx", action: "restart", password: "wrong" }) });
+  assert.equal(bad.status, 403);
+
+  const danger = await fetch(`${base}/api/systemd/op`, { method: "POST", headers: H, body: JSON.stringify({ unit: "dbus", action: "restart", password: "Secret123!" }) });
+  assert.equal(danger.status, 403);
+
+  const ok = await fetch(`${base}/api/systemd/op`, { method: "POST", headers: H, body: JSON.stringify({ unit: "nginx", action: "restart", password: "Secret123!" }) });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).ok, true);
+  w.close();
+});

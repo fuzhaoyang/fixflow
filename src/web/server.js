@@ -251,6 +251,9 @@ export async function startWeb(config = {}, deps = {}) {
       await writeFile(sysOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
     } catch {}
   };
+  const DANGEROUS_UNITS = /^(systemd|systemd-|dbus|NetworkManager|firewalld|networkd|resolved|journald|logind|udevd|sshd?|ssh|lightdm|gdm|sddm|display-manager|dde-|kwin|plymouth|getty|user@)/;
+  const SYS_ACTIONS = ["start", "stop", "restart", "reload", "enable", "disable"];
+  const sysUnitName = (u) => (u.includes(".") ? u : `${u}.service`);
   const aclPath = join(dirname(configPath), "acl.json");
   const readAcl = async () => {
     try { return JSON.parse(await readFile(aclPath, "utf8")); } catch { return { blacklist: [], whitelist: [] }; }
@@ -1162,6 +1165,20 @@ export async function startWeb(config = {}, deps = {}) {
         }
       } else if (url.pathname === "/api/system/ops" && req.method === "GET") {
         sendJson(res, { ops: await readSysOps() });
+      } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {
+        const body = await readBody(req);
+        const { unit, action, password } = JSON.parse(body || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(password || "", auth)) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!SYS_ACTIONS.includes(action)) { sendJson(res, { error: "不支持的操作" }, 400); return; }
+        const u = String(unit || "").trim();
+        if (!/^[a-zA-Z0-9_.@-]+$/.test(u)) { sendJson(res, { error: "非法的服务名" }, 400); return; }
+        if (DANGEROUS_UNITS.test(u.replace(/\.(service|socket|timer)$/, ""))) { sendJson(res, { error: "系统关键服务，禁止操作" }, 403); return; }
+        const unitName = sysUnitName(u);
+        const cmd = `systemctl ${action} ${unitName}`;
+        const r = await execCmd(cmd, { timeout: 20000 });
+        await appendSysOp({ op: `systemd:${action}`, target: unitName, cmd, ok: r.exitCode === 0 });
+        sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
       } else if (url.pathname === "/api/nginx/confs" && req.method === "GET") {
         sendJson(res, await listNginxConfs());
       } else if (url.pathname === "/api/nginx/conf" && req.method === "GET") {
