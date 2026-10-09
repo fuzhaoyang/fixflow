@@ -332,7 +332,7 @@
     .fw-pageinfo { font-size: 12px; color: var(--muted); }
     .fw-risk-row { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
     .fw-risk-row .fw-port { font-family: var(--font-mono); font-weight: 600; min-width: 90px; }
-    .fw-risk-row .fw-mode { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }
+    .fw-mode { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }
     .fw-risk-row .btn { margin-left: auto; }
     /* 黑白名单 */
     .acl-card { overflow: visible; }
