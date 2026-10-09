@@ -31,6 +31,27 @@ export function normalizeSslSites(list) {
   });
 }
 
+const DB_TYPES = new Set(["postgres", "mysql", "redis", "mongodb", "sqlite"]);
+
+export function normalizeDbConnections(list) {
+  if (!Array.isArray(list)) return [];
+  return list.map((d, i) => {
+    if (typeof d !== "object" || d === null || !DB_TYPES.has(d.type)) return null;
+    return {
+      id: d.id || `db${i + 1}`,
+      name: d.name || `${d.type} ${i + 1}`,
+      type: d.type,
+      host: d.host || "",
+      port: String(d.port || (d.type === "sqlite" ? "" : "5432")),
+      database: d.database || "",
+      user: d.user || "",
+      password: d.password || "",
+      path: d.path || "",
+      enabled: d.enabled !== false,
+    };
+  }).filter(Boolean);
+}
+
 export function loadConfig({ filePath = join(process.env.HOME || ".", ".config", "fixflow", "config.json") } = {}) {
   let file = {};
   try { file = JSON.parse(readFileSync(filePath, "utf8")); } catch {}
@@ -42,6 +63,7 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     port: file.port || 2222,
     timeout: file.timeout || 30000,
     databases: file.databases || [],
+    dbConnections: normalizeDbConnections(file.dbConnections),
     sslSites: normalizeSslSites(file.sslSites),
     pingTargets: file.pingTargets || [],
     sslAlerts: file.sslAlerts || { webhook: "", smtp: {} },

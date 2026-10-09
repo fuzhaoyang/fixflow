@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { loadConfig } from "../src/config.js";
+import { loadConfig, normalizeDbConnections } from "../src/config.js";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -75,4 +75,28 @@ test("loadConfig 读取 panelPath", () => {
   const cfg = loadConfig({ filePath: file });
   assert.equal(cfg.panelPath, "abcdef123456");
   assert.equal(cfg.port, 46833);
+});
+
+test("normalizeDbConnections 兜底与非法类型过滤", () => {
+  const r = normalizeDbConnections([
+    { name: "pg", type: "postgres", host: "h", user: "u", password: "p" },
+    { type: "oracle" },
+    "string-entry",
+    null,
+  ]);
+  assert.equal(r.length, 1);
+  assert.equal(r[0].id, "db1");
+  assert.equal(r[0].port, "5432");
+  assert.equal(r[0].enabled, true);
+});
+
+test("dbConnections 从配置文件加载并规范化", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  const cfg = loadConfig({ filePath: file });
+  assert.deepEqual(cfg.dbConnections, []);
+  writeFileSync(file, JSON.stringify({ dbConnections: [{ name: "r", type: "redis", host: "127.0.0.1", port: 6379 }] }));
+  const cfg2 = loadConfig({ filePath: file });
+  assert.equal(cfg2.dbConnections[0].type, "redis");
+  assert.equal(cfg2.dbConnections[0].port, "6379");
 });
