@@ -122,6 +122,8 @@ function applyRoute() {
   });
   chatView = route === "chat";
   logsView = route === "logs";
+  aiFab.style.display = chatView ? "none" : "flex";
+  if (route !== "chat" && aiPopup.style.display === "flex") closeAiPopup();
   if (route === "chat") {
     viewMonitor.style.display = "none";
     viewChat.style.display = "flex";
@@ -2078,9 +2080,11 @@ function addMsg(text, cls, { raw = false, images } = {}) {
 
 function setBusy(b) {
   busy = b;
-  sendBtn.style.display = b ? "none" : "";
-  stopBtn.style.display = b ? "" : "none";
+  ctx.sendBtn.style.display = b ? "none" : "";
+  ctx.stopBtn.style.display = b ? "" : "none";
 }
+
+function toolSummary(ev) {
   const args = ev.args || {};
   let cmd = args.command ?? args.path ?? "";
   if (ev.name === "read_file") cmd = `cat ${cmd}`;
@@ -2560,7 +2564,7 @@ function connectStream() {
       no.onclick = () => { finish(t("risk.rejected")); fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok: false }) }); };
       btnRow.append(yes, no);
       card.appendChild(btnRow);
-      log.appendChild(card);
+      ctx.log.appendChild(card);
       scrollLog();
     } else if (ev.type === "clear") {
       clearHistory();
@@ -2606,17 +2610,17 @@ function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
   div.className = "msg " + cls;
   if (cls === "error") div.innerHTML = icon("xCircle") + "<span>" + escapeHtml(text) + "</span>";
   else div.textContent = text;
-  log.appendChild(div);
+  ctx.log.appendChild(div);
   scrollLog();
 }
 
 function clearHistory() {
   chatHistory = [];
   fetch("api/history/clear", { method: "POST" });
-  log.innerHTML = "";
-  welcome.style.display = "";
+  ctx.log.innerHTML = "";
+  ctx.welcome.style.display = "";
   hideTyping();
-  log.appendChild(welcome);
+  ctx.log.appendChild(ctx.welcome);
 }
 
 async function send() {
@@ -2624,13 +2628,13 @@ async function send() {
     await fetch("api/abort", { method: "POST" });
     return;
   }
-  const text = input.value.trim();
+  const text = ctx.input.value.trim();
   const imgs = pendingImages;
   if (!text && !imgs.length) return;
-  input.value = "";
+  ctx.input.value = "";
   pendingImages = [];
-  preview.innerHTML = "";
-  charCount.textContent = "";
+  if (ctx.preview) ctx.preview.innerHTML = "";
+  ctx.charCount.textContent = "";
   addMsg(text, "user", { images: imgs });
   stickToBottom = true;
   setBusy(true);
@@ -2643,6 +2647,64 @@ stopBtn.onclick = () => fetch("api/abort", { method: "POST" });
 clearBtn.onclick = () => { clearHistory(); addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true }); };
 input.addEventListener("input", () => { charCount.textContent = input.value.length ? input.value.length + "/5000" : ""; });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+
+// ---------- 提问AI 迷你弹窗 ----------
+function syncMiniFromHistory() {
+  miniLog.innerHTML = "";
+  miniWelcome.style.display = "";
+  miniLog.appendChild(miniWelcome);
+  for (const msg of chatHistory) {
+    if (msg.role === "user") renderMsg(msg.text, "user", msg.images);
+    else if (msg.role === "assistant") renderMsg(msg.text, "assistant");
+  }
+}
+
+function openAiPopup() {
+  if (aiPopup.style.display === "flex") return;
+  ctx = miniCtx;
+  renderWelcome();
+  syncMiniFromHistory();
+  aiPopup.style.display = "flex";
+  miniInput.focus();
+}
+
+function closeAiPopup() {
+  if (aiPopup.style.display !== "flex") return;
+  aiPopup.style.display = "none";
+  ctx = chatCtx;
+  log.innerHTML = "";
+  welcome.style.display = "";
+  log.appendChild(welcome);
+  renderWelcome();
+  restoreHistory();
+  if (streamingEl && miniLog.contains(streamingEl)) log.appendChild(streamingEl);
+  if (typingEl && miniLog.contains(typingEl)) log.appendChild(typingEl);
+}
+
+aiFab.addEventListener("click", openAiPopup);
+miniClose.addEventListener("click", closeAiPopup);
+miniClear.addEventListener("click", () => { clearHistory(); addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true }); });
+miniFullscreen.addEventListener("click", () => { closeAiPopup(); location.hash = "/chat"; });
+miniSend.addEventListener("click", send);
+miniStop.addEventListener("click", () => fetch("api/abort", { method: "POST" }));
+miniInput.addEventListener("input", () => { miniCount.textContent = miniInput.value.length ? miniInput.value.length + "/5000" : ""; });
+miniInput.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
+
+let aiDrag = null;
+aiPopupHead.addEventListener("mousedown", (e) => {
+  if (e.target.closest("button")) return;
+  const r = aiPopup.getBoundingClientRect();
+  aiDrag = { dx: e.clientX - r.left, dy: e.clientY - r.top };
+  e.preventDefault();
+});
+document.addEventListener("mousemove", (e) => {
+  if (!aiDrag) return;
+  const x = Math.min(Math.max(0, e.clientX - aiDrag.dx), window.innerWidth - aiPopup.offsetWidth);
+  const y = Math.min(Math.max(0, e.clientY - aiDrag.dy), window.innerHeight - aiPopup.offsetHeight);
+  aiPopup.style.left = x + "px";
+  aiPopup.style.top = y + "px";
+});
+document.addEventListener("mouseup", () => { aiDrag = null; });
 searchBox.addEventListener("input", () => { if (currentFilter === "systemd") renderCards(); });
 const portBtn = document.getElementById("port-btn");
 const pingBtn = document.getElementById("ping-btn");
