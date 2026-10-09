@@ -599,6 +599,132 @@ test("/api/firewall/ops 返回操作记录且成功操作写入审计", async ()
   w.close();
 });
 
+function aclMockRun(calls, numbered = "Status: active\n\nTo                         Action      From\n--                         ------      ----\n[ 1] 0/tcp                 ALLOW IN    Anywhere\n") {
+  return async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "", stderr: "" };
+    if (cmd.includes("ufw status numbered")) return { exitCode: 0, stdout: numbered, stderr: "" };
+    if (cmd.includes("ufw status 2>/dev/null")) return { exitCode: 0, stdout: "Status: active\n", stderr: "" };
+    if (cmd.includes("firewall-cmd --state")) return { exitCode: 1, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "ok", stderr: "" };
+  };
+}
+
+test("/api/acl/list 未登录返回 401", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const res = await fetch(`${base}/api/acl/list`);
+  assert.equal(res.status, 401);
+  w.close();
+});
+
+test("/api/acl/add 密码错误返回 403 且不执行 ufw", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 1, stdout: "", stderr: "" }; } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ list: "black", ip: "9.9.9.9", password: "wrong" }),
+  });
+  assert.equal(res.status, 403);
+  assert.match((await res.json()).error, /密码错误/);
+  assert.ok(!calls.some((c) => c.includes("ufw insert")));
+  w.close();
+});
+
+test("/api/acl/add 无效名单类型/IP 返回 400", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: aclMockRun(calls) });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const badList = await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "gray", ip: "9.9.9.9", password: "Secret123!" }),
+  });
+  assert.equal(badList.status, 400);
+  const badIp = await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "black", ip: "not-an-ip", password: "Secret123!" }),
+  });
+  assert.equal(badIp.status, 400);
+  assert.ok(!calls.some((c) => c.includes("ufw insert")));
+  w.close();
+});
+
+test("/api/acl/add 正确添加黑名单、同步 ufw 并持久化", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: aclMockRun(calls) });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const res = await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "black", ip: "9.9.9.9", comment: "hacker", password: "Secret123!" }),
+  });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).ok, true);
+  assert.ok(calls.some((c) => c.includes("ufw delete 1")));
+  assert.ok(calls.some((c) => c.includes("ufw insert 1 deny from 9.9.9.9 to any port 0 proto tcp")));
+  const list = await (await fetch(`${base}/api/acl/list`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.blacklist.length, 1);
+  assert.equal(list.blacklist[0].ip, "9.9.9.9");
+  assert.equal(list.blacklist[0].comment, "hacker");
+  assert.equal(list.whitelist.length, 0);
+  assert.equal(list.backend, "ufw");
+  const dup = await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "black", ip: "9.9.9.9", password: "Secret123!" }),
+  });
+  assert.equal(dup.status, 400);
+  w.close();
+});
+
+test("/api/acl/add 白名单可添加（本机访问不受锁死护栏限制）", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: aclMockRun(calls) });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify({ list: "white", ip: "1.2.3.4", password: "Secret123!" }),
+  });
+  assert.equal(res.status, 200);
+  assert.ok(calls.some((c) => c.includes("ufw insert 1 deny 0/tcp")));
+  assert.ok(calls.some((c) => c.includes("ufw insert 1 allow from 1.2.3.4 to any port 0 proto tcp")));
+  const list = await (await fetch(`${base}/api/acl/list`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.whitelist.length, 1);
+  w.close();
+});
+
+test("/api/acl/remove 移除并重建规则", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: aclMockRun(calls) });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  await fetch(`${base}/api/acl/add`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "black", ip: "9.9.9.9", password: "Secret123!" }),
+  });
+  calls.length = 0;
+  const res = await fetch(`${base}/api/acl/remove`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "black", ip: "9.9.9.9", password: "Secret123!" }),
+  });
+  assert.equal(res.status, 200);
+  assert.ok(calls.some((c) => c.includes("ufw insert 1 allow 0/tcp")));
+  const list = await (await fetch(`${base}/api/acl/list`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.blacklist.length, 0);
+  const miss = await fetch(`${base}/api/acl/remove`, {
+    method: "POST", headers,
+    body: JSON.stringify({ list: "black", ip: "8.8.8.8", password: "Secret123!" }),
+  });
+  assert.equal(miss.status, 400);
+  w.close();
+});
+
 test("/api/docker/op 未登录返回 401", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;

@@ -21,7 +21,7 @@ import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPasswor
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
-import { verifySudo, runPrivileged, detectBackend, activeZones } from "../firewall.js";
+import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules } from "../firewall.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 
@@ -251,6 +251,14 @@ export async function startWeb(config = {}, deps = {}) {
       await writeFile(sysOpsPath, JSON.stringify(ops.slice(-100), null, 2), { mode: 0o600 }).catch(() => {});
     } catch {}
   };
+  const aclPath = join(dirname(configPath), "acl.json");
+  const readAcl = async () => {
+    try { return JSON.parse(await readFile(aclPath, "utf8")); } catch { return { blacklist: [], whitelist: [] }; }
+  };
+  const writeAcl = async (acl) => {
+    await writeFile(aclPath, JSON.stringify(acl, null, 2), { mode: 0o600 }).catch(() => {});
+  };
+  const panelPorts = () => [config.port ?? 8080, ...(config.tls ? [config.httpsPort ?? 8443] : [])];
   const DB_DEFAULT_PORT = { postgres: "5432", mysql: "3306", redis: "6379", mongodb: "27017", sqlite: "" };
   const DB_TYPES = new Set(["postgres", "mysql", "redis", "mongodb", "sqlite"]);
   const sanitizeConn = (c) => ({ ...c, password: "", hasPass: Boolean(c.password) });
@@ -1058,6 +1066,65 @@ export async function startWeb(config = {}, deps = {}) {
         }
       } else if (url.pathname === "/api/firewall/ops" && req.method === "GET") {
         sendJson(res, { ops: await readFwOps() });
+      } else if (url.pathname === "/api/acl/list" && req.method === "GET") {
+        const acl = await readAcl();
+        sendJson(res, {
+          blacklist: acl.blacklist || [],
+          whitelist: acl.whitelist || [],
+          ports: panelPorts(),
+          backend: (await detectBackend({ run: execCmd })) || null,
+          clientIp: clientIp(req),
+        });
+      } else if (url.pathname === "/api/acl/add" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const { list, ip, comment = "", password } = body;
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else if (!["black", "white"].includes(list)) {
+          sendJson(res, { error: "不支持的名单类型" }, 400);
+        } else if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(String(ip || ""))) {
+          sendJson(res, { error: "无效的 IP（需 IPv4 或网段，如 192.168.1.0/24）" }, 400);
+        } else {
+          const acl = await readAcl();
+          const arr = list === "black" ? (acl.blacklist ||= []) : (acl.whitelist ||= []);
+          if (arr.some((x) => x.ip === ip)) {
+            sendJson(res, { error: "该 IP 已在名单中" }, 400);
+          } else {
+            const me = clientIp(req);
+            const mePlain = String(me || "").replace("::ffff:", "");
+            if (list === "white" && acl.whitelist.length === 0 && mePlain && mePlain !== "unknown" && mePlain !== "127.0.0.1" && mePlain !== "::1" && ip !== mePlain) {
+              sendJson(res, { error: `当前访问 IP（${me}）不在白名单内，添加后将无法访问面板。请先添加当前 IP，或取消操作。` }, 400);
+              return;
+            }
+            arr.push({ ip, comment: String(comment || "").slice(0, 60), ts: Date.now() });
+            const r = await syncAclRules(acl, panelPorts(), password, { run: execCmd });
+            if (!r.ok) { sendJson(res, { error: r.error }, 400); return; }
+            await writeAcl(acl);
+            sendJson(res, { ok: true });
+          }
+        }
+      } else if (url.pathname === "/api/acl/remove" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const { list, ip, password } = body;
+        if (!(await fwVerify(password))) {
+          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+        } else if (!["black", "white"].includes(list)) {
+          sendJson(res, { error: "不支持的名单类型" }, 400);
+        } else if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(String(ip || ""))) {
+          sendJson(res, { error: "无效的 IP" }, 400);
+        } else {
+          const acl = await readAcl();
+          const arr = list === "black" ? (acl.blacklist ||= []) : (acl.whitelist ||= []);
+          const idx = arr.findIndex((x) => x.ip === ip);
+          if (idx < 0) { sendJson(res, { error: "该 IP 不在名单中" }, 400); }
+          else {
+            arr.splice(idx, 1);
+            const r = await syncAclRules(acl, panelPorts(), password, { run: execCmd });
+            if (!r.ok) { sendJson(res, { error: r.error }, 400); return; }
+            await writeAcl(acl);
+            sendJson(res, { ok: true });
+          }
+        }
       } else if (url.pathname === "/api/system/update" && req.method === "POST") {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");

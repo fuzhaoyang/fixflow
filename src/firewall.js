@@ -1,4 +1,5 @@
 import { runCommand } from "./tools.js";
+import { parseUfwStatus } from "./metrics.js";
 
 export function isRoot(getuid = () => (typeof process.getuid === "function" ? process.getuid() : 0)) {
   return getuid() === 0;
@@ -74,4 +75,40 @@ export async function openFirewallPort(port, { run = runCommand, getuid = () => 
     return { ok: r.exitCode === 0, method: "iptables", detail: (r.stdout || r.stderr || "").trim() };
   }
   return { ok: false, reason: "未检测到启用的本机防火墙" };
+}
+
+// 面板端口黑白名单的目标规则（自上而下求值：黑名单拦截 → 白名单放行 → 兜底）
+export function aclTargetRules(acl, port) {
+  const out = [];
+  for (const b of acl.blacklist || []) out.push(`deny from ${b.ip} to any port ${port} proto tcp`);
+  const white = acl.whitelist || [];
+  if (white.length) {
+    for (const w of white) out.push(`allow from ${w.ip} to any port ${port} proto tcp`);
+    out.push(`deny ${port}/tcp`);
+  } else {
+    out.push(`allow ${port}/tcp`);
+  }
+  return out;
+}
+
+// 将 acl 状态全量同步到 ufw：先清掉面板端口旧规则，再按目标顺序逐条 ufw insert 1
+export async function syncAclRules(acl, ports, password, { run = runCommand, getuid = () => (typeof process.getuid === "function" ? process.getuid() : 0) } = {}) {
+  const st = await run("ufw status 2>/dev/null");
+  if (!/Status:\s*active/i.test(st.stdout || "")) return { ok: false, error: "UFW 未启用，无法操作黑白名单" };
+  const numbered = await run("ufw status numbered 2>/dev/null");
+  const { rules } = parseUfwStatus(numbered.stdout || "");
+  const portSet = new Set(ports.map(String));
+  const stale = rules.filter((r) => String(r.port || "").split(",").map((s) => s.trim()).some((p) => portSet.has(p)));
+  for (const r of [...stale].sort((a, b) => b.num - a.num)) {
+    const d = await runPrivileged(`ufw delete ${r.num}`, password, { run, timeout: 15000, getuid });
+    if (d.exitCode !== 0) return { ok: false, error: `删除旧规则失败：${(d.stderr || d.stdout || "").trim()}` };
+  }
+  for (const port of ports) {
+    const target = aclTargetRules(acl, port);
+    for (let i = target.length - 1; i >= 0; i--) {
+      const ins = await runPrivileged(`ufw insert 1 ${target[i]}`, password, { run, timeout: 15000, getuid });
+      if (ins.exitCode !== 0) return { ok: false, error: `添加规则失败：${(ins.stderr || ins.stdout || "").trim()}` };
+    }
+  }
+  return { ok: true };
 }

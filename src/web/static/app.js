@@ -76,6 +76,7 @@ const MODULES = [
   ["network", "menu.network"],
   ["nginx", "menu.nginx"],
   ["firewall", "menu.firewall"],
+  ["acl", "menu.acl"],
   ["databases", "menu.databases"],
   ["docker", "menu.docker"],
   ["ssl", "menu.ssl"],
@@ -711,6 +712,10 @@ function renderCards() {
       lastFwMetrics = m;
       card.innerHTML = `<h2>${label}</h2>${renderFirewall(m)}`;
       loadFwOps();
+    } else if (key === "acl") {
+      card.classList.add("acl-card");
+      card.innerHTML = `<h2>${label}</h2>${renderAcl()}`;
+      loadAcl();
     } else if (key === "docker") {
       card.innerHTML = `<h2>${label}</h2>${renderDocker(m)}`;
       refreshDockerStats();
@@ -1514,6 +1519,62 @@ function renderFirewall(m) {
     : `<pre class="hint">${t("fw.noOps")}</pre>`;
 
   return `${summary}<h3 class="fw-sub">${t("fw.ruleSection")}</h3>${rulesHtml}<h3 class="fw-sub">${t("fw.riskSection")}</h3>${riskHtml}<h3 class="fw-sub">${t("fw.opSection")}</h3>${opsHtml}`;
+}
+
+// ---------- 黑白名单（面板端口 IP 访问控制） ----------
+let aclData = null;
+function renderAclSkeleton() {
+  const stat = (label) => `<div class="fw-stat"><span class="k">${label}</span><div class="skel-line" style="width:60%"></div></div>`;
+  const addRow = `<div class="acl-add"><div class="skel-line" style="flex:1;margin:0;height:30px"></div><div class="skel-line" style="width:76px;margin:0;height:30px"></div><div class="skel-line" style="flex:1;margin:0;height:30px"></div><div class="skel-line" style="width:56px;margin:0;height:30px"></div></div>`;
+  const cell = (w) => `<td><div class="skel-line" style="width:${w};margin:0"></div></td>`;
+  const table = `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("acl.ip")}</th><th>${t("acl.comment")}</th><th>${t("acl.time")}</th><th>${t("acl.op")}</th></tr></thead><tbody>${Array.from({ length: 3 }, () => `<tr>${cell("100%")}${cell("80%")}${cell("60%")}${cell("40px")}</tr>`).join("")}</tbody></table></div>`;
+  const summary = `<div class="fw-summary">${stat(t("acl.port"))}${stat(t("acl.backend"))}${stat(t("acl.counts"))}</div>`;
+  const hint = `<div class="acl-hint"><div class="skel-line" style="width:80%;margin:0"></div></div>`;
+  return `${summary}${hint}<h3 class="fw-sub">${t("acl.wlTitle")}</h3>${addRow}${table}<h3 class="fw-sub">${t("acl.blTitle")}</h3>${addRow}${table}`;
+}
+function renderAcl() {
+  if (!aclData) return renderAclSkeleton();
+  const { whitelist = [], blacklist = [], ports = [], backend } = aclData;
+  const canEdit = backend === "ufw";
+  const disabled = canEdit ? "" : " disabled";
+  const disabledNote = canEdit ? "" : `<div class="hint" style="margin-bottom:8px">${t("acl.needUfw")}</div>`;
+  const hint = whitelist.length
+    ? `<div class="acl-hint danger">${t("acl.wlActive").replace("{n}", whitelist.length)}</div>`
+    : `<div class="acl-hint">${t("acl.wlEmpty")}</div>`;
+  const summary = `<div class="fw-summary">
+    <div class="fw-stat"><span class="k">${t("acl.port")}</span><span class="v">${escapeHtml(ports.join(", "))}</span></div>
+    <div class="fw-stat"><span class="k">${t("acl.backend")}</span><span class="v">${canEdit ? "UFW" : t("acl.unavailable")}</span></div>
+    <div class="fw-stat"><span class="k">${t("acl.counts")}</span><span class="v">${blacklist.length} / ${whitelist.length}</span></div>
+  </div>`;
+  const addBox = (list) => `
+    <div class="acl-add">
+      <input class="acl-ip" placeholder="${t("acl.ipPh")}">
+      <button class="btn small" data-acl-cur="${list}"${disabled}>${t("acl.curIp")}</button>
+      <input class="acl-comment" placeholder="${t("acl.commentPh")}">
+      <button class="btn small" data-acl-add="${list}"${disabled}>${t("acl.addBtn")}</button>
+    </div>`;
+  const table = (list, items) => {
+    if (!items.length) return `<pre class="hint">${t("acl.empty")}</pre>`;
+    const rows = items.map((x) => `<tr><td><span class="fw-from-ip">${escapeHtml(x.ip)}</span></td><td>${escapeHtml(x.comment || "—")}</td><td>${new Date(x.ts).toLocaleString()}</td><td><button class="btn small" data-acl-del="${list}" data-acl-ip="${escapeHtml(x.ip)}"${disabled}>${t("acl.del")}</button></td></tr>`).join("");
+    return `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("acl.ip")}</th><th>${t("acl.comment")}</th><th>${t("acl.time")}</th><th>${t("acl.op")}</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  };
+  return `${summary}${hint}
+    <h3 class="fw-sub">${t("acl.wlTitle")}</h3>${addBox("white")}${table("white", whitelist)}
+    <h3 class="fw-sub">${t("acl.blTitle")}</h3>${addBox("black")}${table("black", blacklist)}${disabledNote}`;
+}
+async function loadAcl() {
+  try {
+    const res = await fetch("api/acl/list");
+    aclData = await res.json();
+  } catch {}
+  refreshAclCard();
+}
+function refreshAclCard() {
+  const card = document.querySelector(".acl-card");
+  if (card) {
+    const h2 = card.querySelector("h2");
+    card.innerHTML = h2 ? `<h2>${h2.innerHTML}</h2>${renderAcl()}` : renderAcl();
+  }
 }
 
 function fmtVal(v) {
@@ -2933,6 +2994,8 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isDockerOp = kind === "docker-op";
   const isDockerPrune = kind === "docker-prune";
   const isDbTest = kind === "db-test";
+  const isAclAdd = kind === "acl-add";
+  const isAclDel = kind === "acl-del";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
@@ -2961,7 +3024,7 @@ document.getElementById("proc-confirm").onclick = async () => {
       fd.append("file", procTarget.body.file, procTarget.body.file.name);
       res = await fetch("api/fs/upload", { method: "POST", body: fd });
     } else {
-      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : isDbTest ? "api/db/test" : `api/system/${procTarget.op}`;
+      const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : isDbTest ? "api/db/test" : isAclAdd ? "api/acl/add" : isAclDel ? "api/acl/remove" : `api/system/${procTarget.op}`;
       const payload = isFw
         ? { port: procTarget.port, proto: procTarget.proto, mode: procTarget.mode, password }
         : isFwCtl
@@ -2978,7 +3041,11 @@ document.getElementById("proc-confirm").onclick = async () => {
                     ? { password }
                     : isDbTest
                       ? { id: procTarget.id, password }
-                      : { ...(procTarget.body || {}), password };
+                      : isAclAdd
+                        ? { list: procTarget.list, ip: procTarget.ip, comment: procTarget.comment || "", password }
+                        : isAclDel
+                          ? { list: procTarget.list, ip: procTarget.ip, password }
+                          : { ...(procTarget.body || {}), password };
       res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       data = await res.json();
       if (res.status === 403 || res.status === 400) {
@@ -2994,7 +3061,9 @@ document.getElementById("proc-confirm").onclick = async () => {
     if (isFwCtl) showSaveMsg(t("fw.controlDone").replace("{action}", procTarget.action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn")), "ok");
     if (isSys) showSaveMsg(t("sys.opDone"), "ok");
     if (isDockerOp || isDockerPrune) showSaveMsg(isDockerOp ? t("docker.opDone") : t("docker.pruneDone"), "ok");
-    if (isDbTest) { runDbTest(procTarget.id, password); } else { refreshMetrics(); }
+    if (isAclAdd || isAclDel) { showSaveMsg(isAclAdd ? t("acl.addDone") : t("acl.delDone"), "ok"); loadAcl(); }
+    else if (isDbTest) { runDbTest(procTarget.id, password); }
+    else { refreshMetrics(); }
     if (isFs) fsRefresh();
   } catch (e2) {
     errEl.textContent = String(e2);
@@ -3103,6 +3172,46 @@ document.getElementById("fw-open-submit").onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// 黑白名单：填入当前 IP
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-acl-cur]");
+  if (!btn) return;
+  const input = btn.closest(".acl-add").querySelector(".acl-ip");
+  if (aclData?.clientIp && input) input.value = aclData.clientIp;
+});
+// 黑白名单：添加 / 删除（密码弹窗确认）
+document.addEventListener("click", (e) => {
+  const addBtn = e.target.closest("[data-acl-add]");
+  if (addBtn) {
+    const box = addBtn.closest(".acl-add");
+    const ip = box.querySelector(".acl-ip").value.trim();
+    if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(ip)) { showSaveMsg(t("acl.invalidIp"), "bad"); return; }
+    procTarget = { kind: "acl-add", list: addBtn.dataset.aclAdd, ip, comment: box.querySelector(".acl-comment").value.trim() };
+    const wl = addBtn.dataset.aclAdd === "white";
+    document.getElementById("proc-title").textContent = wl ? t("acl.addWlTitle") : t("acl.addBlTitle");
+    document.getElementById("proc-text").textContent = t("acl.addText").replace("{ip}", ip).replace("{list}", wl ? t("acl.wlTitle") : t("acl.blTitle"));
+    document.getElementById("proc-err").textContent = "";
+    const pw = document.getElementById("proc-password");
+    pw.value = "";
+    setProcPwdLabel("fw");
+    procMask.classList.add("show");
+    setTimeout(() => pw.focus(), 50);
+    return;
+  }
+  const delBtn = e.target.closest("[data-acl-del]");
+  if (delBtn) {
+    procTarget = { kind: "acl-del", list: delBtn.dataset.aclDel, ip: delBtn.dataset.aclIp };
+    document.getElementById("proc-title").textContent = delBtn.dataset.aclDel === "white" ? t("acl.delWlTitle") : t("acl.delBlTitle");
+    document.getElementById("proc-text").textContent = t("acl.delText").replace("{ip}", delBtn.dataset.aclIp);
+    document.getElementById("proc-err").textContent = "";
+    const pw = document.getElementById("proc-password");
+    pw.value = "";
+    setProcPwdLabel("fw");
+    procMask.classList.add("show");
+    setTimeout(() => pw.focus(), 50);
+  }
+});
 
 // 审计区加载
 function refreshFirewallCard() {

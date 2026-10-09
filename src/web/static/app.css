@@ -314,6 +314,13 @@
     .fw-risk-row .fw-port { font-family: var(--font-mono); font-weight: 600; min-width: 90px; }
     .fw-risk-row .fw-mode { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; outline: none; }
     .fw-risk-row .btn { margin-left: auto; }
+    /* 黑白名单 */
+    .acl-card { overflow: visible; }
+    .acl-hint { font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin-bottom: 6px; }
+    .acl-hint.danger { color: var(--bad); border-color: var(--bad); }
+    .acl-add { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+    .acl-add .acl-ip { flex: 1 1 180px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none; min-width: 0; }
+    .acl-add .acl-comment { flex: 1 1 140px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; outline: none; min-width: 0; }
     /* 总览页 */
     #overview { display: flex; flex-direction: column; gap: 14px; }
     .sys-info { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); font-size: 14px; color: var(--text); }
