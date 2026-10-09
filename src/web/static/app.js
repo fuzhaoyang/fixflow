@@ -136,7 +136,7 @@ function applyRoute() {
     overviewEl.style.display = currentFilter === "all" ? "flex" : "none";
     cards.style.display = currentFilter === "all" ? "none" : "";
     if (currentFilter === "all" || currentFilter === "system") refreshOverview();
-    if (currentFilter === "network") { refreshOverview(); setTimeout(drawNetTraffic, 100); }
+    if (currentFilter === "network") refreshOverview();
     if (currentFilter !== "all") renderCards();
     refreshMetrics();
   }
@@ -607,6 +607,7 @@ async function refreshOverview() {
     if (nics.includes(prev)) sel.value = prev;
     renderChart();
     if (currentFilter === "system") drawSystemTrend();
+    if (currentFilter === "network") drawNetTraffic();
   } catch {}
   setOverviewLoading(false);
 }
@@ -1709,6 +1710,7 @@ async function refreshMetrics() {
     const res = await fetch("api/metrics");
     metrics = await res.json();
     renderCards();
+    if (currentFilter === "network") drawNetTraffic();
   } catch {}
 }
 
