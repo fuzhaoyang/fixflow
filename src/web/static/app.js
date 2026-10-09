@@ -2738,8 +2738,8 @@ document.getElementById("net-ai").onclick = () => {
   const tops = Object.entries(conn).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p, n]) => `${p}:${n}`).join(", ");
   parts.push(t("net.aiConn") + (tops || t("net.aiNone")));
   parts.push(t("net.aiNic") + nics.map((n) => `${n.name}(${n.state})`).join(", "));
-  input.value = parts.join("\n");
-  location.hash = "/chat";
+  miniInput.value = parts.join("\n");
+  openAiPopup();
   send();
 };
 let metricsTimer = null;
