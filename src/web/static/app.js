@@ -1016,8 +1016,11 @@ async function loadSysLog(unit) {
 }
 
 function renderSystemdSkeleton() {
-  const skel = (n) => Array.from({ length: n }, () => `<div class="skel-line"></div>`).join("");
-  return `<div class="card-body">${skel(6)}</div>`;
+  const line = (w) => `<div class="skel-line" style="width:${w}"></div>`;
+  const summary = `<div class="sys-summary">${line("72px")}${line("52px")}${line("64px")}${line("42px")}</div>`;
+  const filters = `<div class="sys-filters">${line("130px")}<div style="flex:1"></div>${line("90px")}</div>`;
+  const row = () => `<div class="sys-skel-row">${["40px", "170px", "60px", "44px", "44px", "60px", "70px", "140px", "96px"].map(line).join("")}</div>`;
+  return summary + filters + `<div class="card-body">${Array.from({ length: 6 }, row).join("")}</div>`;
 }
 
 function renderNginxSkeleton() {
