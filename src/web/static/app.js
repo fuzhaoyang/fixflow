@@ -2487,6 +2487,10 @@ document.getElementById("fs-toggle").onclick = () => {
   applyFsCollapsed(!fsCollapsed);
   fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fsCollapsed }) }).catch(() => {});
 };
+document.getElementById("fs-close").onclick = () => {
+  applyFsCollapsed(true);
+  fetch("api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fsCollapsed }) }).catch(() => {});
+};
 window.addEventListener("resize", () => { if (termOpen) fitTerminal(); });
 const termLogMask = document.getElementById("term-log-mask");
 let termRecs = [];

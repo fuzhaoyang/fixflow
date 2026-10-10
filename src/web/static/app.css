@@ -504,6 +504,8 @@
     .fs-toolbar #fs-edit { min-width: 54px; }
     .fs-toolbar #fs-rename { min-width: 74px; }
     .fs-toolbar #fs-delete { min-width: 64px; }
+    .fs-toolbar .fs-close { margin-left: auto; min-width: 32px; color: var(--muted); }
+    .fs-toolbar .fs-close:hover { color: var(--bad); }
     .fs-toolbar .btn:hover { background: none; filter: none; color: var(--accent); }
     .fs-toolbar .btn.danger { background: none; color: var(--bad); }
     .fs-toolbar .btn.danger:hover { background: none; color: var(--bad); opacity: .8; }
