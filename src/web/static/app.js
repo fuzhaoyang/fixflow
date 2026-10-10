@@ -506,7 +506,6 @@ function openStoreUninstallModal(pkg) {
 
 storeSearch.addEventListener("input", () => { clearTimeout(storeTimer); storeTimer = setTimeout(loadStore, 400); });
 let storeTimer = null;
-document.getElementById("store-refresh").onclick = loadStore;
 document.querySelectorAll(".store-filter").forEach((f) => f.addEventListener("click", () => {
   storeFilter = f.dataset.storeFilter;
   document.querySelectorAll(".store-filter").forEach((x) => x.classList.toggle("active", x === f));

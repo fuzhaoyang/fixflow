@@ -1324,6 +1324,8 @@ export async function startWeb(config = {}, deps = {}) {
         }
         let apps = STORE_PKGS.map((p) => ({ ...p, installed: installed.has(p.name) }));
         if (q) {
+          const ql = q.toLowerCase();
+          apps = apps.filter((a) => a.name.toLowerCase().includes(ql) || (a.desc || "").toLowerCase().includes(ql));
           const search = await execCmd(`apt-cache search --no-all-versions ${JSON.stringify(q)} 2>/dev/null | head -50`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
           const found = (search.stdout || "").split("\n").filter(Boolean).map((l) => {
             const sep = l.indexOf(" - ");
