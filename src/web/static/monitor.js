@@ -241,8 +241,9 @@ function niceCeil(v) {
 
 function setupCanvas(canvas) {
   const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth || 400;
-  const h = canvas.clientHeight || 200;
+  const w = canvas.clientWidth || 0;
+  const h = canvas.clientHeight || 0;
+  if (w <= 0 || h <= 0) return null;
   canvas.width = Math.floor(w * dpr);
   canvas.height = Math.floor(h * dpr);
   const ctx = canvas.getContext("2d");
@@ -282,7 +283,9 @@ function attachChartTip(canvas) {
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 
 function drawLineChart(canvas, { labels, series, fixedMax = null }) {
-  const { ctx, w, h } = setupCanvas(canvas);
+  const sc = setupCanvas(canvas);
+  if (!sc) return;
+  const { ctx, w, h } = sc;
   const pad = { l: 44, r: 12, t: 30, b: 22 };
   const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
   let max = fixedMax;
@@ -345,22 +348,32 @@ function hexToRgba(hex, a) {
 }
 
 function renderChart() {
-  if (trafficTab === "trend") {
-    drawTrendChart(document.getElementById("trend-chart"), overviewData?.trend || [], "ov-trend-legend");
+  const draw = () => {
+    if (trafficTab === "trend") {
+      drawTrendChart(document.getElementById("trend-chart"), overviewData?.trend || [], "ov-trend-legend");
+      return;
+    }
+    if (trafficTab === "token") {
+      const days = overviewData?.usage || [];
+      drawTokenChart(document.getElementById("token-chart"), days);
+      const last = days[days.length - 1];
+      document.getElementById("token-today").textContent = last ? fmtNum(last.total / tokenUnit) : "--";
+      document.getElementById("token-total30").textContent = fmtNum(days.reduce((s, d) => s + d.total, 0) / tokenUnit);
+      return;
+    }
+    const data = chartData(trafficTab);
+    const canvas = trafficTab === "traffic" ? document.getElementById("traffic-chart") : document.getElementById("io-chart");
+    if (data) drawLineChart(canvas, data);
+    renderKpi();
+  };
+  const canvas = trafficTab === "trend" ? document.getElementById("trend-chart")
+    : trafficTab === "token" ? document.getElementById("token-chart")
+    : document.getElementById(trafficTab === "traffic" ? "traffic-chart" : "io-chart");
+  if (canvas && (canvas.clientWidth <= 0 || canvas.clientHeight <= 0)) {
+    requestAnimationFrame(draw);
     return;
   }
-  if (trafficTab === "token") {
-    const days = overviewData?.usage || [];
-    drawTokenChart(document.getElementById("token-chart"), days);
-    const last = days[days.length - 1];
-    document.getElementById("token-today").textContent = last ? fmtNum(last.total / tokenUnit) : "--";
-    document.getElementById("token-total30").textContent = fmtNum(days.reduce((s, d) => s + d.total, 0) / tokenUnit);
-    return;
-  }
-  const data = chartData(trafficTab);
-  const canvas = trafficTab === "traffic" ? document.getElementById("traffic-chart") : document.getElementById("io-chart");
-  if (data) drawLineChart(canvas, data);
-  renderKpi();
+  draw();
 }
 
 function fmtNum(n) {
@@ -370,7 +383,9 @@ function fmtNum(n) {
 }
 
 function drawTokenChart(canvas, days) {
-  const { ctx, w, h } = setupCanvas(canvas);
+  const sc = setupCanvas(canvas);
+  if (!sc) return;
+  const { ctx, w, h } = sc;
   const pad = { l: 44, r: 12, t: 30, b: 24 };
   const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
   const labels = days.map((d) => d.date.slice(5));
@@ -512,6 +527,7 @@ function initOverview() {
   document.getElementById("unit-select").value = "MB/s";
   unitDivider = 1024 * 1024;
   refreshOverview();
+  window.addEventListener("resize", () => { if (overviewEl && overviewEl.style.display !== "none") renderChart(); });
 }
 
 // ---------- 监控 ----------
@@ -701,7 +717,9 @@ function bindSystemCards() {
 function drawTrendChart(canvas, samples, legendId) {
   if (!canvas) return;
   if (!samples.length) {
-    const { ctx, w, h } = setupCanvas(canvas);
+    const sc = setupCanvas(canvas);
+    if (!sc) return;
+    const { ctx, w, h } = sc;
     ctx.fillStyle = cssVar("--muted"); ctx.font = "12px sans-serif"; ctx.textAlign = "center";
     ctx.fillText(t("sys.trendWait"), w / 2, h / 2); ctx.textAlign = "left";
     return;
