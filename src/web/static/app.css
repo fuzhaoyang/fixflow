@@ -451,6 +451,30 @@
     .audit-pager { display: flex; align-items: center; justify-content: flex-end; gap: 16px; margin-top: 15px; padding: 8px 12px; flex-shrink: 0; }
     .audit-pager #audit-pager-nav { display: flex; align-items: center; gap: 16px; }
     .logs-layout { display: flex; flex: 1; width: 100%; min-height: 0; }
+    /* 软件商店 */
+    #view-store { display: none; flex-direction: column; gap: 12px; }
+    .store-filters { display: flex; gap: 6px; margin: 20px 0; }
+    .store-filter { padding: 6px 18px; border: 1px solid var(--border); border-radius: var(--r-pill); background: var(--panel); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: background .18s, color .18s, border-color .18s; }
+    .store-filter:hover { color: var(--text); }
+    .store-filter.active { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+    .store-toolbar { display: flex; align-items: center; gap: 8px; }
+    .store-toolbar input[type="text"] { flex: 1; min-width: 180px; padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+    .store-toolbar input[type="text"]:focus { border-color: var(--accent); }
+    .store-body { flex: 1; overflow-y: auto; }
+    .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    .store-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow-card); }
+    .store-card-head { display: flex; align-items: center; gap: 10px; }
+    .store-icon { width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--accent) 14%, var(--panel2)); color: var(--accent); flex-shrink: 0; }
+    .store-icon svg { width: 18px; height: 18px; }
+    .store-name { font-size: 14px; font-weight: 600; color: var(--text); word-break: break-all; }
+    .store-state { margin-left: auto; font-size: 11px; color: var(--ok); flex-shrink: 0; }
+    .store-desc { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.6; flex: 1; }
+    .store-actions { display: flex; align-items: center; gap: 4px; margin-top: 10px; }
+    .store-card .store-install, .store-card .store-uninstall { align-self: flex-start; width: 64px; justify-content: center; }
+    .store-card .store-uninstall { background: var(--bad); color: #fff; border-color: var(--bad); }
+    .store-card .store-uninstall:hover { background: color-mix(in srgb, var(--bad) 85%, #fff); }
+    .store-card .store-uninstall:hover { background: color-mix(in srgb, var(--bad) 85%, #fff); }
+    .store-empty { color: var(--muted); text-align: center; padding: 60px 0; }
     .logs-side { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
     .logs-search { padding: 10px; border-bottom: 1px solid var(--border); }
     .logs-search input { width: 100%; box-sizing: border-box; }

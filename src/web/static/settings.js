@@ -429,9 +429,29 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isClearHistory = kind === "clear-history";
   const isAuditExport = kind === "audit-export";
   const isAuditClear = kind === "audit-clear";
+  const isStoreInstall = kind === "store-install";
+  const isStoreUninstall = kind === "store-uninstall";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
+    if (isStoreInstall) {
+      res = await fetch("api/store/install", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg: procTarget.pkg, password }) });
+      data = await res.json();
+      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
+      procMask.classList.remove("show");
+      showSaveMsg(t("store.doneMsg"), data.ok ? "ok" : "warn");
+      loadStore();
+      return;
+    }
+    if (isStoreUninstall) {
+      res = await fetch("api/store/uninstall", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg: procTarget.pkg, password }) });
+      data = await res.json();
+      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
+      procMask.classList.remove("show");
+      showSaveMsg(t("store.uninstallMsg"), data.ok ? "ok" : "warn");
+      loadStore();
+      return;
+    }
     if (isClearHistory) {
       res = await fetch("api/history/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
       data = await res.json();

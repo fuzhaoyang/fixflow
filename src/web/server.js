@@ -26,6 +26,26 @@ import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules } f
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 const VERSION = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")).version || "0.0.0";
 
+// 内置精选软件商店（apt 安装，name 为 apt 包名）
+const STORE_PKGS = [
+  { name: "nginx", desc: "高性能 Web 服务器与反向代理，支持负载均衡、HTTPS、静态资源服务，是部署网站与应用的首选。" },
+  { name: "git", desc: "分布式版本控制系统，用于代码托管、协作开发与版本回滚，是开发者必备工具。" },
+  { name: "curl", desc: "命令行网络传输工具，支持 HTTP/HTTPS/FTP 等协议，常用于接口调试、文件下载与健康检查。" },
+  { name: "htop", desc: "交互式进程监控工具，以彩色界面实时展示 CPU、内存、进程树与负载，替代传统 top。" },
+  { name: "tmux", desc: "终端复用器，支持多窗口、多会话与后台任务，断开连接后任务继续运行，SSH 远程运维利器。" },
+  { name: "fail2ban", desc: "入侵防御工具，自动监测登录失败并临时封禁来源 IP，有效防护 SSH 等服务的暴力破解。" },
+  { name: "ufw", desc: "简洁的防火墙管理前端，基于 iptables，用简单命令配置端口放行/拒绝，适合入门与日常管理。" },
+  { name: "docker.io", desc: "容器引擎，将应用与其依赖打包为镜像并隔离运行，支持镜像管理、容器编排与快速部署。" },
+  { name: "postgresql", desc: "功能强大的开源关系型数据库，支持事务、复杂查询与扩展，适合业务数据存储与数据分析。" },
+  { name: "redis-server", desc: "高性能内存缓存与键值数据库，支持持久化、发布订阅与多种数据结构，常用于缓存、队列与会话存储。" },
+  { name: "nginx-extras", desc: "Nginx 扩展版本，额外内置 Lua、WebDAV、auth-request 等模块，满足高级配置需求。" },
+  { name: "tree", desc: "以树形结构展示目录层级，直观查看文件组织结构，适合快速浏览与文档记录。" },
+  { name: "jq", desc: "轻量 JSON 命令行处理器，支持过滤、转换与格式化 JSON 数据，配合脚本解析 API 响应。" },
+  { name: "ncdu", desc: "磁盘占用分析工具，交互式扫描并展示各目录大小，快速定位大文件与清理空间。" },
+  { name: "unzip", desc: "ZIP 压缩包解压工具，支持列出内容、选择性解压与密码保护压缩包，日常文件处理常用。" },
+  { name: "rsync", desc: "高效文件同步与备份工具，支持增量传输、远程同步与压缩，是数据备份与迁移的标准方案。" },
+];
+
 const TLS_CERT_DIR = join(homedir(), ".config", "fixflow", "certs");
 async function ensureTlsCert(dir = TLS_CERT_DIR) {
   const keyPath = join(dir, "key.pem");
@@ -1292,6 +1312,45 @@ export async function startWeb(config = {}, deps = {}) {
           if (r.exitCode === 0) await appendSysOp({ op: action, ok: true });
           sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
         }
+      } else if (url.pathname === "/api/store" && req.method === "GET") {
+        const q = String(url.searchParams.get("q") || "").trim();
+        const installed = new Set();
+        const dpkg = await execCmd("dpkg-query -W -f='${Status} ${Package}\\n' 2>/dev/null", { timeout: 10000 }).catch(() => ({ stdout: "" }));
+        for (const line of (dpkg.stdout || "").split("\n")) {
+          if (line.includes("install ok installed")) {
+            const pkg = line.split(" ").pop();
+            if (pkg) installed.add(pkg);
+          }
+        }
+        let apps = STORE_PKGS.map((p) => ({ ...p, installed: installed.has(p.name) }));
+        if (q) {
+          const search = await execCmd(`apt-cache search --no-all-versions ${JSON.stringify(q)} 2>/dev/null | head -50`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
+          const found = (search.stdout || "").split("\n").filter(Boolean).map((l) => {
+            const sep = l.indexOf(" - ");
+            const name = (sep > 0 ? l.slice(0, sep) : l).trim();
+            const desc = sep > 0 ? l.slice(sep + 3).trim() : "";
+            return { name, desc, installed: installed.has(name), searched: true };
+          });
+          const known = new Set(apps.map((a) => a.name));
+          apps = [...apps, ...found.filter((f) => !known.has(f.name))];
+        }
+        sendJson(res, { apps, q });
+      } else if (url.pathname === "/api/store/install" && req.method === "POST") {
+        const body = await readBody(req);
+        const { pkg, password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        const name = String(pkg || "").trim();
+        if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
+        const r = await fwRun(`DEBIAN_FRONTEND=noninteractive apt-get install -y ${name} 2>&1`, password, 300000);
+        sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+      } else if (url.pathname === "/api/store/uninstall" && req.method === "POST") {
+        const body = await readBody(req);
+        const { pkg, password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        const name = String(pkg || "").trim();
+        if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
+        const r = await fwRun(`DEBIAN_FRONTEND=noninteractive apt-get purge -y ${name} 2>&1`, password, 300000);
+        sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
       } else if (url.pathname === "/api/system/ops" && req.method === "GET") {
         sendJson(res, { ops: await readSysOps() });
       } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {

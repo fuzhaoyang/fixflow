@@ -37,6 +37,7 @@ const viewTitle = document.getElementById("view-title");
 const viewMonitor = document.getElementById("view-monitor");
 const viewChat = document.getElementById("view-chat");
 const viewLogs = document.getElementById("view-logs");
+const viewStore = document.getElementById("view-store");
 const overviewEl = document.getElementById("overview");
 
 let pendingImages = [];
@@ -116,7 +117,7 @@ function applyRoute() {
   if (authMask.style.display === "flex") return;
   const route = helpOpen ? lastRoute : raw;
   document.querySelectorAll(".menu-item").forEach((i) => {
-    const hit = route === "chat" ? i.dataset.view === "chat" : route === "logs" ? i.dataset.view === "logs" : i.dataset.view === "monitor" && i.dataset.filter === route;
+    const hit = route === "chat" ? i.dataset.view === "chat" : route === "logs" ? i.dataset.view === "logs" : route === "store" ? i.dataset.view === "store" : i.dataset.view === "monitor" && i.dataset.filter === route;
     i.classList.toggle("active", hit);
   });
   chatView = route === "chat";
@@ -127,6 +128,7 @@ function applyRoute() {
     viewMonitor.style.display = "none";
     viewChat.style.display = "flex";
     viewLogs.style.display = "none";
+    viewStore.style.display = "none";
     viewTitle.dataset.i18nTitle = "title.chat";
     viewTitle.textContent = t("title.chat");
     searchBox.style.display = "none";
@@ -135,18 +137,30 @@ function applyRoute() {
     viewMonitor.style.display = "none";
     viewChat.style.display = "none";
     viewLogs.style.display = "flex";
+    viewStore.style.display = "none";
     viewTitle.dataset.i18nTitle = "title.logs";
     viewTitle.textContent = t("title.logs");
     searchBox.style.display = "none";
     netTools.style.display = "none";
     loadLogSources();
     if (document.getElementById("logs-pane-audit").style.display !== "none") loadAudit();
+  } else if (route === "store") {
+    viewMonitor.style.display = "none";
+    viewChat.style.display = "none";
+    viewLogs.style.display = "none";
+    viewStore.style.display = "block";
+    viewTitle.dataset.i18nTitle = "title.store";
+    viewTitle.textContent = t("title.store");
+    searchBox.style.display = "none";
+    netTools.style.display = "none";
+    loadStore();
   } else {
     currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
     viewMonitor.classList.toggle("single", currentFilter !== "all");
     viewMonitor.style.display = currentFilter === "all" ? "block" : "flex";
     viewChat.style.display = "none";
     viewLogs.style.display = "none";
+    viewStore.style.display = "none";
     viewMonitor.style.display = "block";
     const titleKey = currentFilter === "all" ? "title.overview" : `menu.${currentFilter}`;
     viewTitle.dataset.i18nTitle = titleKey;
@@ -164,7 +178,7 @@ function applyRoute() {
 document.querySelectorAll(".menu-item").forEach((item) => {
   item.addEventListener("click", () => {
     const v = item.dataset.view;
-    location.hash = v === "chat" ? "/chat" : v === "logs" ? "/logs" : "/" + item.dataset.filter;
+    location.hash = v === "chat" ? "/chat" : v === "logs" ? "/logs" : v === "store" ? "/store" : "/" + item.dataset.filter;
   });
 });
 
@@ -428,5 +442,81 @@ new MutationObserver(() => {
   aiPopupEl.dataset.auditShown = shown ? "1" : "0";
   auditLog(t("audit.modal"), t("ai.title"), shown ? t("audit.open") : t("audit.close"));
 }).observe(aiPopupEl, { attributes: true, attributeFilter: ["style"] });
+
+// ---------- 软件商店 ----------
+const storeSearch = document.getElementById("store-search");
+const storeBody = document.getElementById("store-body");
+let storeApps = [];
+let storeFilter = "all";
+
+async function loadStore() {
+  const q = (storeSearch.value || "").trim();
+  storeBody.innerHTML = `<div class="store-empty">${t("store.loading")}</div>`;
+  try {
+    const res = await fetch(`api/store${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+    const data = await res.json();
+    storeApps = data.apps || [];
+  } catch { storeApps = []; }
+  renderStore();
+}
+
+function renderStore() {
+  let apps = storeApps;
+  if (storeFilter === "installed") apps = apps.filter((a) => a.installed);
+  else if (storeFilter === "missing") apps = apps.filter((a) => !a.installed);
+  if (!apps.length) { storeBody.innerHTML = `<div class="store-empty">${t("store.empty")}</div>`; return; }
+  storeBody.innerHTML = `<div class="store-grid">${apps.map((a) => `
+    <div class="store-card">
+      <div class="store-card-head">
+        <span class="store-icon">${icon("box")}</span>
+        <span class="store-name">${escapeHtml(a.name)}</span>
+        <span class="store-state ${a.installed ? "installed" : ""}">${a.installed ? t("store.installed") : ""}</span>
+      </div>
+      <p class="store-desc">${escapeHtml(a.desc || "")}</p>
+      <div class="store-actions">
+        <button class="btn small store-install" data-pkg="${escapeHtml(a.name)}" ${a.installed ? "disabled" : ""}>${a.installed ? t("store.done") : t("store.install")}</button>
+        ${a.installed ? `<button class="btn small store-uninstall" data-pkg="${escapeHtml(a.name)}">${t("store.uninstall")}</button>` : ""}
+      </div>
+    </div>`).join("")}</div>`;
+}
+
+function openStoreInstallModal(pkg) {
+  procTarget = { kind: "store-install", pkg };
+  document.getElementById("proc-title").textContent = t("store.installTitle");
+  document.getElementById("proc-text").textContent = t("store.installConfirm").replace("{pkg}", pkg);
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+}
+
+function openStoreUninstallModal(pkg) {
+  procTarget = { kind: "store-uninstall", pkg };
+  document.getElementById("proc-title").textContent = t("store.uninstallTitle");
+  document.getElementById("proc-text").textContent = t("store.uninstallConfirm").replace("{pkg}", pkg);
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+}
+
+storeSearch.addEventListener("input", () => { clearTimeout(storeTimer); storeTimer = setTimeout(loadStore, 400); });
+let storeTimer = null;
+document.getElementById("store-refresh").onclick = loadStore;
+document.querySelectorAll(".store-filter").forEach((f) => f.addEventListener("click", () => {
+  storeFilter = f.dataset.storeFilter;
+  document.querySelectorAll(".store-filter").forEach((x) => x.classList.toggle("active", x === f));
+  renderStore();
+}));
+storeBody.addEventListener("click", (e) => {
+  const install = e.target.closest(".store-install");
+  if (install) { openStoreInstallModal(install.dataset.pkg); return; }
+  const uninstall = e.target.closest(".store-uninstall");
+  if (uninstall) openStoreUninstallModal(uninstall.dataset.pkg);
+});
 
 window.addEventListener("hashchange", applyRoute);
