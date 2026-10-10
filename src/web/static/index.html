@@ -437,6 +437,7 @@
 </div>
 <div class="modal-mask" id="fs-edit-mask">
   <div class="modal" style="width:640px;max-width:94vw">
+    <button class="modal-close" id="fs-edit-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2 id="fs-edit-title"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg><span data-i18n="fs.editTitle">编辑文件</span></h2>
     <textarea id="fs-edit-content" class="field-textarea" style="height:320px;font-family:ui-monospace,monospace;font-size:12px"></textarea>
     <div class="hint" id="fs-edit-err" style="color:var(--bad)"></div>
@@ -589,6 +590,7 @@
 </div>
 <div class="modal-mask" id="restart-mask">
   <div class="modal">
+    <button class="modal-close" id="restart-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 11-2.6-6.3"/><path d="M21 3v5h-5"/></svg><span data-i18n="restart.title">重启服务</span></h2>
     <p class="modal-text" data-i18n="restart.text">重启后当前会话会重新开始（聊天记录保留在本地），页面将自动刷新。确认重启 fixflow 服务吗？</p>
     <div class="modal-actions">
@@ -627,6 +629,7 @@
     </div>
 <div class="modal-mask" id="ssl-add-mask">
   <div class="modal">
+    <button class="modal-close" id="ssl-add-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg><span data-i18n="ssl.addTitle">添加监控</span></h2>
     <div class="field">
       <label data-i18n="ssl.type">类型</label>
@@ -659,6 +662,7 @@
 </div>
 <div class="modal-mask" id="ssl-renew-mask">
   <div class="modal">
+    <button class="modal-close" id="ssl-renew-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span data-i18n="ssl.renewTitle">续签证书</span></h2>
     <p class="modal-text" id="ssl-renew-text"></p>
     <div class="field">
@@ -695,6 +699,7 @@
 </div>
 <div class="modal-mask" id="proc-mask">
   <div class="modal">
+    <button class="modal-close" id="proc-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2 id="proc-title">进程操作</h2>
     <p class="modal-text" id="proc-text"></p>
     <div class="field">
@@ -723,6 +728,7 @@
 </div>
 <div class="modal-mask" id="logout-mask">
   <div class="modal">
+    <button class="modal-close" id="logout-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4h3a2 2 0 012 2v12a2 2 0 01-2 2h-3"/><path d="M10 12H3M6 8l-3 4 3 4"/></svg><span data-i18n="logout.title">退出登录</span></h2>
     <p class="modal-text" data-i18n="logout.text">退出后需要重新输入账号密码才能使用面板。确认退出登录吗？</p>
     <div class="modal-actions">

@@ -1422,6 +1422,7 @@ cards.addEventListener("click", async (e) => {
 });
 
 document.getElementById("ssl-add-cancel").onclick = () => sslAddMask.classList.remove("show");
+document.getElementById("ssl-add-close").onclick = () => sslAddMask.classList.remove("show");
 document.getElementById("ssl-add-type").onchange = (e) => {
   const local = e.target.value === "local";
   document.getElementById("ssl-add-remote-fields").style.display = local ? "none" : "";
@@ -1440,6 +1441,7 @@ document.getElementById("ssl-add-save").onclick = async () => {
 };
 
 document.getElementById("ssl-renew-cancel").onclick = () => sslRenewMask.classList.remove("show");
+document.getElementById("ssl-renew-close").onclick = () => sslRenewMask.classList.remove("show");
 document.getElementById("ssl-renew-confirm").onclick = async () => {
   const errEl = document.getElementById("ssl-renew-err");
   const password = document.getElementById("ssl-renew-password").value.trim();
@@ -2453,6 +2455,7 @@ async function fsEditFile(path) {
   fsEditMask.classList.add("show");
 }
 document.getElementById("fs-edit-cancel").onclick = () => fsEditMask.classList.remove("show");
+document.getElementById("fs-edit-close").onclick = () => fsEditMask.classList.remove("show");
 document.getElementById("fs-edit-save").onclick = () => {
   if (!fsEditPath) return;
   fsAskPassword(t("fs.writeTitle"), t("fs.writeText").replace("{path}", fsEditPath), { path: fsEditPath, content: fsEditContent.value }, "write");
@@ -3143,6 +3146,7 @@ function setUserName(name) {
 }
 
 document.getElementById("logout-cancel").onclick = () => logoutMask.classList.remove("show");
+document.getElementById("logout-close").onclick = () => logoutMask.classList.remove("show");
 logoutMask.addEventListener("click", (e) => { if (e.target === logoutMask) logoutMask.classList.remove("show"); });
 document.getElementById("logout-confirm").onclick = async () => {
   try { await fetch("api/logout", { method: "POST" }); } catch {}
@@ -3156,6 +3160,7 @@ document.getElementById("help-close").onclick = () => { location.hash = "/" + la
 const restartMask = document.getElementById("restart-mask");
 const restartConfirmBtn = document.getElementById("restart-confirm");
 document.getElementById("restart-cancel").onclick = () => restartMask.classList.remove("show");
+document.getElementById("restart-close").onclick = () => restartMask.classList.remove("show");
 restartMask.addEventListener("click", (e) => { if (e.target === restartMask) restartMask.classList.remove("show"); });
 restartConfirmBtn.onclick = () => {
   restartConfirmBtn.disabled = true;
@@ -3259,6 +3264,7 @@ document.addEventListener("click", (e) => {
   setTimeout(() => pw.focus(), 50);
 });
 document.getElementById("proc-cancel").onclick = () => procMask.classList.remove("show");
+document.getElementById("proc-close").onclick = () => procMask.classList.remove("show");
 procMask.addEventListener("click", (e) => { if (e.target === procMask) procMask.classList.remove("show"); });
 document.getElementById("proc-confirm").onclick = async () => {
   const errEl = document.getElementById("proc-err");
