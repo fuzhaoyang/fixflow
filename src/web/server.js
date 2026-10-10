@@ -1404,6 +1404,10 @@ export async function startWeb(config = {}, deps = {}) {
         const js = await readFile(join(STATIC, "app.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
+      } else if (url.pathname === "/markdown.js") {
+        const js = await readFile(join(STATIC, "markdown.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
       } else if (url.pathname === "/app.css") {
         const css = await readFile(join(STATIC, "app.css"));
         res.writeHead(200, { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-cache" });

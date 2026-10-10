@@ -1655,3 +1655,16 @@ test("终端操作记录弹窗：搜索/过滤/分页/复制/导出/危险高亮
   assert.match(html, /id="term-log-export"/);
   w.close();
 });
+
+test("前端拆分：markdown.js 独立加载且 app.js 未重复定义", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const html = await (await fetch(`${base}/`)).text();
+  assert.match(html, /<script src="markdown\.js"><\/script>/);
+  const md = await (await fetch(`${base}/markdown.js`)).text();
+  assert.match(md, /function renderMarkdown/);
+  const app = await (await fetch(`${base}/app.js`)).text();
+  assert.doesNotMatch(app, /function renderMarkdown/);
+  assert.match(app, /renderMarkdown\(/);
+  w.close();
+});
