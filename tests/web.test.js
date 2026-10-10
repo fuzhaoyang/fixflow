@@ -28,6 +28,14 @@ function makeServer(extra = {}, extraDeps = {}) {
   return w;
 }
 
+async function frontJs(base) {
+  let all = "";
+  for (const n of ["app.js", "markdown.js", "monitor.js"]) {
+    try { all += await (await fetch(`${base}/${n}`)).text() + "\n"; } catch {}
+  }
+  return all;
+}
+
 async function registerAndLogin(base) {
   const reg = await fetch(`${base}/api/register`, {
     method: "POST", headers: { "Content-Type": "application/json" },
@@ -361,7 +369,7 @@ test("自绘图表：页面不再加载 echarts", async () => {
   assert.doesNotMatch(html, /echarts/);
   const css = await (await fetch(`${base}/app.css`)).text();
   assert.match(css, /conic-gradient/);
-  const app = await (await fetch(`${base}/app.js`)).text();
+  const app = await frontJs(base);
   assert.match(app, /drawLineChart/);
   assert.doesNotMatch(app, /echarts\.init/);
   w.close();
@@ -1563,7 +1571,7 @@ test("数据库连接接口校验：非法类型 400", async () => {
 test("数据库页前端：renderDb 相关钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await (await fetch(`${base}/app.js`)).text();
+  const js = await frontJs(base);
   const html = await (await fetch(`${base}/`)).text();
   assert.match(js, /loadDbConnections/);
   assert.match(js, /renderDbConnections/);
@@ -1611,7 +1619,7 @@ test("服务日志接口", async () => {
 test("服务页前端：renderSystemd 交互钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await (await fetch(`${base}/app.js`)).text();
+  const js = await frontJs(base);
   assert.match(js, /data-sysop/);
   assert.match(js, /data-systoggle/);
   assert.match(js, /data-sysfilter-state/);
@@ -1624,7 +1632,7 @@ test("服务页前端：renderSystemd 交互钩子存在", async () => {
 test("总览页前端：健康/KPI/趋势/时间范围钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await (await fetch(`${base}/app.js`)).text();
+  const js = await frontJs(base);
   assert.match(js, /function renderHealth/);
   assert.match(js, /function renderOvKpis/);
   assert.match(js, /function drawTrendChart/);
