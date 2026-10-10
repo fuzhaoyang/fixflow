@@ -393,10 +393,11 @@ export async function startWeb(config = {}, deps = {}) {
 
   const monitor = createMonitor();
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
-  setTimeout(() => collectExtras().catch(() => {}), 3000);
+  const prewarmTimer = setTimeout(() => collectExtras().catch(() => {}), 3000);
   let alertTimer = null;
+  let alertStartTimer = null;
   if (!deps.noAlertsTimer && config.apiKey) {
-    setTimeout(() => alertsManager.tick(), 5000);
+    alertStartTimer = setTimeout(() => alertsManager.tick(), 5000);
     alertTimer = setInterval(() => alertsManager.tick(), 60000);
   }
 
@@ -1472,6 +1473,6 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(sseGuard); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

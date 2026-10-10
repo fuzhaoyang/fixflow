@@ -1,10 +1,30 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { writeFile } from "node:fs/promises";
+import cp from "node:child_process";
 import { runCommand, readFile, applyFix, isWriteCommand, isDangerousCommand, redactSecrets } from "../src/tools.js";
 import { createSession } from "../src/core.js";
 
 const MAX_OUTPUT = 50 * 1024;
+
+// apply_fix 沙箱降权（runuser nobody）需要 root；非 root 环境用 mock 让测试稳定：
+// - mock process.getuid 返回 0（通过 canDropPrivileges）
+// - mock child_process.exec，把 runuser 包裹命令替换为直接执行
+const realExec = cp.exec;
+const realGetuid = process.getuid;
+const fakeExec = (cmd, opts, cb) => {
+  const m = String(cmd).match(/sh -c (.*)$/s);
+  const realCmd = m ? JSON.parse(m[1]) : cmd;
+  return realExec(realCmd, opts, cb);
+};
+before(() => {
+  if (typeof process.getuid === "function") process.getuid = () => 0;
+  cp.exec = fakeExec;
+});
+after(() => {
+  if (realGetuid) process.getuid = realGetuid;
+  cp.exec = realExec;
+});
 
 // ============ 1. run_command 基础执行（20 条） ============
 const RUN_BASIC = [

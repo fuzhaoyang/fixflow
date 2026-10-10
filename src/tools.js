@@ -1,4 +1,4 @@
-import { exec, spawn } from "node:child_process";
+import cp, { spawn } from "node:child_process";
 import { readFile as fsReadFile } from "node:fs/promises";
 
 const MAX_OUTPUT = 50 * 1024;
@@ -59,10 +59,10 @@ export function isDangerousCommand(command) {
   return DANGEROUS_PATTERNS.some((re) => re.test(c));
 }
 
-function execRestricted(command, { timeout = 30000, signal } = {}) {
+function execRestricted(command, { timeout = 30000, signal, runExec = cp.exec } = {}) {
   return new Promise((resolve) => {
     const wrapped = `runuser -u nobody -- sh -c ${JSON.stringify(command)}`;
-    const child = exec(wrapped, { timeout, maxBuffer: MAX_OUTPUT }, (err, stdout, stderr) => {
+    const child = runExec(wrapped, { timeout, maxBuffer: MAX_OUTPUT }, (err, stdout, stderr) => {
       if (signal?.aborted) {
         resolve({ stdout: "", stderr: "命令已中止", exitCode: 1, aborted: true });
       } else {
@@ -147,19 +147,20 @@ export async function readFile(path) {
   }
 }
 
-function canDropPrivileges() {
-  return typeof process.getuid === "function" && process.getuid() === 0;
+function canDropPrivileges(getuid) {
+  const uid = typeof getuid === "function" ? getuid() : (typeof process.getuid === "function" ? process.getuid() : -1);
+  return uid === 0;
 }
 
-export async function applyFix({ command, reason = "", riskLevel = "medium", impact = "" }, onConfirm) {
+export async function applyFix({ command, reason = "", riskLevel = "medium", impact = "" }, onConfirm, { getuid, execImpl } = {}) {
   if (isDangerousCommand(command)) {
     return { confirmed: false, note: "已拦截：命令超出允许范围", blocked: true };
   }
-  if (!canDropPrivileges()) {
+  if (!canDropPrivileges(getuid)) {
     return { confirmed: false, note: "已拒绝：写命令需要 root 环境才能降权执行（沙箱限制）", blocked: true };
   }
   const ok = await onConfirm({ command, reason, riskLevel, impact });
   if (!ok) return { confirmed: false, note: "用户拒绝执行" };
-  const r = await execRestricted(command);
+  const r = await execRestricted(command, { runExec: execImpl });
   return { confirmed: true, ...r };
 }

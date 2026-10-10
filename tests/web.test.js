@@ -1,4 +1,4 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -14,11 +14,18 @@ const testCaptchas = {
 };
 const deps = { captchas: testCaptchas };
 
+const liveServers = [];
+after(async () => {
+  await Promise.allSettled(liveServers.map((s) => s.close()));
+});
+
 function makeServer(extra = {}, extraDeps = {}) {
   const dir = mkdtempSync(join(tmpdir(), "ff-web-"));
   const cfg = join(dir, "config.json");
   writeFileSync(cfg, "{}");
-  return startWeb({ port: 0, services: [], databases: [], configPath: cfg, termHistoryPath: join(dir, "term-history.json"), ...extra }, { captchas: testCaptchas, ...extraDeps });
+  const w = startWeb({ port: 0, services: [], databases: [], configPath: cfg, termHistoryPath: join(dir, "term-history.json"), ...extra }, { captchas: testCaptchas, ...extraDeps });
+  w.then((srv) => liveServers.push(srv)).catch(() => {});
+  return w;
 }
 
 async function registerAndLogin(base) {
