@@ -200,6 +200,7 @@ export async function startWeb(config = {}, deps = {}) {
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
   const renewToolCache = createTtlCache(30000);
+  const sslCache = createTtlCache(30000);
   const waiters = new Map();
   let seq = 0;
   const configPath = config.configPath || defaultConfigPath();
@@ -394,6 +395,7 @@ export async function startWeb(config = {}, deps = {}) {
   const monitor = createMonitor();
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
   const prewarmTimer = setTimeout(() => collectExtras().catch(() => {}), 3000);
+  const metricsWarmTimer = setTimeout(() => { metricsCache("metrics", () => collectAll(config)).catch(() => {}); }, 2000);
   let alertTimer = null;
   let alertStartTimer = null;
   if (!deps.noAlertsTimer && config.apiKey) {
@@ -790,8 +792,8 @@ export async function startWeb(config = {}, deps = {}) {
           sendJson(res, { error: e.message }, 400);
         }
       } else if (url.pathname === "/api/ssl" && req.method === "GET") {
-        const data = await collectSslAll(config);
-        const { tool } = await detectRenewTool();
+        const data = await sslCache("ssl", () => collectSslAll(config));
+        const { tool } = await renewToolCache("tool", () => detectRenewTool());
         sendJson(res, { ...data, renewTool: tool });
       } else if (url.pathname === "/api/ssl" && req.method === "POST") {
         const body = await readBody(req);
@@ -808,6 +810,7 @@ export async function startWeb(config = {}, deps = {}) {
         };
         config.sslSites.push(entry);
         await persistConfig();
+        sslCache.clear("ssl");
         sendJson(res, { ok: true, entry });
       } else if (url.pathname === "/api/ssl" && req.method === "PATCH") {
         const body = await readBody(req);
@@ -817,6 +820,7 @@ export async function startWeb(config = {}, deps = {}) {
         if (label !== undefined) entry.label = String(label);
         if (enabled !== undefined) entry.enabled = Boolean(enabled);
         await persistConfig();
+        sslCache.clear("ssl");
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/ssl" && req.method === "DELETE") {
         const body = await readBody(req);
@@ -828,6 +832,7 @@ export async function startWeb(config = {}, deps = {}) {
         }
         config.sslSites = config.sslSites.filter((e) => e.id !== id);
         await persistConfig();
+        sslCache.clear("ssl");
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/db/connections" && req.method === "GET") {
         sendJson(res, { connections: config.dbConnections.map(sanitizeConn) });
@@ -895,6 +900,7 @@ export async function startWeb(config = {}, deps = {}) {
         const data = await collectSslAll(config);
         const live = data.results.find((r) => r.id === id) || entry;
         const result = await renewCert({ ...entry, cn: live.cn });
+        sslCache.clear("ssl");
         sendJson(res, result);
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
@@ -1473,6 +1479,6 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }
