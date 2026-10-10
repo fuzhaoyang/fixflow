@@ -378,6 +378,7 @@ export async function startWeb(config = {}, deps = {}) {
       broadcast({ type: "confirm", id, ...info });
     }),
     onUsage: (u) => usageStore.record(u),
+    onClearRequest: () => broadcast({ type: "clearRequest" }),
   });
 
   const monitor = createMonitor();
@@ -915,8 +916,12 @@ export async function startWeb(config = {}, deps = {}) {
         await writeHistoryFile(historyPath, [...existing, ...messages]);
         sendJson(res, {});
       } else if (url.pathname === "/api/history/clear" && req.method === "POST") {
+        const body = await readBody(req);
+        const { password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
         await writeHistoryFile(historyPath, []);
-        sendJson(res, {});
+        session.clear();
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/chat" && req.method === "POST") {
         const body = await readBody(req);
         const { input, images = [] } = JSON.parse(body || "{}");

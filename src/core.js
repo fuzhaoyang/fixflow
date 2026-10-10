@@ -61,7 +61,7 @@ function sanitizeHistory(history) {
   return out;
 }
 
-export function createSession({ config, onConfirm = async () => false, onEvent, onUsage = () => {}, llmChat = streamChat }) {
+export function createSession({ config, onConfirm = async () => false, onEvent, onUsage = () => {}, llmChat = streamChat, onClearRequest }) {
   const history = [{ role: "system", content: buildSystemPrompt(config.lang) }];
   const ctx = { onConfirm };
   let controller = new AbortController();
@@ -72,7 +72,9 @@ export function createSession({ config, onConfirm = async () => false, onEvent, 
     safeEvent({ type: "clear" });
     return { cleared: true };
   }
-  ctx.clearHistory = clearHistory;
+  ctx.clearHistory = onClearRequest
+    ? () => { onClearRequest(); return { pending: true, note: "已请求用户在面板输入 root 密码确认清空历史" }; }
+    : clearHistory;
   async function doSend(input, images = []) {
     controller = new AbortController();
     ctx.signal = controller.signal;
