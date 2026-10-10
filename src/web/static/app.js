@@ -324,8 +324,18 @@ function renderAudit() {
 }
 
 async function loadAudit() {
-  try { const res = await fetch("api/panel-audit"); auditRecords = (await res.json()).records || []; } catch {}
+  auditBody.innerHTML = auditSkeleton();
+  try {
+    const res = await fetch("api/panel-audit");
+    auditRecords = (await res.json()).records || [];
+  } catch {}
   renderAudit();
+}
+
+function auditSkeleton() {
+  const cell = (w = "100%") => `<div class="skel-line" style="width:${w};margin:0"></div>`;
+  const row = () => `<tr>${["70px", "60px", "80px", "70px", "90px", "160px"].map(cell).join("")}</tr>`;
+  return `<table class="audit-table"><thead><tr><th>${t("audit.time")}</th><th>${t("audit.user")}</th><th>${t("audit.page")}</th><th>${t("audit.action")}</th><th>${t("audit.target")}</th><th>${t("audit.detail")}</th></tr></thead><tbody>${Array.from({ length: 8 }, row).join("")}</tbody></table>`;
 }
 
 document.querySelectorAll(".logs-tab").forEach((tab) => tab.addEventListener("click", () => {
