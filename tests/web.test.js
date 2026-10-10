@@ -29,8 +29,10 @@ function makeServer(extra = {}, extraDeps = {}) {
 }
 
 async function frontJs(base) {
+  const html = await (await fetch(`${base}/`)).text();
+  const srcs = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
   let all = "";
-  for (const n of ["app.js", "markdown.js", "monitor.js"]) {
+  for (const n of srcs) {
     try { all += await (await fetch(`${base}/${n}`)).text() + "\n"; } catch {}
   }
   return all;
@@ -1449,7 +1451,7 @@ test("登录遮罩默认隐藏 + 启动遮罩兜底，双场景无闪烁", async
 test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await (await fetch(`${base}/app.js`)).text();
+  const js = await frontJs(base);
   assert.match(js, /onTitleChange/);
   assert.doesNotMatch(js, /if \(cd\) fsRevealPath/);
   w.close();
@@ -1458,7 +1460,7 @@ test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async
 test("终端初始化防丢帧：app.js 增量写入历史并补拉二次 open", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await (await fetch(`${base}/app.js`)).text();
+  const js = await frontJs(base);
   assert.match(js, /writeHistory/);
   assert.match(js, /h\.slice\(written\)/);
   assert.match(js, /fetch\("api\/term\/open"/);
@@ -1649,7 +1651,7 @@ test("总览页前端：健康/KPI/趋势/时间范围钩子存在", async () =>
 test("终端操作记录弹窗：搜索/过滤/分页/复制/导出/危险高亮钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await (await fetch(`${base}/app.js`)).text();
+  const js = await frontJs(base);
   assert.match(js, /function termIsDanger/);
   assert.match(js, /function termFiltered/);
   assert.match(js, /function renderTermLog/);
@@ -1664,15 +1666,21 @@ test("终端操作记录弹窗：搜索/过滤/分页/复制/导出/危险高亮
   w.close();
 });
 
-test("前端拆分：markdown.js 独立加载且 app.js 未重复定义", async () => {
+test("前端拆分：markdown 定义/调用分离且无重复定义", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const html = await (await fetch(`${base}/`)).text();
   assert.match(html, /<script src="markdown\.js"><\/script>/);
+  assert.match(html, /<script src="monitor\.js"><\/script>/);
+  assert.match(html, /<script src="chat\.js"><\/script>/);
+  assert.match(html, /<script src="fs\.js"><\/script>/);
+  assert.match(html, /<script src="settings\.js"><\/script>/);
   const md = await (await fetch(`${base}/markdown.js`)).text();
   assert.match(md, /function renderMarkdown/);
+  const chat = await (await fetch(`${base}/chat.js`)).text();
+  assert.match(chat, /renderMarkdown\(/);
+  assert.doesNotMatch(chat, /function renderMarkdown/);
   const app = await (await fetch(`${base}/app.js`)).text();
-  assert.doesNotMatch(app, /function renderMarkdown/);
-  assert.match(app, /renderMarkdown\(/);
+  assert.doesNotMatch(app, /function renderMarkdown|renderMarkdown\(/);
   w.close();
 });
