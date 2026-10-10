@@ -201,6 +201,7 @@ export async function startWeb(config = {}, deps = {}) {
   const statusCache = createTtlCache(2000);
   const renewToolCache = createTtlCache(30000);
   const sslCache = createTtlCache(30000);
+  const logsSourcesCache = createTtlCache(10000);
   const waiters = new Map();
   let seq = 0;
   const configPath = config.configPath || defaultConfigPath();
@@ -640,7 +641,7 @@ export async function startWeb(config = {}, deps = {}) {
         if (q.get("probe")) data.probeResult = await collectRemoteProbe(q.get("probe"));
         sendJson(res, data);
       } else if (url.pathname === "/api/logs/sources" && req.method === "GET") {
-        sendJson(res, await collectLogSources({ run: execCmd }));
+        sendJson(res, await logsSourcesCache("logs-sources", () => collectLogSources({ run: execCmd })));
       } else if (url.pathname === "/api/logs" && req.method === "POST") {
         const body = await readBody(req);
         const { service, container, lines } = JSON.parse(body || "{}");

@@ -1,10 +1,16 @@
-import test from "node:test";
+import test, { before, after } from "node:test";
 import assert from "node:assert/strict";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync, existsSync } from "node:fs";
 import { runPostinstall } from "../scripts/postinstall.js";
 import { needsReconfigure, clearReconfigureFlag, setReconfigureFlag } from "../src/setup.js";
+
+// runPostinstall 默认 console.log 打印大量安装文案，会触发 node:test 并行 IPC 序列化 bug（Unable to deserialize cloned data）。
+// 测试断言基于返回值而非输出，静默即可。
+const origLog = console.log;
+before(() => { console.log = () => {}; });
+after(() => { console.log = origLog; });
 
 test("无环境变量且未配置时写重配标记、不改写配置，且重启已在运行的服务", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-"));

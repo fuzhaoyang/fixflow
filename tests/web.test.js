@@ -28,12 +28,13 @@ function makeServer(extra = {}, extraDeps = {}) {
   return w;
 }
 
-async function frontJs(base) {
-  const html = await (await fetch(`${base}/`)).text();
+function frontJs() {
+  const dir = new URL("../src/web/static/", import.meta.url);
+  const html = readFileSync(new URL("index.html", dir), "utf8");
   const srcs = [...html.matchAll(/<script src="([^"]+)"><\/script>/g)].map((m) => m[1]);
   let all = "";
   for (const n of srcs) {
-    try { all += await (await fetch(`${base}/${n}`)).text() + "\n"; } catch {}
+    try { all += readFileSync(new URL(n, dir), "utf8") + "\n"; } catch {}
   }
   return all;
 }
@@ -371,7 +372,7 @@ test("自绘图表：页面不再加载 echarts", async () => {
   assert.doesNotMatch(html, /echarts/);
   const css = await (await fetch(`${base}/app.css`)).text();
   assert.match(css, /conic-gradient/);
-  const app = await frontJs(base);
+  const app = frontJs();
   assert.match(app, /drawLineChart/);
   assert.doesNotMatch(app, /echarts\.init/);
   w.close();
@@ -1451,7 +1452,7 @@ test("登录遮罩默认隐藏 + 启动遮罩兜底，双场景无闪烁", async
 test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await frontJs(base);
+  const js = frontJs();
   assert.match(js, /onTitleChange/);
   assert.doesNotMatch(js, /if \(cd\) fsRevealPath/);
   w.close();
@@ -1460,7 +1461,7 @@ test("终端 cd 同步：app.js 使用 onTitleChange 而非仅 cd 解析", async
 test("终端初始化防丢帧：app.js 增量写入历史并补拉二次 open", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await frontJs(base);
+  const js = frontJs();
   assert.match(js, /writeHistory/);
   assert.match(js, /h\.slice\(written\)/);
   assert.match(js, /fetch\("api\/term\/open"/);
@@ -1573,7 +1574,7 @@ test("数据库连接接口校验：非法类型 400", async () => {
 test("数据库页前端：renderDb 相关钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await frontJs(base);
+  const js = frontJs();
   const html = await (await fetch(`${base}/`)).text();
   assert.match(js, /loadDbConnections/);
   assert.match(js, /renderDbConnections/);
@@ -1621,7 +1622,7 @@ test("服务日志接口", async () => {
 test("服务页前端：renderSystemd 交互钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await frontJs(base);
+  const js = frontJs();
   assert.match(js, /data-sysop/);
   assert.match(js, /data-systoggle/);
   assert.match(js, /data-sysfilter-state/);
@@ -1634,7 +1635,7 @@ test("服务页前端：renderSystemd 交互钩子存在", async () => {
 test("总览页前端：健康/KPI/趋势/时间范围钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await frontJs(base);
+  const js = frontJs();
   assert.match(js, /function renderHealth/);
   assert.match(js, /function renderOvKpis/);
   assert.match(js, /function drawTrendChart/);
@@ -1651,7 +1652,7 @@ test("总览页前端：健康/KPI/趋势/时间范围钩子存在", async () =>
 test("终端操作记录弹窗：搜索/过滤/分页/复制/导出/危险高亮钩子存在", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
-  const js = await frontJs(base);
+  const js = frontJs();
   assert.match(js, /function termIsDanger/);
   assert.match(js, /function termFiltered/);
   assert.match(js, /function renderTermLog/);
