@@ -429,10 +429,22 @@
       </div>
     </div>
   <div class="modal-mask" id="term-log-mask">
-  <div class="modal">
+  <div class="modal" style="width:760px;max-width:94vw">
     <button class="modal-close" id="term-log-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14v12H5z"/><path d="M8 10l2.5 2.5L8 15M13 15h3"/></svg><span data-i18n="term.logTitle">终端操作记录</span></h2>
-    <div id="term-log-body" style="max-height:420px;overflow:auto"></div>
+    <div class="term-log-toolbar">
+      <input id="term-log-search" type="text" placeholder="搜索命令…" data-i18n="term.searchPh" data-i18n-attr="placeholder">
+      <select id="term-log-user" title="用户" data-i18n="term.userAll" data-i18n-attr="title"><option value="" data-i18n="term.userAll">全部用户</option></select>
+      <select id="term-log-range">
+        <option value="all" data-i18n="term.rangeAll">全部时间</option>
+        <option value="today" data-i18n="term.rangeToday">今天</option>
+        <option value="7d" data-i18n="term.range7">近7天</option>
+        <option value="30d" data-i18n="term.range30">近30天</option>
+      </select>
+      <button class="btn small" id="term-log-export" data-i18n="term.export">导出</button>
+    </div>
+    <div id="term-log-body" style="max-height:400px;overflow:auto"></div>
+    <div class="fw-pager" id="term-log-pager" style="margin-top:10px"></div>
   </div>
 </div>
 <div class="modal-mask" id="fs-edit-mask">

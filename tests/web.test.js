@@ -127,7 +127,7 @@ test("历史接口：append/read/clear 持久化到文件", async () => {
   const cfg = join(dir, "config.json");
   const hist = join(dir, "history.json");
   writeFileSync(cfg, "{}");
-  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, historyPath: hist }, deps);
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, historyPath: hist }, { ...deps, runCommand: async () => ({ exitCode: 0, stdout: "", stderr: "" }) });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const authHeaders = { Cookie: cookie };
@@ -137,7 +137,9 @@ test("历史接口：append/read/clear 持久化到文件", async () => {
   const got = await (await fetch(`${base}/api/history`, { headers: authHeaders })).json();
   assert.equal(got.messages.length, 2);
   assert.equal(got.messages[1].role, "assistant");
-  const clear = await fetch(`${base}/api/history/clear`, { method: "POST", headers: authHeaders });
+  const bad = await fetch(`${base}/api/history/clear`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ password: "" }) });
+  assert.equal(bad.status, 403);
+  const clear = await fetch(`${base}/api/history/clear`, { method: "POST", headers: { ...authHeaders, "Content-Type": "application/json" }, body: JSON.stringify({ password: "Secret123!" }) });
   assert.equal(clear.status, 200);
   const empty = await (await fetch(`${base}/api/history`, { headers: authHeaders })).json();
   assert.deepEqual(empty.messages, []);
@@ -1592,5 +1594,23 @@ test("总览页前端：健康/KPI/趋势/时间范围钩子存在", async () =>
   assert.match(html, /id="ov-kpis"/);
   assert.match(html, /id="attention-card"/);
   assert.match(html, /id="trend-chart"/);
+  w.close();
+});
+
+test("终端操作记录弹窗：搜索/过滤/分页/复制/导出/危险高亮钩子存在", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const js = await (await fetch(`${base}/app.js`)).text();
+  assert.match(js, /function termIsDanger/);
+  assert.match(js, /function termFiltered/);
+  assert.match(js, /function renderTermLog/);
+  assert.match(js, /TERM_PAGE_SIZE/);
+  assert.match(js, /term-log-search/);
+  assert.match(js, /term-log-export/);
+  const html = await (await fetch(`${base}/`)).text();
+  assert.match(html, /id="term-log-search"/);
+  assert.match(html, /id="term-log-user"/);
+  assert.match(html, /id="term-log-range"/);
+  assert.match(html, /id="term-log-export"/);
   w.close();
 });

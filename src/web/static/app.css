@@ -256,6 +256,16 @@
     .card-body .svc-table thead th, .fs-list-wrap .svc-table thead th { position: sticky; top: 0; z-index: 1; }
     .svc-table tbody tr:hover { background: var(--hover); }
     .svc-table td.ok { color: var(--ok); } .svc-table td.bad { color: var(--bad); } .svc-table td.na { color: var(--muted); }
+    .svc-table td code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
+    .svc-table td code.term-cmd-danger { color: var(--bad); font-weight: 600; }
+    .term-log-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .term-log-toolbar input[type="text"] { flex: 1; min-width: 140px; }
+    .term-log-toolbar input[type="text"], .term-log-toolbar select {
+      padding: 7px 10px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; outline: none;
+    }
+    .term-log-toolbar input[type="text"]:focus, .term-log-toolbar select:focus { border-color: var(--accent); }
+    .copy-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; border-radius: 4px; display: inline-flex; align-items: center; }
+    .copy-btn:hover { color: var(--accent); background: var(--hover); }
     /* 系统页：整宽纵向分区 */
     #view-monitor.single .cards.system-mode { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: auto; align-content: start; }
     .cards.system-mode .card.wide { grid-column: 1 / -1; }

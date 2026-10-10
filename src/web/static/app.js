@@ -2489,6 +2489,64 @@ document.getElementById("fs-toggle").onclick = () => {
 };
 window.addEventListener("resize", () => { if (termOpen) fitTerminal(); });
 const termLogMask = document.getElementById("term-log-mask");
+let termRecs = [];
+let termPage = 0;
+let termSearch = "";
+let termUserFilter = "";
+let termRangeFilter = "all";
+const TERM_PAGE_SIZE = 50;
+
+function termIsDanger(cmd) {
+  const words = String(cmd || "").trim().split(/\s+/);
+  const head = (words[0] || "").toLowerCase();
+  if (/^(rm|rmdir|mkfs|mkfs\.\w+|dd|reboot|shutdown|poweroff|halt|pkill|killall|shred|wipefs|mkpart|fdisk|truncate|pvremove|lvremove|vgremove)$/.test(head)) return true;
+  if (head === "systemctl") return /\b(stop|disable|mask|reset-failed)\b/.test(String(cmd));
+  if (head === "service") return /\b(stop|restart|reload|force-stop)\b/.test(String(cmd));
+  if (head === "apt" || head === "apt-get") return /\b(remove|purge|autoremove)\b/.test(String(cmd));
+  if (head === "yum" || head === "dnf") return /\b(remove|erase)\b/.test(String(cmd));
+  if (head === "dpkg") return /(^|\s)(-r|--remove|-P|--purge)(\s|$)/.test(String(cmd));
+  if (head === "kill") return true;
+  if (head === "chmod" || head === "chown") return /-R/.test(String(cmd)) && /(777|666|nobody)/.test(String(cmd));
+  return false;
+}
+
+function termFiltered() {
+  const kw = termSearch.trim().toLowerCase();
+  const now = Date.now();
+  return (termRecs || []).filter((r) => {
+    if (kw && !String(r.command || "").toLowerCase().includes(kw)) return false;
+    if (termUserFilter && r.user !== termUserFilter) return false;
+    const t = new Date(r.time).getTime();
+    if (!Number.isFinite(t)) return termRangeFilter === "all";
+    if (termRangeFilter === "today") { const d = new Date(r.time); if (d.toDateString() !== new Date().toDateString()) return false; }
+    else if (termRangeFilter === "7d" && now - t > 7 * 864e5) return false;
+    else if (termRangeFilter === "30d" && now - t > 30 * 864e5) return false;
+    return true;
+  });
+}
+
+function renderTermLog() {
+  const box = document.getElementById("term-log-body");
+  const filtered = termFiltered();
+  const total = Math.max(1, Math.ceil(filtered.length / TERM_PAGE_SIZE));
+  if (termPage >= total) termPage = total - 1;
+  if (!filtered.length) {
+    box.innerHTML = `<pre>${t("term.noHist")}</pre>`;
+  } else {
+    const page = filtered.slice(termPage * TERM_PAGE_SIZE, (termPage + 1) * TERM_PAGE_SIZE);
+    box.innerHTML = `<table class="svc-table"><thead><tr><th>${t("term.time")}</th><th>${t("term.user")}</th><th>${t("term.command")}</th><th style="width:44px"></th></tr></thead><tbody>${page.map((r) => {
+      const danger = termIsDanger(r.command);
+      return `<tr><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.user)}</td><td><code class="${danger ? "term-cmd-danger" : ""}">${escapeHtml(r.command)}</code></td><td><button class="copy-btn" data-cmd="${escapeHtml(r.command)}" title="${t("term.copy")}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 012-2h10"/></svg></button></td></tr>`;
+    }).join("")}</tbody></table>`;
+  }
+  const pagerEl = document.getElementById("term-log-pager");
+  pagerEl.innerHTML = total > 1
+    ? `<button class="btn small" id="term-log-prev"${termPage === 0 ? " disabled" : ""}>${t("fw.prev")}</button><span class="fw-pageinfo">${termPage + 1} / ${total} · ${filtered.length} ${t("term.records")}</span><button class="btn small" id="term-log-next"${termPage >= total - 1 ? " disabled" : ""}>${t("fw.next")}</button>`
+    : "";
+  document.getElementById("term-log-prev")?.addEventListener("click", () => { termPage--; renderTermLog(); });
+  document.getElementById("term-log-next")?.addEventListener("click", () => { termPage++; renderTermLog(); });
+}
+
 document.getElementById("term-log").onclick = async () => {
   termLogMask.classList.add("show");
   const box = document.getElementById("term-log-body");
@@ -2496,13 +2554,38 @@ document.getElementById("term-log").onclick = async () => {
   try {
     const res = await fetch("api/term/history");
     const data = await res.json();
-    const recs = data.records || [];
-    if (!recs.length) { box.innerHTML = `<pre>${t("term.noHist")}</pre>`; return; }
-    box.innerHTML = `<table class="svc-table"><thead><tr><th>${t("term.time")}</th><th>${t("term.user")}</th><th>${t("term.command")}</th></tr></thead><tbody>${recs.map((r) => `<tr><td>${escapeHtml(r.time)}</td><td>${escapeHtml(r.user)}</td><td><code>${escapeHtml(r.command)}</code></td></tr>`).join("")}</tbody></table>`;
+    termRecs = data.records || [];
+    const users = [...new Set(termRecs.map((r) => r.user).filter(Boolean))].sort();
+    const userSel = document.getElementById("term-log-user");
+    userSel.innerHTML = `<option value="" data-i18n="term.userAll">${t("term.userAll")}</option>` + users.map((u) => `<option>${escapeHtml(u)}</option>`).join("");
+    termPage = 0;
+    termSearch = ""; termUserFilter = ""; termRangeFilter = "all";
+    document.getElementById("term-log-search").value = "";
+    userSel.value = "";
+    document.getElementById("term-log-range").value = "all";
+    renderTermLog();
   } catch (e) { box.innerHTML = `<pre>${t("fs.loadFail").replace("{e}", escapeHtml(String(e)))}</pre>`; }
 };
 document.getElementById("term-log-close").onclick = () => termLogMask.classList.remove("show");
 termLogMask.addEventListener("click", (e) => { if (e.target === termLogMask) termLogMask.classList.remove("show"); });
+document.getElementById("term-log-search").oninput = (e) => { termSearch = e.target.value; termPage = 0; renderTermLog(); };
+document.getElementById("term-log-user").onchange = (e) => { termUserFilter = e.target.value; termPage = 0; renderTermLog(); };
+document.getElementById("term-log-range").onchange = (e) => { termRangeFilter = e.target.value; termPage = 0; renderTermLog(); };
+document.getElementById("term-log-body").addEventListener("click", async (e) => {
+  const btn = e.target.closest(".copy-btn");
+  if (!btn) return;
+  try { await navigator.clipboard.writeText(btn.dataset.cmd || ""); showSaveMsg(t("term.copied"), "ok"); } catch { showSaveMsg(t("term.copyFail"), "warn"); }
+});
+document.getElementById("term-log-export").onclick = () => {
+  const lines = termFiltered().map((r) => `${r.time} [${r.user}] ${r.command}`);
+  if (!lines.length) { showSaveMsg(t("term.noHist"), "warn"); return; }
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "term-history.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+};
 
 let termDragging = false;
 termSplitter.addEventListener("mousedown", (e) => {
@@ -2568,6 +2651,8 @@ function connectStream() {
       card.appendChild(btnRow);
       ctx.log.appendChild(card);
       scrollLog();
+    } else if (ev.type === "clearRequest") {
+      openClearModal();
     } else if (ev.type === "clear") {
       clearHistory();
       addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true });
@@ -2618,7 +2703,6 @@ function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
 
 function clearHistory() {
   chatHistory = [];
-  fetch("api/history/clear", { method: "POST" });
   ctx.log.innerHTML = "";
   ctx.welcome.style.display = "";
   hideTyping();
@@ -2646,7 +2730,7 @@ async function send() {
 
 sendBtn.onclick = send;
 stopBtn.onclick = () => fetch("api/abort", { method: "POST" });
-clearBtn.onclick = () => { clearHistory(); addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true }); };
+clearBtn.onclick = openClearModal;
 input.addEventListener("input", () => { charCount.textContent = input.value.length ? input.value.length + "/5000" : ""; });
 input.addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } });
 
@@ -3187,6 +3271,17 @@ function setProcPwdLabel(kind) {
   input.setAttribute("autocomplete", isFw ? "current-password" : "current-password");
 }
 let procTarget = null;
+function openClearModal() {
+  procTarget = { kind: "clear-history" };
+  document.getElementById("proc-title").textContent = t("chat.clearTitle");
+  document.getElementById("proc-text").textContent = t("chat.clearConfirm");
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+}
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-fw-close]");
   if (!btn) return;
@@ -3287,9 +3382,17 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isAclAdd = kind === "acl-add";
   const isAclDel = kind === "acl-del";
   const isSdOp = kind === "systemd-op";
+  const isClearHistory = kind === "clear-history";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
+    if (isClearHistory) {
+      res = await fetch("api/history/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+      data = await res.json();
+      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
+      procMask.classList.remove("show");
+      return;
+    }
     if (isFwBatch) {
       let fail = null;
       for (const it of procTarget.items) {
