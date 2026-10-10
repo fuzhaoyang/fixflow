@@ -156,6 +156,10 @@ function defaultTermHistoryPath() {
   return join(homedir(), ".config", "fixflow", "term-history.json");
 }
 
+function defaultPanelAuditPath() {
+  return join(homedir(), ".config", "fixflow", "panel-audit.json");
+}
+
 async function readHistoryFile(path) {
   try {
     const data = JSON.parse(await readFile(path, "utf8"));
@@ -166,6 +170,11 @@ async function readHistoryFile(path) {
 async function writeHistoryFile(path, messages) {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(messages.slice(-200), null, 2));
+}
+
+async function writeAuditFile(path, records) {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, JSON.stringify(records.slice(-2000), null, 2));
 }
 
 async function fetchModels(baseUrl, apiKey) {
@@ -196,6 +205,7 @@ export async function startWeb(config = {}, deps = {}) {
   const configPath = config.configPath || defaultConfigPath();
   const historyPath = config.historyPath || defaultHistoryPath();
   const termHistoryPath = config.termHistoryPath || defaultTermHistoryPath();
+  const panelAuditPath = config.panelAuditPath || defaultPanelAuditPath();
   const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
   const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
   const readConfigFile = () => readJsonFile(configPath);
@@ -967,6 +977,39 @@ export async function startWeb(config = {}, deps = {}) {
           await writeHistoryFile(termHistoryPath, list);
         }
         sendJson(res, {});
+      } else if (url.pathname === "/api/panel-audit" && req.method === "GET") {
+        sendJson(res, { records: await readHistoryFile(panelAuditPath) });
+      } else if (url.pathname === "/api/panel-audit" && req.method === "POST") {
+        const body = await readBody(req);
+        const { records } = JSON.parse(body || "{}");
+        if (Array.isArray(records) && records.length) {
+          const auth = await readAuth();
+          const user = authHeader(req) ? (auth?.username || "?") : "?";
+          const now = new Date().toISOString().replace("T", " ").slice(0, 19);
+          const list = await readHistoryFile(panelAuditPath);
+          for (const r of records.slice(0, 200)) {
+            list.push({
+              time: now, user,
+              page: String(r.page || ""),
+              action: String(r.action || ""),
+              target: String(r.target || ""),
+              detail: String(r.detail || ""),
+            });
+          }
+          await writeAuditFile(panelAuditPath, list);
+        }
+        sendJson(res, {});
+      } else if (url.pathname === "/api/panel-audit/export" && req.method === "POST") {
+        const body = await readBody(req);
+        const { password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        sendJson(res, { records: await readHistoryFile(panelAuditPath) });
+      } else if (url.pathname === "/api/panel-audit/clear" && req.method === "POST") {
+        const body = await readBody(req);
+        const { password } = JSON.parse(body || "{}");
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        await writeAuditFile(panelAuditPath, []);
+        sendJson(res, { ok: true });
       } else if (url.pathname === "/api/fs/list" && req.method === "GET") {
         const r = await listFs(url.searchParams.get("path") || "/");
         sendJson(res, r, r.error ? 400 : 200);

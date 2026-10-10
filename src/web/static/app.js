@@ -140,6 +140,7 @@ function applyRoute() {
     searchBox.style.display = "none";
     netTools.style.display = "none";
     loadLogSources();
+    if (document.getElementById("logs-pane-audit").style.display !== "none") loadAudit();
   } else {
     currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
     viewMonitor.classList.toggle("single", currentFilter !== "all");
@@ -269,6 +270,154 @@ document.getElementById("logs-export").onclick = () => {
   a.click();
   URL.revokeObjectURL(a.href);
 };
+
+// ---------- 面板操作日志 ----------
+const auditBody = document.getElementById("audit-body");
+const auditSearch = document.getElementById("audit-search");
+const auditPageSize = document.getElementById("audit-page-size");
+let auditRecords = [];
+let auditQueue = [];
+let auditTimer = null;
+let auditPage = 0;
+
+function auditEnabled() { return authMask.style.display !== "flex"; }
+
+function currentPage() {
+  const active = document.querySelector(".menu-item.active .menu-label");
+  return (active?.textContent || viewTitle.textContent || "").trim();
+}
+
+function auditLog(action, target, detail = "", page = null) {
+  if (!auditEnabled()) return;
+  auditQueue.push({ page: page ?? currentPage(), action, target, detail });
+  if (auditTimer) return;
+  auditTimer = setTimeout(flushAudit, 1000);
+}
+
+function flushAudit() {
+  auditTimer = null;
+  if (!auditQueue.length) return;
+  const records = auditQueue;
+  auditQueue = [];
+  fetch("api/panel-audit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records }) }).catch(() => {});
+}
+
+function renderAudit() {
+  const kw = (auditSearch.value || "").trim().toLowerCase();
+  const rows = auditRecords.filter((r) => !kw || `${r.time} ${r.user} ${r.page} ${r.action} ${r.target} ${r.detail}`.toLowerCase().includes(kw));
+  const size = Number(auditPageSize.value) || 20;
+  const total = Math.max(1, Math.ceil(rows.length / size));
+  if (auditPage >= total) auditPage = total - 1;
+  const page = rows.slice(auditPage * size, (auditPage + 1) * size);
+  if (!page.length) {
+    auditBody.innerHTML = `<div class="audit-empty">${t("audit.empty")}</div>`;
+  } else {
+    auditBody.innerHTML = `<table class="audit-table"><thead><tr><th>${t("audit.time")}</th><th>${t("audit.user")}</th><th>${t("audit.page")}</th><th>${t("audit.action")}</th><th>${t("audit.target")}</th><th>${t("audit.detail")}</th></tr></thead><tbody>${page.map((r) => `<tr><td class="audit-time">${escapeHtml(r.time)}</td><td class="audit-user">${escapeHtml(r.user)}</td><td>${escapeHtml(r.page || "")}</td><td class="audit-action">${escapeHtml(r.action || "")}</td><td>${escapeHtml(r.target || "")}</td><td class="audit-detail">${escapeHtml(r.detail || "")}</td></tr>`).join("")}</tbody></table>`;
+  }
+  const pagerNav = document.getElementById("audit-pager-nav");
+  auditPageSize.style.display = rows.length ? "" : "none";
+  pagerNav.innerHTML = rows.length
+    ? `<button class="btn small" id="audit-prev"${auditPage === 0 ? " disabled" : ""}>${t("fw.prev")}</button><span class="fw-pageinfo">${auditPage + 1} / ${total} · ${rows.length} ${t("term.records")}</span><button class="btn small" id="audit-next"${auditPage >= total - 1 ? " disabled" : ""}>${t("fw.next")}</button>`
+    : "";
+  document.getElementById("audit-prev")?.addEventListener("click", () => { auditPage--; renderAudit(); });
+  document.getElementById("audit-next")?.addEventListener("click", () => { auditPage++; renderAudit(); });
+}
+
+async function loadAudit() {
+  try { const res = await fetch("api/panel-audit"); auditRecords = (await res.json()).records || []; } catch {}
+  renderAudit();
+}
+
+document.querySelectorAll(".logs-tab").forEach((tab) => tab.addEventListener("click", () => {
+  const which = tab.dataset.logsTab;
+  document.querySelectorAll(".logs-tab").forEach((x) => x.classList.toggle("active", x === tab));
+  document.getElementById("logs-pane-service").style.display = which === "service" ? "flex" : "none";
+  document.getElementById("logs-pane-audit").style.display = which === "audit" ? "flex" : "none";
+  if (which === "audit") loadAudit();
+}));
+auditSearch.addEventListener("input", () => { auditPage = 0; renderAudit(); });
+auditPageSize.addEventListener("change", () => { auditPage = 0; renderAudit(); });
+document.getElementById("audit-refresh").onclick = loadAudit;
+document.getElementById("audit-export").onclick = () => {
+  if (!auditRecords.length) { showSaveMsg(t("audit.empty"), "warn"); return; }
+  openAuditModal("audit-export");
+};
+document.getElementById("audit-clear").onclick = () => openAuditModal("audit-clear");
+
+function exportAudit(records) {
+  if (!records.length) { showSaveMsg(t("audit.empty"), "warn"); return; }
+  const lines = records.map((r) => `${r.time || ""}\t${r.user || ""}\t${r.page || ""}\t${r.action || ""}\t${r.target || ""}\t${r.detail || ""}`);
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "panel-audit.txt";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function openAuditModal(kind) {
+  procTarget = { kind };
+  document.getElementById("proc-title").textContent = kind === "audit-export" ? t("audit.export") : t("audit.clear");
+  document.getElementById("proc-text").textContent = kind === "audit-export" ? t("audit.exportConfirm") : t("audit.clearConfirm");
+  document.getElementById("proc-err").textContent = "";
+  const pw = document.getElementById("proc-password");
+  pw.value = "";
+  setProcPwdLabel("fw");
+  procMask.classList.add("show");
+  setTimeout(() => pw.focus(), 50);
+}
+
+// ---------- 全局操作埋点 ----------
+function elLabel(el) {
+  const txt = (el.querySelector?.(".menu-label")?.textContent || el.textContent || "").trim();
+  return (el.title || el.getAttribute?.("aria-label") || txt || el.id || "").slice(0, 80);
+}
+function fieldLabel(el) {
+  return (el.closest(".field")?.querySelector("label")?.textContent
+    || el.getAttribute?.("data-i18n") || el.getAttribute?.("aria-label")
+    || el.placeholder || el.id || el.name || "").trim().slice(0, 60);
+}
+document.addEventListener("click", (e) => {
+  if (!auditEnabled()) return;
+  if (e.target.closest?.("#logs-pane-audit") || e.target.closest?.(".logs-tabs")) return;
+  const menu = e.target.closest?.(".menu-item");
+  if (menu) { auditLog(t("audit.nav"), elLabel(menu), "", elLabel(menu)); return; }
+  const btn = e.target.closest?.("button");
+  if (btn) auditLog(t("audit.btn"), elLabel(btn));
+}, true);
+document.addEventListener("change", (e) => {
+  if (!auditEnabled()) return;
+  const el = e.target;
+  if (!el?.matches?.("input, select, textarea")) return;
+  if (el.type === "password" || el.type === "file") return;
+  if (!el.closest?.(".modal-mask")) return;
+  const val = el.type === "checkbox" ? (el.checked ? "✓" : "✗") : String(el.value || "").slice(0, 200);
+  auditLog(t("audit.edit"), fieldLabel(el), val);
+}, true);
+window.addEventListener("beforeunload", () => {
+  if (auditQueue.length && navigator.sendBeacon) {
+    navigator.sendBeacon("api/panel-audit", new Blob([JSON.stringify({ records: auditQueue })], { type: "application/json" }));
+    auditQueue = [];
+  }
+});
+document.querySelectorAll(".modal-mask").forEach((el) => {
+  new MutationObserver(() => {
+    const shown = el.classList.contains("show");
+    const prev = el.dataset.auditShown === "1";
+    if (shown === prev) return;
+    el.dataset.auditShown = shown ? "1" : "0";
+    const title = (el.querySelector("h2")?.textContent || el.id).trim().slice(0, 60);
+    auditLog(t("audit.modal"), title, shown ? t("audit.open") : t("audit.close"));
+  }).observe(el, { attributes: true, attributeFilter: ["class"] });
+});
+const aiPopupEl = document.getElementById("ai-popup");
+new MutationObserver(() => {
+  const shown = aiPopupEl.style.display === "flex";
+  const prev = aiPopupEl.dataset.auditShown === "1";
+  if (shown === prev) return;
+  aiPopupEl.dataset.auditShown = shown ? "1" : "0";
+  auditLog(t("audit.modal"), t("ai.title"), shown ? t("audit.open") : t("audit.close"));
+}).observe(aiPopupEl, { attributes: true, attributeFilter: ["style"] });
 
 window.addEventListener("hashchange", applyRoute);
 
@@ -3387,6 +3536,8 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isAclDel = kind === "acl-del";
   const isSdOp = kind === "systemd-op";
   const isClearHistory = kind === "clear-history";
+  const isAuditExport = kind === "audit-export";
+  const isAuditClear = kind === "audit-clear";
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
@@ -3395,6 +3546,23 @@ document.getElementById("proc-confirm").onclick = async () => {
       data = await res.json();
       if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
       procMask.classList.remove("show");
+      return;
+    }
+    if (isAuditExport) {
+      res = await fetch("api/panel-audit/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+      data = await res.json();
+      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
+      procMask.classList.remove("show");
+      exportAudit(data.records || []);
+      return;
+    }
+    if (isAuditClear) {
+      res = await fetch("api/panel-audit/clear", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password }) });
+      data = await res.json();
+      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
+      procMask.classList.remove("show");
+      auditRecords = [];
+      renderAudit();
       return;
     }
     if (isFwBatch) {

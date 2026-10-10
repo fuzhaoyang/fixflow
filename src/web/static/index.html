@@ -405,6 +405,11 @@
       </div>
     </div>
     <div class="content logs-view" id="view-logs">
+      <div class="logs-tabs">
+        <button class="logs-tab active" data-logs-tab="service" data-i18n="logs.tabService">服务日志</button>
+        <button class="logs-tab" data-logs-tab="audit" data-i18n="logs.tabAudit">面板操作日志</button>
+      </div>
+      <div class="logs-pane" id="logs-pane-service">
       <div class="logs-layout">
         <div class="logs-side">
           <div class="logs-search"><input id="logs-filter" type="text" placeholder="筛选服务…" data-i18n="logs.filterPh" data-i18n-attr="placeholder"></div>
@@ -426,6 +431,27 @@
           </div>
           <button class="ai-analyze-btn" id="ai-analyze" title="AI 帮我分析" data-i18n="logs.aiAnalyze" data-i18n-attr="title" style="display:none"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6z"/><path d="M18 15l.8 2.2L21 18l-2.2.8L18 21l-.8-2.2L15 18l2.2-.8z"/></svg><span data-i18n="logs.aiAnalyze">AI 帮我分析</span></button>
           <div class="logs-body" id="logs-body"><pre class="logs-empty" data-i18n="logs.selectHint">选择一个服务查看日志</pre></div>
+        </div>
+      </div>
+      </div>
+      <div class="logs-pane" id="logs-pane-audit" style="display:none">
+        <div class="logs-toolbar">
+          <span class="logs-target" data-i18n="audit.title">面板操作日志</span>
+          <input id="audit-search" type="text" placeholder="搜索操作…" data-i18n="audit.searchPh" data-i18n-attr="placeholder">
+          <button class="btn small" id="audit-refresh" data-i18n="audit.refresh">刷新</button>
+          <button class="btn small" id="audit-export" data-i18n="audit.export">导出</button>
+          <button class="btn small" id="audit-clear" data-i18n="audit.clear">清空</button>
+        </div>
+        <div class="logs-body audit-body" id="audit-body"></div>
+        <div class="audit-pager" id="audit-pager">
+          <select id="audit-page-size" class="fw-mode">
+            <option value="20" selected>20</option>
+            <option value="40">40</option>
+            <option value="60">60</option>
+            <option value="100">100</option>
+            <option value="500">500</option>
+          </select>
+          <span id="audit-pager-nav"></span>
         </div>
       </div>
     </div>

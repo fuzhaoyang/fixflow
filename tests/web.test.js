@@ -146,6 +146,40 @@ test("历史接口：append/read/clear 持久化到文件", async () => {
   w.close();
 });
 
+test("面板操作日志：写入/读取/导出/清空（需密码）", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-audit-"));
+  const w = await makeServer({ panelAuditPath: join(dir, "panel-audit.json") }, { runCommand: async () => ({ exitCode: 0, stdout: "", stderr: "" }) });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const noauth = await fetch(`${base}/api/panel-audit`);
+  assert.equal(noauth.status, 401);
+  const post = await fetch(`${base}/api/panel-audit`, {
+    method: "POST", headers: H,
+    body: JSON.stringify({ records: [{ page: "系统", action: "导航", target: "系统", detail: "" }, { page: "日志", action: "按钮", target: "重启服务", detail: "" }] }),
+  });
+  assert.equal(post.status, 200);
+  const get = await fetch(`${base}/api/panel-audit`, { headers: H });
+  const data = await get.json();
+  assert.equal(data.records.length, 2);
+  assert.equal(data.records[0].action, "导航");
+  assert.equal(data.records[0].page, "系统");
+  assert.equal(data.records[0].user, "admin");
+  assert.ok(data.records[0].time);
+  const badExport = await fetch(`${base}/api/panel-audit/export`, { method: "POST", headers: H, body: JSON.stringify({ password: "" }) });
+  assert.equal(badExport.status, 403);
+  const exportRes = await fetch(`${base}/api/panel-audit/export`, { method: "POST", headers: H, body: JSON.stringify({ password: "Secret123!" }) });
+  assert.equal(exportRes.status, 200);
+  assert.equal((await exportRes.json()).records.length, 2);
+  const badClear = await fetch(`${base}/api/panel-audit/clear`, { method: "POST", headers: H, body: JSON.stringify({ password: "" }) });
+  assert.equal(badClear.status, 403);
+  const clear = await fetch(`${base}/api/panel-audit/clear`, { method: "POST", headers: H, body: JSON.stringify({ password: "Secret123!" }) });
+  assert.equal(clear.status, 200);
+  const empty = await (await fetch(`${base}/api/panel-audit`, { headers: H })).json();
+  assert.deepEqual(empty.records, []);
+  w.close();
+});
+
 test("chat 与 abort 走通会话", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
