@@ -96,19 +96,25 @@ export function isStrongPassword(password) {
 export function createSessionStore({ ttlMs = SESSION_TTL_MS } = {}) {
   const sessions = new Map();
   return {
-    create() {
+    create(username = "") {
       const token = randomBytes(32).toString("hex");
-      sessions.set(token, Date.now() + ttlMs);
+      sessions.set(token, { expires: Date.now() + ttlMs, user: username });
       return token;
     },
     valid(token) {
-      const expires = sessions.get(token);
-      if (!expires) return false;
-      if (Date.now() > expires) { sessions.delete(token); return false; }
+      const s = sessions.get(token);
+      if (!s) return false;
+      if (Date.now() > s.expires) { sessions.delete(token); return false; }
       return true;
     },
+    userOf(token) { return sessions.get(token)?.user || ""; },
     revoke(token) { sessions.delete(token); },
     revokeAll() { sessions.clear(); },
+    revokeByUser(username) {
+      for (const [token, s] of sessions) {
+        if (s.user === username) sessions.delete(token);
+      }
+    },
   };
 }
 

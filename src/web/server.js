@@ -617,7 +617,8 @@ export async function startWeb(config = {}, deps = {}) {
           return;
         }
         loginFails.delete(clientIp(req));
-        const token = sessions.create();
+        sessions.revokeByUser(auth.username);
+        const token = sessions.create(auth.username);
         res.writeHead(200, {
           "Content-Type": "application/json",
           "Set-Cookie": `fixflow_token=${token}; HttpOnly; Path=/; Max-Age=43200; SameSite=Lax${sc}`,
