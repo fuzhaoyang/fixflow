@@ -32,6 +32,23 @@ miniLog.addEventListener("scroll", () => {
   stickToBottom = miniLog.scrollHeight - miniLog.scrollTop - miniLog.clientHeight < 40;
 });
 const searchBox = document.getElementById("search");
+
+// ---------- 全局会话失效处理：另一处登录被踢下线 ----------
+let kickedShown = false;
+const kickedMask = document.getElementById("kicked-mask");
+const origFetch = window.fetch;
+window.fetch = async (...args) => {
+  const res = await origFetch(...args);
+  if (res.status === 401 && !kickedShown && kickedMask && !/^api\/(login|register|captcha|status)/.test(String(args[0]))) {
+    kickedShown = true;
+    kickedMask.classList.add("show");
+  }
+  return res;
+};
+document.getElementById("kicked-confirm").onclick = () => {
+  document.cookie = "fixflow_token=; Path=/; Max-Age=0; SameSite=Lax";
+  location.reload();
+};
 const netTools = document.getElementById("net-tools");
 const viewTitle = document.getElementById("view-title");
 const viewMonitor = document.getElementById("view-monitor");
