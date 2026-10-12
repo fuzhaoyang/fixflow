@@ -483,7 +483,7 @@ function renderStore() {
   else if (storeFilter === "missing") apps = apps.filter((a) => !a.installed);
   if (!apps.length) { storeBody.innerHTML = `<div class="store-empty">${t("store.empty")}</div>`; return; }
   storeBody.innerHTML = `<div class="store-grid">${apps.map((a) => `
-    <div class="store-card">
+    <div class="store-card${a.installed ? " app-manageable" : ""}"${a.installed ? ` data-app-manage="${escapeHtml(a.name)}" title="${t("app.openManage")}"` : ""}>
       <div class="store-card-head">
         <span class="store-icon">${icon("box")}</span>
         <span class="store-name">${escapeHtml(a.name)}</span>
@@ -534,7 +534,9 @@ storeBody.addEventListener("click", (e) => {
   const install = e.target.closest(".store-install");
   if (install) { openStoreInstallModal(install.dataset.pkg); return; }
   const uninstall = e.target.closest(".store-uninstall");
-  if (uninstall) openStoreUninstallModal(uninstall.dataset.pkg);
+  if (uninstall) { openStoreUninstallModal(uninstall.dataset.pkg); return; }
+  const manage = e.target.closest(".store-card[data-app-manage]");
+  if (manage) openAppManage(manage.dataset.appManage);
 });
 
 window.addEventListener("hashchange", applyRoute);

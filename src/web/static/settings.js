@@ -436,7 +436,7 @@ document.getElementById("proc-confirm").onclick = async () => {
     let res, data;
     if (isStoreInstall || isStoreUninstall) {
       procMask.classList.remove("show");
-      runStoreOp(isStoreInstall ? "install" : "uninstall", procTarget.pkg, password);
+      runStoreOp(isStoreInstall ? "install" : "uninstall", procTarget.pkg, password, procTarget.version);
       return;
     }
     if (isClearHistory) {
@@ -524,6 +524,8 @@ document.getElementById("proc-confirm").onclick = async () => {
     if (isNginxSave) nginxConfMask.classList.remove("show");
     if (isFs && fsOp === "write") fsEditMask.classList.remove("show");
     procMask.classList.remove("show");
+    if (isNginxSave) showSaveMsg(t("nginx.saveDone"), "ok");
+    if (isNginxOp) { const lb = { reload: t("nginx.opReload"), restart: t("nginx.opRestart"), start: t("nginx.opStart"), stop: t("nginx.opStop") }[procTarget.action] || procTarget.action; showSaveMsg(t("nginx.opDone").replace("{action}", lb), "ok"); }
     if (isFwCtl) showSaveMsg(t("fw.controlDone").replace("{action}", procTarget.action === "disable" ? t("fw.disableBtn") : t("fw.enableBtn")), "ok");
     if (isSys) showSaveMsg(t("sys.opDone"), "ok");
     if (isDockerOp || isDockerPrune) showSaveMsg(isDockerOp ? t("docker.opDone") : t("docker.pruneDone"), "ok");
@@ -547,7 +549,7 @@ const storeProgressBar = document.getElementById("store-progress-bar");
 const storeProgressStatus = document.getElementById("store-progress-status");
 const storeProgressLog = document.getElementById("store-progress-log");
 
-async function runStoreOp(op, pkg, password) {
+async function runStoreOp(op, pkg, password, version) {
   const isInstall = op === "install";
   storeProgressTitle.textContent = isInstall ? t("store.installTitle") : t("store.uninstallTitle");
   storeProgressBar.className = "progress-bar indeterminate";
@@ -576,7 +578,7 @@ async function runStoreOp(op, pkg, password) {
   };
   try {
     const res = await fetch(isInstall ? "api/store/install" : "api/store/uninstall", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg, password }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg, password, version }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));

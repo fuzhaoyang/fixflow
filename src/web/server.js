@@ -64,6 +64,60 @@ export function parseAptPct(line) {
   return null;
 }
 
+// 解析 nginx stub_status 输出（curl /nginx_status）
+export function parseNginxStatus(text) {
+  const t = String(text || "");
+  const out = {};
+  const active = t.match(/Active connections:\s*(\d+)/);
+  if (active) out.active = +active[1];
+  const nums = t.match(/^\s*(\d+)\s+(\d+)\s+(\d+)\s*$/m);
+  if (nums) { out.accepts = +nums[1]; out.handled = +nums[2]; out.requests = +nums[3]; }
+  const rd = t.match(/Reading:\s*(\d+)/), wr = t.match(/Writing:\s*(\d+)/), wt = t.match(/Waiting:\s*(\d+)/);
+  if (rd) out.reading = +rd[1];
+  if (wr) out.writing = +wr[1];
+  if (wt) out.waiting = +wt[1];
+  return out;
+}
+
+// 解析 `LC_ALL=C apt-cache policy <pkg>` 输出
+export function parseAptPolicy(text) {
+  const t = String(text || "");
+  const out = { installed: null, candidate: null, versions: [] };
+  const inst = t.match(/^\s*Installed:\s*(.+)$/m);
+  if (inst && inst[1].trim() && inst[1].trim() !== "(none)") out.installed = inst[1].trim();
+  const cand = t.match(/^\s*Candidate:\s*(.+)$/m);
+  if (cand && cand[1].trim()) out.candidate = cand[1].trim();
+  let inTable = false;
+  for (const line of t.split("\n")) {
+    if (/^Version table:/i.test(line.trim())) { inTable = true; continue; }
+    if (!inTable) continue;
+    const m = line.match(/^\s*(\*\*\*)?\s*(\S+)\s+(\d+)\s*$/);
+    if (m) out.versions.push({ version: m[2], priority: +m[3], isInstalled: !!m[1] });
+  }
+  return out;
+}
+
+const NGINX_STATUS_CONF = "/etc/nginx/conf.d/fixflow-status.conf";
+const NGINX_STATUS_URL = "http://127.0.0.1:8099/nginx_status";
+
+// 确保 stub_status 生效（独立 127.0.0.1 server 块，不碰业务配置），返回实时负载
+async function collectNginxLoad({ run = runCommand } = {}) {
+  const statusConf = `server {\n  listen 127.0.0.1:8099;\n  location /nginx_status {\n    stub_status on;\n    access_log off;\n    allow 127.0.0.1;\n    deny all;\n  }\n}\n`;
+  try { await readFile(NGINX_STATUS_CONF); }
+  catch {
+    try {
+      await mkdir(dirname(NGINX_STATUS_CONF), { recursive: true });
+      await writeFile(NGINX_STATUS_CONF, statusConf);
+    } catch (e) { return { error: `无法写入 ${NGINX_STATUS_CONF}: ${e.message}` }; }
+    const t = await run("nginx -t 2>&1");
+    if (t.exitCode !== 0) return { error: `nginx 配置检查失败：${(t.stdout || t.stderr || "").trim()}` };
+    await run("systemctl reload nginx", { timeout: 15000 });
+  }
+  const r = await run(`curl -s --max-time 5 ${NGINX_STATUS_URL}`);
+  if (r.exitCode !== 0 || !(r.stdout || "").trim()) return { error: "无法读取 nginx 负载状态，请确认 nginx 已启动" };
+  return { ok: true, ...parseNginxStatus(r.stdout) };
+}
+
 const APT_PROTO_RE = /^(PMERROR|PMESSAGES|PSTATUS|PREG|PACKAGE|STATUS):/;
 
 // 流式执行命令（root 直跑或 sudo -S），每行回调；解决缓冲式执行 50KB 截断被杀的问题
@@ -1392,10 +1446,12 @@ export async function startWeb(config = {}, deps = {}) {
         res.end(JSON.stringify({ apps, q }));
       } else if ((url.pathname === "/api/store/install" || url.pathname === "/api/store/uninstall") && req.method === "POST") {
         const body = await readBody(req);
-        const { pkg, password } = JSON.parse(body || "{}");
+        const { pkg, password, version } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
         const name = String(pkg || "").trim();
         if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
+        const ver = String(version || "").trim();
+        if (ver && !/^[A-Za-z0-9:._~+-]+$/.test(ver)) { sendJson(res, { error: "非法的版本号" }, 400); return; }
         const isInstall = url.pathname.endsWith("/install");
         const op = isInstall ? "install -y" : "purge -y";
         res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", Connection: "keep-alive" });
@@ -1403,7 +1459,7 @@ export async function startWeb(config = {}, deps = {}) {
         const send = (type, data) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); };
         const aborted = new AbortController();
         res.on("close", () => aborted.abort());
-        const wrapped = sudoCmd(`DEBIAN_FRONTEND=noninteractive apt-get -o APT::Status-Fd=1 ${op} ${name} 2>&1`, password);
+        const wrapped = sudoCmd(`DEBIAN_FRONTEND=noninteractive apt-get -o APT::Status-Fd=1 ${op} ${name}${ver ? "=" + ver : ""} 2>&1`, password);
         let lastPct = -1;
         const onLine = (line) => {
           if (APT_PROTO_RE.test(line)) {
@@ -1417,6 +1473,13 @@ export async function startWeb(config = {}, deps = {}) {
         installedCache.clear("dpkg");
         send("done", { ok: r.exitCode === 0 && !r.aborted, exitCode: r.exitCode, aborted: r.aborted });
         res.end();
+      } else if (url.pathname === "/api/app/nginx/load" && req.method === "GET") {
+        sendJson(res, await collectNginxLoad({ run: execCmd }));
+      } else if (url.pathname === "/api/app/nginx/versions" && req.method === "GET") {
+        const pkg = String(url.searchParams.get("pkg") || "nginx").trim();
+        if (!/^[a-zA-Z0-9+._-]+$/.test(pkg)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
+        const r = await execCmd(`LC_ALL=C apt-cache policy ${pkg} 2>/dev/null`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
+        sendJson(res, { pkg, ...parseAptPolicy(r.stdout || "") });
       } else if (url.pathname === "/api/system/ops" && req.method === "GET") {
         sendJson(res, { ops: await readSysOps() });
       } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {
@@ -1548,6 +1611,10 @@ export async function startWeb(config = {}, deps = {}) {
         res.end(js);
       } else if (url.pathname === "/settings.js") {
         const js = await readFile(join(STATIC, "settings.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
+      } else if (url.pathname === "/appman.js") {
+        const js = await readFile(join(STATIC, "appman.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
       } else if (url.pathname === "/app.css") {

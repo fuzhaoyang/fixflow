@@ -1685,3 +1685,23 @@ test("前端拆分：markdown 定义/调用分离且无重复定义", async () =
   assert.doesNotMatch(app, /function renderMarkdown|renderMarkdown\(/);
   w.close();
 });
+
+test("应用管理：/api/app/nginx/versions 解析 apt-cache policy 输出", async () => {
+  const run = async (cmd) => {
+    if (cmd.includes("apt-cache policy")) return { exitCode: 0, stdout: "nginx:\n  Installed: 1.2.3-1\n  Candidate: 1.2.3-1\n  Version table:\n *** 1.2.3-1 500\n     1.1.0 100\n", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  };
+  const w = await makeServer({}, { runCommand: run });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/app/nginx/versions?pkg=nginx`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.installed, "1.2.3-1");
+  assert.equal(data.candidate, "1.2.3-1");
+  assert.equal(data.versions.length, 2);
+  assert.equal(data.versions[0].isInstalled, true);
+  const bad = await fetch(`${base}/api/app/nginx/versions?pkg=bad;name`, { headers: { Cookie: cookie } });
+  assert.equal(bad.status, 400);
+  w.close();
+});
