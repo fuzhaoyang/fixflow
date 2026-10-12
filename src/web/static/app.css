@@ -116,6 +116,7 @@
     }
     .modal-mask.show { display: flex; }
     #proc-mask { z-index: 200; }
+    .autofill-decoy { position: absolute; left: -9999px; top: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
     .modal {
       width: 440px; max-width: 92vw; background: var(--panel); border: 1px solid var(--border);
       border-radius: var(--r-lg); padding: 20px; box-shadow: var(--shadow-pop); position: relative;

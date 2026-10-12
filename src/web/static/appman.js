@@ -156,7 +156,7 @@ async function renderNginxPerf(box) {
         const v = escapeHtml(val(p));
         const input = p.type === "select"
           ? `<select id="perf-${p.k}"><option value="on" ${v === "on" ? "selected" : ""}>on</option><option value="off" ${v === "off" ? "selected" : ""}>off</option></select>`
-          : `<input id="perf-${p.k}" type="${p.type === "num" ? "number" : "text"}" min="${p.type === "num" ? "0" : ""}" step="any" value="${v}">`;
+          : `<input id="perf-${p.k}" type="${p.type === "num" ? "number" : "text"}" autocomplete="off" min="${p.type === "num" ? "0" : ""}" step="any" value="${v}">`;
         return `<div class="field"><label>${t(p.label)}</label>${input}</div>`;
       }).join("")}
       </div>
