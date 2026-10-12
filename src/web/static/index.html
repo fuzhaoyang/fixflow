@@ -459,7 +459,10 @@
     <div class="content store-view" id="view-store">
       <div class="store-toolbar">
         <span class="logs-target" data-i18n="store.title">软件商店</span>
-        <input id="store-search" type="text" placeholder="搜索软件（apt 源）…" data-i18n="store.searchPh" data-i18n-attr="placeholder">
+        <div class="store-search-wrap">
+          <input id="store-search" type="text" autocomplete="off" placeholder="搜索软件（apt 源）…" data-i18n="store.searchPh" data-i18n-attr="placeholder">
+          <button class="store-search-btn" id="store-search-btn" type="button" title="搜索" data-i18n="store.searchPh" data-i18n-attr="title" aria-label="搜索"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></button>
+        </div>
       </div>
       <div class="store-filters">
         <button class="store-filter active" data-store-filter="all" data-i18n="store.filterAll">全部</button>
@@ -756,12 +759,24 @@
     <p class="modal-text" id="proc-text"></p>
     <div class="field">
       <label data-i18n="proc.pwdLabel">登录密码</label>
-      <div class="pwd-wrap"><input id="proc-password" type="password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
+      <div class="pwd-wrap"><input id="proc-password" type="password" autocomplete="current-password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
       <div class="hint" id="proc-err" style="color:var(--bad)"></div>
     </div>
     <div class="modal-actions">
       <button class="btn" id="proc-cancel" data-i18n="proc.cancel">取消</button>
       <button class="btn" id="proc-confirm" data-i18n="proc.confirm">确认执行</button>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="store-progress-mask">
+  <div class="modal">
+    <button class="modal-close" id="store-progress-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2 id="store-progress-title">安装软件</h2>
+    <div class="progress-track"><div class="progress-bar" id="store-progress-bar"></div></div>
+    <div class="hint store-progress-status" id="store-progress-status"></div>
+    <div class="store-log" id="store-progress-log"></div>
+    <div class="modal-actions">
+      <button class="btn" id="store-progress-close-btn" style="display:none" data-i18n="store.close">关闭</button>
     </div>
   </div>
 </div>

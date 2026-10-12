@@ -150,6 +150,15 @@
     .field .hint { font-size: 11px; color: var(--muted); margin-top: 4px; }
     .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
     .modal-actions .btn { padding: 8px 18px; }
+    .progress-track { position: relative; height: 8px; border-radius: 999px; background: var(--border); overflow: hidden; margin: 2px 0 10px; }
+    .progress-bar { position: relative; height: 100%; width: 0; border-radius: 999px; background: var(--accent); transition: width .25s ease; }
+    .progress-bar.indeterminate { width: 30%; animation: store-progress-slide 1.1s ease-in-out infinite; }
+    @keyframes store-progress-slide { 0% { left: -30%; } 100% { left: 100%; } }
+    .store-progress-status { margin: 8px 0; min-height: 18px; }
+    .store-progress-status.ok { color: var(--ok); }
+    .store-progress-status.bad { color: var(--bad); }
+    .store-log { height: 180px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 10px; font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+    .store-log div { line-height: 1.5; }
     .model-loading { font-size: 12px; color: var(--muted); margin-top: 4px; }
     .model-loading.error { color: var(--bad); }
     .save-msg {
@@ -458,8 +467,12 @@
     .store-filter:hover { color: var(--text); }
     .store-filter.active { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
     .store-toolbar { display: flex; align-items: center; gap: 8px; }
-    .store-toolbar input[type="text"] { flex: 1; min-width: 180px; padding: 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
+    .store-search-wrap { position: relative; }
+    .store-toolbar input[type="text"] { width: 280px; padding: 8px 34px 8px 12px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 13px; outline: none; }
     .store-toolbar input[type="text"]:focus { border-color: var(--accent); }
+    .store-search-btn { position: absolute; right: 3px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); }
+    .store-search-btn:hover { color: var(--accent); }
+    .store-search-btn svg { width: 16px; height: 16px; }
     .store-body { flex: 1; overflow-y: auto; }
     .store-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .store-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: var(--shadow-card); }

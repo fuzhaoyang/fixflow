@@ -434,22 +434,9 @@ document.getElementById("proc-confirm").onclick = async () => {
   const fsOp = isFs ? procTarget.op : "";
   try {
     let res, data;
-    if (isStoreInstall) {
-      res = await fetch("api/store/install", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg: procTarget.pkg, password }) });
-      data = await res.json();
-      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
+    if (isStoreInstall || isStoreUninstall) {
       procMask.classList.remove("show");
-      showSaveMsg(t("store.doneMsg"), data.ok ? "ok" : "warn");
-      loadStore();
-      return;
-    }
-    if (isStoreUninstall) {
-      res = await fetch("api/store/uninstall", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg: procTarget.pkg, password }) });
-      data = await res.json();
-      if (res.status === 403 || res.status === 400) { errEl.textContent = data.error || t("op.fail"); return; }
-      procMask.classList.remove("show");
-      showSaveMsg(t("store.uninstallMsg"), data.ok ? "ok" : "warn");
-      loadStore();
+      runStoreOp(isStoreInstall ? "install" : "uninstall", procTarget.pkg, password);
       return;
     }
     if (isClearHistory) {
@@ -550,6 +537,87 @@ document.getElementById("proc-confirm").onclick = async () => {
     confirmBtn.disabled = false;
   }
 };
+
+// 软件商店 安装/卸载：SSE 实时进度 + 日志 + 完成后刷新列表
+const storeProgressMask = document.getElementById("store-progress-mask");
+const storeProgressClose = document.getElementById("store-progress-close");
+const storeProgressCloseBtn = document.getElementById("store-progress-close-btn");
+const storeProgressTitle = document.getElementById("store-progress-title");
+const storeProgressBar = document.getElementById("store-progress-bar");
+const storeProgressStatus = document.getElementById("store-progress-status");
+const storeProgressLog = document.getElementById("store-progress-log");
+
+async function runStoreOp(op, pkg, password) {
+  const isInstall = op === "install";
+  storeProgressTitle.textContent = isInstall ? t("store.installTitle") : t("store.uninstallTitle");
+  storeProgressBar.className = "progress-bar indeterminate";
+  storeProgressBar.style.width = "";
+  storeProgressStatus.textContent = isInstall ? t("store.installing") : t("store.uninstalling");
+  storeProgressStatus.className = "hint store-progress-status";
+  storeProgressLog.textContent = "";
+  storeProgressClose.style.display = "none";
+  storeProgressCloseBtn.style.display = "none";
+  storeProgressMask.classList.add("show");
+  const finish = (ok, msg) => {
+    storeProgressStatus.textContent = msg;
+    storeProgressStatus.className = ok ? "hint store-progress-status ok" : "hint store-progress-status bad";
+    if (ok) storeProgressBar.classList.remove("indeterminate");
+    storeProgressBar.style.width = "100%";
+    storeProgressClose.style.display = "";
+    storeProgressCloseBtn.style.display = "";
+    loadStore();
+  };
+  const appendLog = (line) => {
+    while (storeProgressLog.childElementCount >= 200) storeProgressLog.firstElementChild.remove();
+    const d = document.createElement("div");
+    d.textContent = line;
+    storeProgressLog.appendChild(d);
+    storeProgressLog.scrollTop = storeProgressLog.scrollHeight;
+  };
+  try {
+    const res = await fetch(isInstall ? "api/store/install" : "api/store/uninstall", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pkg, password }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      finish(false, data.error || t("op.fail"));
+      return;
+    }
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        for (const part of chunk.split("\n")) {
+          if (!part.startsWith("data:")) continue;
+          let ev;
+          try { ev = JSON.parse(part.slice(5).trim()); } catch { continue; }
+          if (!ev) continue;
+          if (ev.type === "log") appendLog(ev.line || "");
+          else if (ev.type === "progress") {
+            storeProgressBar.classList.remove("indeterminate");
+            storeProgressBar.style.width = Math.max(0, Math.min(100, Number(ev.pct))) + "%";
+          } else if (ev.type === "done") {
+            finish(Boolean(ev.ok), ev.ok ? t("store.doneMsg") : (isInstall ? t("store.installErr") : t("store.uninstallErr")));
+            return;
+          }
+        }
+      }
+    }
+    finish(false, isInstall ? t("store.installErr") : t("store.uninstallErr"));
+  } catch {
+    finish(false, t("op.fail"));
+  }
+}
+
+storeProgressClose.onclick = () => storeProgressMask.classList.remove("show");
+storeProgressCloseBtn.onclick = () => storeProgressMask.classList.remove("show");
+storeProgressMask.addEventListener("click", (e) => { if (e.target === storeProgressMask) storeProgressMask.classList.remove("show"); });
 
 // 系统操作（更新/清理/重启/关机）密码验证弹窗
 document.addEventListener("click", (e) => {

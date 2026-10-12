@@ -21,7 +21,7 @@ import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPasswor
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
-import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules } from "../firewall.js";
+import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 const VERSION = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")).version || "0.0.0";
@@ -45,6 +45,60 @@ const STORE_PKGS = [
   { name: "unzip", desc: "ZIP 压缩包解压工具，支持列出内容、选择性解压与密码保护压缩包，日常文件处理常用。" },
   { name: "rsync", desc: "高效文件同步与备份工具，支持增量传输、远程同步与压缩，是数据备份与迁移的标准方案。" },
 ];
+
+// 解析 dpkg-query 输出，返回已安装包名集合（兼容多架构后缀 :amd64）
+export function parseInstalledDpkg(stdout) {
+  const out = new Set();
+  for (const line of String(stdout || "").split("\n")) {
+    if (!line.includes("install ok installed")) continue;
+    const pkg = line.trim().split(/\s+/).pop().split(":")[0];
+    if (pkg) out.add(pkg);
+  }
+  return out;
+}
+
+// 从 apt 输出行中提取进度百分比（APT::Status-Fd 协议 STATUS 行 / Progress 样式），拿不到返回 null
+export function parseAptPct(line) {
+  const m = String(line || "").match(/STATUS:\s*(\d{1,3})/i) || String(line || "").match(/Progress:\s*\[\s*(\d{1,3})%/i);
+  if (m) return Math.min(100, +m[1]);
+  return null;
+}
+
+const APT_PROTO_RE = /^(PMERROR|PMESSAGES|PSTATUS|PREG|PACKAGE|STATUS):/;
+
+// 流式执行命令（root 直跑或 sudo -S），每行回调；解决缓冲式执行 50KB 截断被杀的问题
+function spawnLines(cmd, { onLine, timeout = 300000, signal } = {}) {
+  return new Promise((resolve) => {
+    const child = spawn("/bin/sh", ["-c", cmd], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env } });
+    let buf = "";
+    let finished = false;
+    const killTree = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
+    const finish = (code, aborted = false) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (buf.trim()) onLine(buf.trim());
+      resolve({ exitCode: typeof code === "number" ? code : 1, aborted });
+    };
+    const flush = (d) => {
+      buf += d;
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).replace(/\r$/, "");
+        buf = buf.slice(i + 1);
+        onLine(line);
+      }
+    };
+    child.stdout.on("data", flush);
+    child.stderr.on("data", flush);
+    let exitCode = 1;
+    child.on("error", () => finish(1));
+    child.on("exit", (code) => { exitCode = typeof code === "number" ? code : 1; });
+    child.on("close", () => finish(exitCode));
+    const timer = setTimeout(() => { killTree(); finish(1, true); }, timeout);
+    if (signal) signal.addEventListener("abort", () => { killTree(); finish(1, true); }, { once: true });
+  });
+}
 
 const TLS_CERT_DIR = join(homedir(), ".config", "fixflow", "certs");
 async function ensureTlsCert(dir = TLS_CERT_DIR) {
@@ -222,6 +276,7 @@ export async function startWeb(config = {}, deps = {}) {
   const renewToolCache = createTtlCache(30000);
   const sslCache = createTtlCache(30000);
   const logsSourcesCache = createTtlCache(10000);
+  const installedCache = createTtlCache(5000);
   const waiters = new Map();
   let seq = 0;
   const configPath = config.configPath || defaultConfigPath();
@@ -1315,19 +1370,15 @@ export async function startWeb(config = {}, deps = {}) {
         }
       } else if (url.pathname === "/api/store" && req.method === "GET") {
         const q = String(url.searchParams.get("q") || "").trim();
-        const installed = new Set();
-        const dpkg = await execCmd("dpkg-query -W -f='${Status} ${Package}\\n' 2>/dev/null", { timeout: 10000 }).catch(() => ({ stdout: "" }));
-        for (const line of (dpkg.stdout || "").split("\n")) {
-          if (line.includes("install ok installed")) {
-            const pkg = line.split(" ").pop();
-            if (pkg) installed.add(pkg);
-          }
-        }
+        const installed = await installedCache("dpkg", async () => {
+          const dpkg = await execCmd("dpkg-query -W -f='${Status} ${Package}\\n' 2>/dev/null", { timeout: 10000, maxOutput: 2 * 1024 * 1024 }).catch(() => ({ stdout: "" }));
+          return parseInstalledDpkg(dpkg.stdout || "");
+        });
         let apps = STORE_PKGS.map((p) => ({ ...p, installed: installed.has(p.name) }));
         if (q) {
           const ql = q.toLowerCase();
           apps = apps.filter((a) => a.name.toLowerCase().includes(ql) || (a.desc || "").toLowerCase().includes(ql));
-          const search = await execCmd(`apt-cache search --no-all-versions ${JSON.stringify(q)} 2>/dev/null | head -50`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
+          const search = await execCmd(`apt-cache search -n ${JSON.stringify(q)} 2>/dev/null | head -50`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
           const found = (search.stdout || "").split("\n").filter(Boolean).map((l) => {
             const sep = l.indexOf(" - ");
             const name = (sep > 0 ? l.slice(0, sep) : l).trim();
@@ -1337,23 +1388,35 @@ export async function startWeb(config = {}, deps = {}) {
           const known = new Set(apps.map((a) => a.name));
           apps = [...apps, ...found.filter((f) => !known.has(f.name))];
         }
-        sendJson(res, { apps, q });
-      } else if (url.pathname === "/api/store/install" && req.method === "POST") {
+        res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+        res.end(JSON.stringify({ apps, q }));
+      } else if ((url.pathname === "/api/store/install" || url.pathname === "/api/store/uninstall") && req.method === "POST") {
         const body = await readBody(req);
         const { pkg, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
         const name = String(pkg || "").trim();
         if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
-        const r = await fwRun(`DEBIAN_FRONTEND=noninteractive apt-get install -y ${name} 2>&1`, password, 300000);
-        sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
-      } else if (url.pathname === "/api/store/uninstall" && req.method === "POST") {
-        const body = await readBody(req);
-        const { pkg, password } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
-        const name = String(pkg || "").trim();
-        if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
-        const r = await fwRun(`DEBIAN_FRONTEND=noninteractive apt-get purge -y ${name} 2>&1`, password, 300000);
-        sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
+        const isInstall = url.pathname.endsWith("/install");
+        const op = isInstall ? "install -y" : "purge -y";
+        res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", Connection: "keep-alive" });
+        res.flushHeaders?.();
+        const send = (type, data) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); };
+        const aborted = new AbortController();
+        res.on("close", () => aborted.abort());
+        const wrapped = sudoCmd(`DEBIAN_FRONTEND=noninteractive apt-get -o APT::Status-Fd=1 ${op} ${name} 2>&1`, password);
+        let lastPct = -1;
+        const onLine = (line) => {
+          if (APT_PROTO_RE.test(line)) {
+            const pct = parseAptPct(line);
+            if (pct !== null && pct !== lastPct) { lastPct = pct; send("progress", { pct }); }
+            return;
+          }
+          if (line.trim()) send("log", { line: line.slice(0, 500) });
+        };
+        const r = await spawnLines(wrapped, { onLine, timeout: 300000, signal: aborted.signal });
+        installedCache.clear("dpkg");
+        send("done", { ok: r.exitCode === 0 && !r.aborted, exitCode: r.exitCode, aborted: r.aborted });
+        res.end();
       } else if (url.pathname === "/api/system/ops" && req.method === "GET") {
         sendJson(res, { ops: await readSysOps() });
       } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {
