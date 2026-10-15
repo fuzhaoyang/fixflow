@@ -199,7 +199,7 @@ const I18N_ZH = {
   "net.pingOk": "可达", "net.pingFail": "不可达",
   "net.aiPrompt": "请帮我诊断当前服务器的网络状况，分析以下信息并给出建议：",
   "net.aiListen": "\n监听端口：", "net.aiConn": "\n连接最多的端口：", "net.aiNic": "\n网卡状态：", "net.aiNone": "无",
-  "help.title": "Fixflow 使用文档", "help.btn": "帮助文档", "help.back": "返回",
+  "help.title": "Fixflow 使用文档", "help.btn": "帮助文档", "help.back": "返回", "help.tocToggle": "折叠/展开目录",
   "sys.os": "当前系统：{os} · {arch}", "sys.uptime": "持续运行：{up}",
   "sys.infoTitle": "系统信息", "sys.kernel": "内核", "sys.hostname": "主机名", "sys.arch": "架构", "sys.cpuModel": "CPU 型号", "sys.cpuCount": "CPU 核数", "sys.memTotal": "总内存", "sys.swapTotal": "Swap 总量", "sys.tz": "时区",
   "sys.healthTitle": "健康检查", "sys.loadTitle": "系统负载", "sys.loadHint": "1/5/15 分钟平均负载，持续超过 {n}（核数）说明任务在排队。",
@@ -435,7 +435,7 @@ const I18N_EN = {
   "net.pingOk": "reachable", "net.pingFail": "unreachable",
   "net.aiPrompt": "Please diagnose this server's network status. Analyze the following and give advice:",
   "net.aiListen": "\nListening ports: ", "net.aiConn": "\nTop connection ports: ", "net.aiNic": "\nNIC states: ", "net.aiNone": "none",
-  "help.title": "Fixflow Docs", "help.btn": "Help", "help.back": "Back",
+  "help.title": "Fixflow Docs", "help.btn": "Help", "help.back": "Back", "help.tocToggle": "Collapse/Expand TOC",
   "sys.os": "System: {os} · {arch}", "sys.uptime": "Uptime: {up}",
   "sys.infoTitle": "System Info", "sys.kernel": "Kernel", "sys.hostname": "Hostname", "sys.arch": "Arch", "sys.cpuModel": "CPU model", "sys.cpuCount": "CPU cores", "sys.memTotal": "Total memory", "sys.swapTotal": "Swap total", "sys.tz": "Timezone",
   "sys.healthTitle": "Health Check", "sys.loadTitle": "System Load", "sys.loadHint": "1/5/15-min load average; sustained above {n} (cores) means tasks are queuing.",
@@ -475,19 +475,308 @@ const I18N_EN = {
 Object.assign(I18N.zh, I18N_ZH);
 Object.assign(I18N.en, I18N_EN);
 
-I18N.zh["help.body"] = `<h3>一、它是什么</h3>
+
+const FIG = {
+setup: `<svg class="help-fig" viewBox="0 0 620 170" role="img">
+  <rect x="15" y="30" width="180" height="110" rx="12" class="fg-panel"/>
+  <circle cx="105" cy="62" r="16" class="fg-accent" opacity=".15"/>
+  <path d="M99 62l5 5 9-10" class="fg-arrow-head"/>
+  <text x="105" y="98" text-anchor="middle" class="fg-head">1 Install</text>
+  <text x="105" y="116" text-anchor="middle" class="fg-text">npm i -g fixflow</text>
+  <text x="105" y="132" text-anchor="middle" class="fg-text">run: fixflow</text>
+  <path d="M205 85h55" class="fg-arrow"/><path d="M255 85l-9-6M255 85l-9 6" class="fg-arrow-head"/>
+  <rect x="268" y="30" width="180" height="110" rx="12" class="fg-panel"/>
+  <circle cx="358" cy="62" r="16" class="fg-accent" opacity=".15"/>
+  <path d="M358 54v16M350 62h16" class="fg-arrow-head"/>
+  <text x="358" y="98" text-anchor="middle" class="fg-head">2 Wizard</text>
+  <text x="358" y="116" text-anchor="middle" class="fg-text">provider → key → model</text>
+  <text x="358" y="132" text-anchor="middle" class="fg-text">start panel?</text>
+  <path d="M458 85h55" class="fg-arrow"/><path d="M508 85l-9-6M508 85l-9 6" class="fg-arrow-head"/>
+  <rect x="521" y="30" width="84" height="110" rx="12" class="fg-panel"/>
+  <circle cx="563" cy="62" r="16" class="fg-accent" opacity=".15"/>
+  <path d="M558 58l5 5 8-9" class="fg-arrow-head"/>
+  <text x="563" y="98" text-anchor="middle" class="fg-head">3 Use</text>
+  <text x="563" y="116" text-anchor="middle" class="fg-text">open panel</text>
+  <text x="563" y="132" text-anchor="middle" class="fg-text">fixflow doctor</text>
+</svg>`,
+layout: `<svg class="help-fig" viewBox="0 0 620 210" role="img">
+  <rect x="15" y="15" width="140" height="180" rx="10" class="fg-panel"/>
+  <text x="85" y="36" text-anchor="middle" class="fg-head">Sidebar</text>
+  <rect x="28" y="46" width="114" height="16" rx="5" class="fg-btn"/>
+  <rect x="28" y="68" width="114" height="16" rx="5" class="fg-btn"/>
+  <rect x="28" y="90" width="114" height="16" rx="5" class="fg-btn"/>
+  <rect x="28" y="112" width="114" height="16" rx="5" class="fg-btn"/>
+  <rect x="28" y="134" width="114" height="16" rx="5" class="fg-btn"/>
+  <rect x="165" y="15" width="440" height="30" rx="8" class="fg-btn"/>
+  <text x="180" y="34" class="fg-text">top bar: help · lang · bell · theme · account</text>
+  <rect x="165" y="55" width="212" height="140" rx="10" class="fg-panel"/>
+  <text x="271" y="75" text-anchor="middle" class="fg-head">Cards</text>
+  <circle cx="225" cy="105" r="20" class="fg-ok" opacity=".18"/><circle cx="225" cy="105" r="13" class="fg-line"/>
+  <circle cx="295" cy="105" r="20" class="fg-accent" opacity=".18"/><circle cx="295" cy="105" r="13" class="fg-line"/>
+  <circle cx="225" cy="150" r="20" class="fg-warn" opacity=".18"/><circle cx="225" cy="150" r="13" class="fg-line"/>
+  <circle cx="295" cy="150" r="20" class="fg-accent" opacity=".18"/><circle cx="295" cy="150" r="13" class="fg-line"/>
+  <rect x="387" y="55" width="218" height="140" rx="10" class="fg-panel"/>
+  <text x="496" y="75" text-anchor="middle" class="fg-head">Charts</text>
+  <path d="M400 150 L440 132 L470 142 L500 120 L540 128 L585 100" class="fg-chart-line"/>
+  <rect x="400" y="160" width="16" height="26" rx="3" class="fg-bar" opacity=".7"/>
+  <rect x="424" y="150" width="16" height="36" rx="3" class="fg-bar" opacity=".5"/>
+  <rect x="448" y="142" width="16" height="44" rx="3" class="fg-bar" opacity=".7"/>
+  <rect x="472" y="154" width="16" height="32" rx="3" class="fg-bar" opacity=".5"/>
+  <rect x="496" y="134" width="16" height="52" rx="3" class="fg-bar" opacity=".7"/>
+  <rect x="520" y="160" width="16" height="26" rx="3" class="fg-bar" opacity=".5"/>
+</svg>`,
+topbar: `<svg class="help-fig" viewBox="0 0 620 80" role="img">
+  <rect x="15" y="18" width="590" height="44" rx="8" class="fg-btn"/>
+  <text x="30" y="44" class="fg-head">View title</text>
+  <text x="130" y="44" class="fg-text">search box</text>
+  <text x="220" y="44" class="fg-text">model status</text>
+  <rect x="336" y="28" width="52" height="24" rx="6" class="fg-btn"/><text x="362" y="45" text-anchor="middle" class="fg-text">Help</text>
+  <rect x="394" y="28" width="48" height="24" rx="6" class="fg-btn"/><text x="418" y="45" text-anchor="middle" class="fg-text">Lang</text>
+  <rect x="448" y="28" width="48" height="24" rx="6" class="fg-btn"/><text x="472" y="45" text-anchor="middle" class="fg-text">Bell</text>
+  <rect x="502" y="28" width="48" height="24" rx="6" class="fg-btn"/><text x="526" y="45" text-anchor="middle" class="fg-text">Theme</text>
+  <rect x="556" y="28" width="40" height="24" rx="6" class="fg-btn"/><circle cx="576" cy="40" r="6" class="fg-line"/>
+</svg>`,
+system: `<svg class="help-fig" viewBox="0 0 620 180" role="img">
+  <rect x="15" y="20" width="590" height="140" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">System health</text>
+  <rect x="28" y="58" width="8" height="8" rx="2" class="fg-ok"/><rect x="44" y="56" width="300" height="12" rx="3" class="fg-btn"/><text x="354" y="66" class="fg-text">OK</text>
+  <rect x="28" y="80" width="8" height="8" rx="2" class="fg-ok"/><rect x="44" y="78" width="300" height="12" rx="3" class="fg-btn"/><text x="354" y="88" class="fg-text">OK</text>
+  <rect x="28" y="102" width="8" height="8" rx="2" class="fg-warn"/><rect x="44" y="100" width="300" height="12" rx="3" class="fg-btn"/><text x="354" y="110" class="fg-text">WARN</text>
+  <rect x="28" y="124" width="8" height="8" rx="2" class="fg-ok"/><rect x="44" y="122" width="300" height="12" rx="3" class="fg-btn"/><text x="354" y="132" class="fg-text">OK</text>
+  <rect x="492" y="56" width="100" height="24" rx="6" class="fg-btn-accent"/><text x="542" y="72" text-anchor="middle" class="fg-btn-txt-accent">Report</text>
+  <rect x="492" y="88" width="100" height="24" rx="6" class="fg-btn"/><text x="542" y="104" text-anchor="middle" class="fg-text">Download .md</text>
+</svg>`,
+network: `<svg class="help-fig" viewBox="0 0 620 200" role="img">
+  <rect x="15" y="20" width="360" height="160" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Listening ports</text>
+  <rect x="28" y="56" width="330" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="76" width="330" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="96" width="330" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="116" width="330" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="136" width="330" height="14" rx="3" class="fg-btn"/>
+  <text x="28" y="168" class="fg-text">port lookup: which process uses port X?</text>
+  <rect x="395" y="40" width="210" height="80" rx="10" class="fg-panel"/>
+  <text x="500" y="62" text-anchor="middle" class="fg-head">Connectivity</text>
+  <rect x="420" y="74" width="90" height="20" rx="5" class="fg-btn"/>
+  <rect x="518" y="74" width="70" height="20" rx="5" class="fg-btn-accent"/><text x="553" y="88" text-anchor="middle" class="fg-btn-txt-accent">Ping</text>
+  <text x="500" y="112" text-anchor="middle" class="fg-text">target + result</text>
+</svg>`,
+nginx: `<svg class="help-fig" viewBox="0 0 620 190" role="img">
+  <rect x="15" y="20" width="460" height="150" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">nginx.conf</text>
+  <rect x="28" y="56" width="420" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="74" width="420" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="92" width="380" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="110" width="300" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="128" width="420" height="12" rx="3" class="fg-btn"/>
+  <rect x="492" y="40" width="112" height="26" rx="6" class="fg-btn-accent"/><text x="548" y="56" text-anchor="middle" class="fg-btn-txt-accent">Save &amp; reload</text>
+  <rect x="492" y="76" width="112" height="26" rx="6" class="fg-btn"/><text x="548" y="92" text-anchor="middle" class="fg-text">Validate</text>
+  <rect x="492" y="112" width="112" height="26" rx="6" class="fg-btn"/><text x="548" y="128" text-anchor="middle" class="fg-text">Error log</text>
+  <text x="492" y="162" class="fg-text">status · start/stop</text>
+</svg>`,
+firewall: `<svg class="help-fig" viewBox="0 0 620 200" role="img">
+  <rect x="15" y="20" width="460" height="160" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Firewall rules</text>
+  <circle cx="470" cy="41" r="5" class="fg-ok"/><text x="482" y="45" class="fg-text">enabled</text>
+  <rect x="28" y="56" width="420" height="18" rx="4" class="fg-btn"/><text x="38" y="69" class="fg-text">80/tcp · web</text><text x="150" y="69" class="fg-ok">ALLOW</text>
+  <rect x="28" y="80" width="420" height="18" rx="4" class="fg-btn"/><text x="38" y="93" class="fg-text">443/tcp · https</text><text x="150" y="93" class="fg-ok">ALLOW</text>
+  <rect x="28" y="104" width="420" height="18" rx="4" class="fg-btn"/><text x="38" y="117" class="fg-text">22/tcp · ssh</text><text x="150" y="117" class="fg-warn">open to all</text>
+  <rect x="28" y="128" width="420" height="18" rx="4" class="fg-btn"/><text x="38" y="141" class="fg-text">9000/tcp · panel</text><text x="150" y="141" class="fg-ok">ALLOW</text>
+  <rect x="492" y="56" width="112" height="26" rx="6" class="fg-btn-accent"/><text x="548" y="72" text-anchor="middle" class="fg-btn-txt-accent">Close port</text>
+  <rect x="492" y="92" width="112" height="26" rx="6" class="fg-btn"/><text x="548" y="108" text-anchor="middle" class="fg-text">Add rule</text>
+</svg>`,
+acl: `<svg class="help-fig" viewBox="0 0 620 150" role="img">
+  <rect x="15" y="20" width="300" height="110" rx="10" class="fg-panel"/>
+  <rect x="28" y="34" width="70" height="20" rx="5" class="fg-btn-accent"/><text x="63" y="48" text-anchor="middle" class="fg-btn-txt-accent">Black</text>
+  <rect x="106" y="34" width="70" height="20" rx="5" class="fg-btn"/><text x="141" y="48" text-anchor="middle" class="fg-text">White</text>
+  <rect x="28" y="64" width="240" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="84" width="240" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="104" width="240" height="14" rx="3" class="fg-btn"/>
+  <rect x="360" y="60" width="220" height="50" rx="10" class="fg-panel"/>
+  <text x="470" y="82" text-anchor="middle" class="fg-head">IP access control</text>
+  <text x="470" y="98" text-anchor="middle" class="fg-text">applies to panel port · needs UFW</text>
+</svg>`,
+databases: `<svg class="help-fig" viewBox="0 0 620 190" role="img">
+  <rect x="15" y="20" width="590" height="150" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Connections</text>
+  <rect x="492" y="34" width="100" height="22" rx="6" class="fg-btn-accent"/><text x="542" y="49" text-anchor="middle" class="fg-btn-txt-accent">Add</text>
+  <rect x="28" y="56" width="560" height="18" rx="4" class="fg-btn"/><circle cx="46" cy="65" r="6" class="fg-ok" opacity=".8"/><text x="62" y="69" class="fg-text">PostgreSQL · app_db</text><rect x="480" y="58" width="96" height="14" rx="4" class="fg-btn"/><text x="528" y="68" text-anchor="middle" class="fg-text">test</text>
+  <rect x="28" y="80" width="560" height="18" rx="4" class="fg-btn"/><circle cx="46" cy="89" r="6" class="fg-ok" opacity=".8"/><text x="62" y="93" class="fg-text">MySQL · cache_db</text>
+  <rect x="28" y="104" width="560" height="18" rx="4" class="fg-btn"/><circle cx="46" cy="113" r="6" class="fg-warn" opacity=".8"/><text x="62" y="117" class="fg-text">Redis · session (stopped)</text>
+  <rect x="28" y="128" width="560" height="18" rx="4" class="fg-btn"/><circle cx="46" cy="137" r="6" class="fg-ok" opacity=".8"/><text x="62" y="141" class="fg-text">SQLite · data.db</text>
+</svg>`,
+docker: `<svg class="help-fig" viewBox="0 0 620 200" role="img">
+  <rect x="15" y="20" width="590" height="160" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Containers</text>
+  <rect x="28" y="56" width="560" height="26" rx="5" class="fg-btn"/>
+  <circle cx="46" cy="69" r="6" class="fg-ok" opacity=".8"/><text x="62" y="73" class="fg-text">web-nginx</text><rect x="200" y="66" width="70" height="6" rx="3" class="fg-bar" opacity=".5"/><rect x="290" y="66" width="40" height="6" rx="3" class="fg-bar" opacity=".7"/>
+  <rect x="28" y="88" width="560" height="26" rx="5" class="fg-btn"/>
+  <circle cx="46" cy="101" r="6" class="fg-ok" opacity=".8"/><text x="62" y="105" class="fg-text">api-node</text><rect x="200" y="98" width="40" height="6" rx="3" class="fg-bar" opacity=".5"/><rect x="290" y="98" width="60" height="6" rx="3" class="fg-bar" opacity=".7"/>
+  <rect x="28" y="120" width="560" height="26" rx="5" class="fg-btn"/>
+  <circle cx="46" cy="133" r="6" class="fg-warn" opacity=".8"/><text x="62" y="137" class="fg-text">db-redis (stopped)</text>
+  <text x="28" y="152" class="fg-text">actions: start · stop · restart · remove</text>
+  <text x="280" y="152" class="fg-text">images · prune dangling</text>
+  <text x="460" y="152" class="fg-text">logs · details</text>
+</svg>`,
+ssl: `<svg class="help-fig" viewBox="0 0 620 170" role="img">
+  <rect x="15" y="20" width="280" height="130" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">example.com</text>
+  <text x="30" y="63" class="fg-text">SAN: example.com · www.*</text>
+  <rect x="30" y="76" width="220" height="8" rx="4" class="fg-btn"/>
+  <rect x="30" y="76" width="150" height="8" rx="4" class="fg-ok" opacity=".8"/>
+  <text x="30" y="100" class="fg-text">expires in 45 days</text>
+  <rect x="30" y="112" width="80" height="24" rx="6" class="fg-btn-accent"/><text x="70" y="128" text-anchor="middle" class="fg-btn-txt-accent">Renew</text>
+  <rect x="320" y="20" width="280" height="130" rx="10" class="fg-panel"/>
+  <text x="335" y="45" class="fg-head">api.example.org</text>
+  <text x="335" y="63" class="fg-text">SAN: api.example.org</text>
+  <rect x="335" y="76" width="220" height="8" rx="4" class="fg-btn"/>
+  <rect x="335" y="76" width="40" height="8" rx="4" class="fg-warn" opacity=".8"/>
+  <text x="335" y="100" class="fg-text">expires in 5 days</text>
+  <rect x="335" y="112" width="80" height="24" rx="6" class="fg-btn-accent"/><text x="375" y="128" text-anchor="middle" class="fg-btn-txt-accent">Renew</text>
+</svg>`,
+systemd: `<svg class="help-fig" viewBox="0 0 620 190" role="img">
+  <rect x="15" y="20" width="590" height="150" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Services</text>
+  <rect x="28" y="56" width="560" height="26" rx="5" class="fg-btn"/>
+  <circle cx="46" cy="69" r="6" class="fg-ok" opacity=".8"/><text x="62" y="73" class="fg-text">nginx</text><text x="470" y="73" class="fg-text">active (running)</text>
+  <rect x="28" y="88" width="560" height="26" rx="5" class="fg-btn"/>
+  <circle cx="46" cy="101" r="6" class="fg-ok" opacity=".8"/><text x="62" y="105" class="fg-text">fixflow</text><text x="470" y="105" class="fg-text">active (running)</text>
+  <rect x="28" y="120" width="560" height="26" rx="5" class="fg-btn"/>
+  <circle cx="46" cy="133" r="6" class="fg-bad" opacity=".8"/><text x="62" y="137" class="fg-text">mysql</text><text x="470" y="137" class="fg-text">failed</text>
+  <text x="28" y="162" class="fg-text">start · stop · restart · reload · enable</text>
+  <text x="280" y="162" class="fg-text">deps &amp; logs · filter</text>
+</svg>`,
+store: `<svg class="help-fig" viewBox="0 0 620 170" role="img">
+  <rect x="15" y="20" width="182" height="130" rx="10" class="fg-panel"/>
+  <rect x="28" y="34" width="34" height="34" rx="8" class="fg-accent" opacity=".5"/>
+  <text x="45" y="56" text-anchor="middle" class="fg-btn-txt-accent">N</text>
+  <text x="30" y="88" class="fg-head">Nginx</text>
+  <text x="30" y="104" class="fg-text">web server</text>
+  <rect x="28" y="114" width="70" height="22" rx="6" class="fg-btn-accent"/><text x="63" y="129" text-anchor="middle" class="fg-btn-txt-accent">Install</text>
+  <rect x="219" y="20" width="182" height="130" rx="10" class="fg-panel"/>
+  <rect x="232" y="34" width="34" height="34" rx="8" class="fg-accent" opacity=".5"/>
+  <text x="249" y="56" text-anchor="middle" class="fg-btn-txt-accent">DB</text>
+  <text x="234" y="88" class="fg-head">MySQL</text>
+  <text x="234" y="104" class="fg-text">database</text>
+  <rect x="232" y="114" width="70" height="22" rx="6" class="fg-btn-accent"/><text x="267" y="129" text-anchor="middle" class="fg-btn-txt-accent">Install</text>
+  <rect x="423" y="20" width="182" height="130" rx="10" class="fg-panel"/>
+  <rect x="436" y="34" width="34" height="34" rx="8" class="fg-accent" opacity=".5"/>
+  <text x="453" y="56" text-anchor="middle" class="fg-btn-txt-accent">R</text>
+  <text x="437" y="88" class="fg-head">Redis</text>
+  <text x="437" y="104" class="fg-text">cache</text>
+  <rect x="436" y="114" width="70" height="22" rx="6" class="fg-btn-accent"/><text x="471" y="129" text-anchor="middle" class="fg-btn-txt-accent">Install</text>
+</svg>`,
+logs: `<svg class="help-fig" viewBox="0 0 620 180" role="img">
+  <rect x="15" y="20" width="590" height="140" rx="10" class="fg-panel"/>
+  <rect x="28" y="34" width="200" height="20" rx="6" class="fg-btn"/><text x="38" y="48" class="fg-text">search…</text>
+  <rect x="240" y="34" width="60" height="20" rx="6" class="fg-btn-accent"/><text x="270" y="48" text-anchor="middle" class="fg-btn-txt-accent">Filter</text>
+  <rect x="512" y="34" width="80" height="20" rx="6" class="fg-btn"/><text x="552" y="48" text-anchor="middle" class="fg-text">Follow</text>
+  <rect x="28" y="64" width="560" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="82" width="560" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="100" width="520" height="12" rx="3" class="fg-btn"/>
+  <rect x="28" y="118" width="560" height="12" rx="3" class="fg-btn"/>
+  <rect x="492" y="132" width="100" height="20" rx="6" class="fg-btn-accent"/><text x="542" y="146" text-anchor="middle" class="fg-btn-txt-accent">AI analyze</text>
+  <text x="28" y="152" class="fg-text">copy · export · clear</text>
+</svg>`,
+chat: `<svg class="help-fig" viewBox="0 0 620 200" role="img">
+  <rect x="15" y="20" width="590" height="160" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Agent chat</text>
+  <rect x="28" y="56" width="180" height="14" rx="7" class="fg-ok" opacity=".3"/><text x="38" y="66" class="fg-text">You: check disk usage</text>
+  <rect x="370" y="60" width="210" height="20" rx="7" class="fg-accent" opacity=".15"/><text x="380" y="74" class="fg-text">Agent reply… streams</text>
+  <rect x="28" y="88" width="180" height="14" rx="7" class="fg-ok" opacity=".3"/><text x="38" y="98" class="fg-text">You: delete old logs</text>
+  <rect x="28" y="112" width="380" height="40" rx="8" class="fg-btn"/>
+  <text x="38" y="128" class="fg-head">Change approval required</text>
+  <text x="38" y="144" class="fg-text">rm /var/log/app/*.log · enter password</text>
+  <rect x="420" y="120" width="70" height="24" rx="6" class="fg-btn-accent"/><text x="455" y="136" text-anchor="middle" class="fg-btn-txt-accent">Confirm</text>
+  <rect x="496" y="120" width="70" height="24" rx="6" class="fg-btn"/><text x="531" y="136" text-anchor="middle" class="fg-text">Cancel</text>
+  <text x="28" y="172" class="fg-text">input box · image upload · clear history</text>
+</svg>`,
+fs: `<svg class="help-fig" viewBox="0 0 620 190" role="img">
+  <rect x="15" y="20" width="590" height="70" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Terminal</text>
+  <text x="30" y="65" class="fg-text">$ systemctl status nginx</text>
+  <text x="30" y="80" class="fg-text">● nginx.service — active (running)</text>
+  <rect x="15" y="102" width="590" height="70" rx="10" class="fg-panel"/>
+  <text x="30" y="125" class="fg-head">Files</text>
+  <rect x="28" y="136" width="420" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="154" width="380" height="14" rx="3" class="fg-btn"/>
+  <rect x="492" y="120" width="100" height="22" rx="6" class="fg-btn-accent"/><text x="542" y="135" text-anchor="middle" class="fg-btn-txt-accent">Upload</text>
+  <text x="492" y="160" class="fg-text">edit · rename · delete</text>
+</svg>`,
+alerts: `<svg class="help-fig" viewBox="0 0 620 190" role="img">
+  <rect x="15" y="20" width="290" height="150" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Daily report</text>
+  <text x="30" y="64" class="fg-text">SMTP · time · instruction</text>
+  <rect x="28" y="74" width="150" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="94" width="150" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="114" width="230" height="14" rx="3" class="fg-btn"/>
+  <rect x="28" y="138" width="90" height="22" rx="6" class="fg-btn-accent"/><text x="73" y="153" text-anchor="middle" class="fg-btn-txt-accent">Save</text>
+  <rect x="320" y="20" width="285" height="150" rx="10" class="fg-panel"/>
+  <text x="335" y="45" class="fg-head">Metric rules</text>
+  <rect x="335" y="56" width="250" height="14" rx="3" class="fg-btn"/><text x="345" y="66" class="fg-text">CPU &gt; 80% · P1</text>
+  <rect x="335" y="76" width="250" height="14" rx="3" class="fg-btn"/><text x="345" y="86" class="fg-text">Memory &gt; 90% · P2</text>
+  <rect x="335" y="96" width="250" height="14" rx="3" class="fg-btn"/><text x="345" y="106" class="fg-text">Disk &gt; 85% · P2</text>
+  <rect x="335" y="138" width="90" height="22" rx="6" class="fg-btn-accent"/><text x="380" y="153" text-anchor="middle" class="fg-btn-txt-accent">New rule</text>
+</svg>`,
+settings: `<svg class="help-fig" viewBox="0 0 620 160" role="img">
+  <rect x="15" y="20" width="590" height="120" rx="10" class="fg-panel"/>
+  <text x="30" y="45" class="fg-head">Model settings</text>
+  <text x="30" y="66" class="fg-text">API base URL</text>
+  <rect x="28" y="74" width="300" height="14" rx="3" class="fg-btn"/>
+  <text x="30" y="100" class="fg-text">API key</text>
+  <rect x="28" y="108" width="300" height="14" rx="3" class="fg-btn"/>
+  <text x="30" y="126" class="fg-text">Model</text>
+  <rect x="28" y="134" width="150" height="14" rx="3" class="fg-btn"/>
+  <rect x="492" y="76" width="100" height="26" rx="6" class="fg-btn-accent"/><text x="542" y="92" text-anchor="middle" class="fg-btn-txt-accent">Save</text>
+  <rect x="492" y="112" width="100" height="26" rx="6" class="fg-btn"/><text x="542" y="128" text-anchor="middle" class="fg-text">Restart</text>
+</svg>`,
+account: `<svg class="help-fig" viewBox="0 0 620 150" role="img">
+  <rect x="185" y="15" width="250" height="120" rx="12" class="fg-panel"/>
+  <text x="310" y="40" text-anchor="middle" class="fg-head">Login / Register</text>
+  <rect x="215" y="50" width="190" height="16" rx="4" class="fg-btn"/>
+  <rect x="215" y="72" width="190" height="16" rx="4" class="fg-btn"/>
+  <rect x="215" y="94" width="140" height="16" rx="4" class="fg-btn"/>
+  <rect x="365" y="94" width="40" height="16" rx="4" class="fg-btn"/>
+  <text x="310" y="108" text-anchor="middle" class="fg-text">username · password · captcha</text>
+  <rect x="276" y="114" width="68" height="18" rx="6" class="fg-btn-accent"/><text x="310" y="127" text-anchor="middle" class="fg-btn-txt-accent">Sign in</text>
+</svg>`,
+confirm: `<svg class="help-fig" viewBox="0 0 620 180" role="img">
+  <rect x="15" y="40" width="170" height="100" rx="12" class="fg-panel"/>
+  <circle cx="100" cy="70" r="15" class="fg-accent" opacity=".15"/>
+  <path d="M94 70l5 5 9-10" class="fg-arrow-head"/>
+  <text x="100" y="102" text-anchor="middle" class="fg-head">Action</text>
+  <text x="100" y="120" text-anchor="middle" class="fg-text">run_command · apply_fix</text>
+  <path d="M195 90h55" class="fg-arrow"/><path d="M245 90l-9-6M245 90l-9 6" class="fg-arrow-head"/>
+  <rect x="258" y="40" width="170" height="100" rx="12" class="fg-panel"/>
+  <circle cx="343" cy="70" r="15" class="fg-warn" opacity=".2"/>
+  <path d="M343 62v16M335 70h16" class="fg-arrow-head"/>
+  <text x="343" y="102" text-anchor="middle" class="fg-head">Confirm</text>
+  <text x="343" y="120" text-anchor="middle" class="fg-text">y · approve + password</text>
+  <path d="M438 90h55" class="fg-arrow"/><path d="M488 90l-9-6M488 90l-9 6" class="fg-arrow-head"/>
+  <rect x="501" y="40" width="104" height="100" rx="12" class="fg-panel"/>
+  <circle cx="553" cy="70" r="15" class="fg-ok" opacity=".2"/>
+  <path d="M547 70l5 5 9-10" class="fg-arrow-head"/>
+  <text x="553" y="102" text-anchor="middle" class="fg-head">Executed</text>
+</svg>`,
+};
+
+I18N.zh["help.body"] = `
+<h3 id="get-started">入门</h3>
+<h4 id="what-is">它是什么</h4>
 <p>Fixflow 是装在你自己服务器上的 AI 运维助手。用中文描述问题，它会调用命令检查服务器、定位问题，并在你确认后执行修复。所有删除 / 修改 / 安装类操作都必须经你确认。</p>
 
-<h3>二、快速开始</h3>
-<ul>
-  <li>安装后运行 <code>fixflow</code> 进入配置向导：选服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
+<h4 id="quick-start">快速开始</h4>
+${FIG.setup}
+<ol>
+  <li>安装：<code>npm i -g fixflow</code>，然后运行 <code>fixflow</code> 进入配置向导。</li>
+  <li>向导：选服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
   <li>选择启动面板时，配置完成后会自动自检，看到「全部正常」即成功。</li>
-  <li>访问面板：配置向导结束时会打印访问地址（形如 <code>http://服务器IP:端口/随机入口/</code>）；忘记入口 / 端口时在服务器运行 <code>fixflow default</code> 重新查看。</li>
+  <li>访问面板：向导结束会打印访问地址（形如 <code>http://服务器IP:端口/随机入口/</code>）；忘记入口 / 端口时运行 <code>fixflow default</code> 重新查看。</li>
   <li>随时自检：<code>fixflow doctor</code>。</li>
-</ul>
+</ol>
 
-<h3>三、命令行（CLI）</h3>
-<h4>子命令</h4>
+<h3 id="cli">命令行（CLI）</h3>
+<h4 id="cli-sub">子命令</h4>
 <table>
   <tr><th>命令</th><th>作用</th></tr>
   <tr><td><code>fixflow</code></td><td>未配置时进入配置向导；已配置则进入对话</td></tr>
@@ -499,12 +788,12 @@ I18N.zh["help.body"] = `<h3>一、它是什么</h3>
   <tr><td><code>fixflow uninstall</code></td><td>卸载（停服务 + 卸载全局包，配置保留）</td></tr>
   <tr><td><code>fixflow --version</code></td><td>查看版本</td></tr>
 </table>
-<h4>对话示例</h4>
+<h4 id="cli-examples">对话示例</h4>
 <pre>检查磁盘空间并汇报
 防火墙开了哪些端口
 Nginx 配置有问题吗，帮我看看
 帮我清理 /var/log 下 30 天前的日志</pre>
-<h4>内置命令</h4>
+<h4 id="cli-builtin">内置命令</h4>
 <table>
   <tr><th>操作</th><th>作用</th></tr>
   <tr><td><code>help</code> / <code>?</code></td><td>显示帮助</td></tr>
@@ -514,61 +803,153 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>Ctrl+C（任务运行中）</td><td>中止当前任务（同时中断模型请求）</td></tr>
   <tr><td>Ctrl+C（空闲时）</td><td>退出会话</td></tr>
 </table>
-
-<h3>四、Web 面板</h3>
-<h4>账号</h4>
-<ul>
-  <li>首次访问注册账号（用户名 + 密码 + 验证码），之后登录；会话 12 小时有效。</li>
+<h3 id="web">登录与面板布局</h3>
+<h4 id="account">账号与登录</h4>
+${FIG.account}
+<ol>
+  <li>首次访问注册账号（用户名 + 密码 + 验证码），之后用同一账号登录。</li>
   <li>密码要求：8-24 位，且同时包含字母、数字和特殊字符。</li>
-  <li>点右上角账号名 → 「修改密码」（需输入当前密码，修改后需重新登录）。</li>
+  <li>登录后会话 12 小时有效；点右上角账号名 → 「修改密码」（需输入当前密码，修改后需重新登录）。</li>
   <li>忘记密码：登录页点「忘记密码？」查看说明，或在服务器运行 <code>fixflow reset-password</code>。</li>
-</ul>
-<h4>顶部栏</h4>
+</ol>
+<h4 id="topbar">顶部栏</h4>
+${FIG.topbar}
 <ul>
   <li><b>帮助文档</b>：打开本说明。</li>
   <li><b>语言</b>：中 / EN 实时切换（AI 回复语言跟随面板语言）。</li>
   <li><b>告警</b>：铃铛打开告警管理。</li>
   <li><b>主题</b>：亮 / 暗切换。</li>
+  <li><b>账号菜单</b>：重启服务 / 修改密码 / 退出登录。</li>
 </ul>
-<h4>监控（自动刷新：总览约 3 秒、卡片约 10 秒）</h4>
-<table>
-  <tr><th>页面</th><th>内容</th></tr>
-  <tr><td>总览</td><td>负载 / CPU / 内存 / 磁盘环形图；面板内存；流量 / 磁盘IO / Token 用量图表</td></tr>
-  <tr><td>系统</td><td>健康检查明细，可一键生成报告（复制 / 下载 .md）</td></tr>
-  <tr><td>网络</td><td>端口监听、端口占用查询、连通性检测（ping）</td></tr>
-  <tr><td>Nginx</td><td>运行状态、配置校验、错误日志、配置文件查看 / 编辑 / 保存重载、服务操作</td></tr>
-  <tr><td>防火墙</td><td>状态、放行规则、对全网开放端口风险、一键关闭端口</td></tr>
-  <tr><td>黑白名单</td><td>面板端口 IP 访问控制（黑 / 白名单，需 UFW 防火墙）</td></tr>
-  <tr><td>数据库</td><td>连接管理（PostgreSQL / MySQL / Redis / MongoDB / SQLite，增删改、启用停用、测试连接）</td></tr>
-  <tr><td>Docker</td><td>容器列表与资源占用、镜像列表、启停 / 重启 / 删除容器、详情、日志、清理悬空镜像</td></tr>
-  <tr><td>SSL 证书</td><td>自动发现 + 手动添加，到期进度与 SAN，一键续签，到期告警</td></tr>
-  <tr><td>服务</td><td>systemd 服务管理：启停 / 重启 / 重载 / 开机自启、详情与依赖、内嵌日志、状态与类型筛选、failed 告警</td></tr>
-  <tr><td>日志</td><td>系统服务 / Docker 容器日志检索、搜索、跟随、复制 / 导出、AI 分析</td></tr>
-</table>
-<h4>AI 对话</h4>
+
+<h3 id="monitor">监控</h3>
+<h4 id="view-overview">总览</h4>
+${FIG.layout}
+<p>监控总览自动刷新（总览约 3 秒、卡片约 10 秒）：</p>
 <ul>
+  <li>四张环形图：负载 / CPU / 内存 / 磁盘使用率。</li>
+  <li>面板自身内存占用卡片。</li>
+  <li>图表区：网络流量、磁盘 IO、Token 用量趋势。</li>
+  <li>左下角菜单可切换到系统、网络等子页。</li>
+</ul>
+<h4 id="view-system">系统</h4>
+${FIG.system}
+<ol>
+  <li>查看各项健康检查明细（服务 / 资源 / 关键组件状态）。</li>
+  <li>点「生成报告」一键汇总，可复制或下载 .md 文件。</li>
+  <li>有异常项时优先处理告警提示的组件。</li>
+</ol>
+<h4 id="view-network">网络</h4>
+${FIG.network}
+<ol>
+  <li>「端口监听」：查看当前所有监听端口及其进程。</li>
+  <li>「端口占用」：输入端口号查询被哪个进程占用。</li>
+  <li>「连通性检测」：输入目标地址做 ping，看网络是否可达。</li>
+</ol>
+<h3 id="nginx-fw">Nginx 与防火墙</h3>
+<h4 id="view-nginx">Nginx</h4>
+${FIG.nginx}
+<ol>
+  <li>顶部查看运行状态与版本。</li>
+  <li>「校验配置」检查语法；「错误日志」查看最近报错。</li>
+  <li>点击配置文件名查看 / 编辑内容，保存后点「保存重载」生效。</li>
+  <li>服务操作：启动 / 停止 / 重启。</li>
+</ol>
+<p class="help-tip">改配置前建议先校验，保存重载失败时页面会报错并保持原配置。</p>
+
+<h4 id="view-firewall">防火墙</h4>
+${FIG.firewall}
+<ol>
+  <li>查看防火墙状态与放行规则列表。</li>
+  <li>「对全网开放」的端口会标红提示风险。</li>
+  <li>点「关闭端口」可一键移除放行（敏感操作，需重输登录密码）。</li>
+</ol>
+<h4 id="view-acl">黑白名单</h4>
+${FIG.acl}
+<ol>
+  <li>针对面板端口做 IP 访问控制，需已启用 UFW 防火墙。</li>
+  <li><b>黑名单</b>：禁止的 IP；<b>白名单</b>：仅允许的 IP。</li>
+  <li>新增 / 删除条目立即生效。</li>
+</ol>
+
+<h3 id="resources">资源管理</h3>
+<h4 id="view-databases">数据库</h4>
+${FIG.databases}
+<ol>
+  <li>点「添加」选择类型（PostgreSQL / MySQL / Redis / MongoDB / SQLite），填地址、账号密码。</li>
+  <li>「测试连接」验证配置；「启用 / 停用」切换是否纳入管理；「删除」移除该连接。</li>
+  <li>连接异常时列表会标记告警状态。</li>
+</ol>
+<h4 id="view-docker">Docker</h4>
+${FIG.docker}
+<ol>
+  <li>容器列表：查看状态与 CPU / 内存占用。</li>
+  <li>操作：启动 / 停止 / 重启 / 删除容器；查看详情与日志。</li>
+  <li>镜像列表：可清理悬空镜像释放磁盘。</li>
+</ol>
+<h4 id="view-ssl">SSL 证书</h4>
+${FIG.ssl}
+<ol>
+  <li>自动发现服务器上的证书，也可手动添加站点。</li>
+  <li>每张卡显示到期进度与 SAN 域名；即将到期会标黄。</li>
+  <li>点「续签」一键更新（敏感操作，需重输登录密码）。</li>
+  <li>到期告警通过「告警管理」的指标规则触发。</li>
+</ol>
+<h4 id="view-services">服务</h4>
+${FIG.systemd}
+<ol>
+  <li>systemd 服务列表，可按状态 / 类型筛选。</li>
+  <li>操作：启动 / 停止 / 重启 / 重载 / 开机自启。</li>
+  <li>点开详情：依赖关系、内嵌日志查看。</li>
+  <li>failed 状态的服务会触发告警提示。</li>
+</ol>
+<h4 id="view-store">软件商店</h4>
+${FIG.store}
+<ol>
+  <li>浏览可选软件，查看说明与版本。</li>
+  <li>点「安装」执行安装（安装类操作会弹确认，需重输登录密码）。</li>
+</ol>
+<h4 id="view-logs">日志</h4>
+${FIG.logs}
+<ol>
+  <li>选择来源：系统服务 / Docker 容器日志。</li>
+  <li>搜索过滤关键字、按需「跟随」实时输出。</li>
+  <li>复制 / 导出日志；或点「AI 分析」让模型解读报错。</li>
+</ol>
+<h3 id="interact">对话、终端与告警</h3>
+<h4 id="chat">Agent 对话</h4>
+${FIG.chat}
+<ol>
   <li>直接打字让助手干活，回复逐字显示；支持上传图片。</li>
   <li>会改动系统的操作会弹「变更审批单」，确认后才执行。</li>
+  <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输登录密码。</li>
   <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
-</ul>
-<h4>终端与文件管理</h4>
-<ul>
+</ol>
+<p class="help-tip">任务运行中可随时停止生成 / 中断任务。</p>
+
+<h4 id="fs-terminal">终端与文件管理</h4>
+${FIG.fs}
+<ol>
   <li>内置 Web 终端，可直接在面板里执行命令。</li>
   <li>下方文件管理器：浏览目录、新建文件夹、上传 / 下载 / 编辑 / 重命名 / 删除文件。</li>
   <li>点终端栏「文件」按钮可折叠 / 展开文件模块（状态会记住）。</li>
-</ul>
-<h4>告警管理（右上角铃铛）</h4>
-<ul>
+</ol>
+<h4 id="alerts">告警管理（右上角铃铛）</h4>
+${FIG.alerts}
+<ol>
   <li><b>日报告警</b>：配置 SMTP 邮箱，设定每日时间与指令，模型自动生成报表并发送。</li>
   <li><b>指标告警</b>：设置面板外网地址 / Webhook；按 CPU / 内存 / 磁盘 / 网络流量 / TCP 会话数设阈值、持续时间与级别（P1–P5）；事件可认领、恢复。</li>
   <li><b>面板内存</b>：在「设置」里配置面板进程内存上限，超出时页面顶部弹横幅提示（仅提示，不中断服务）。</li>
-</ul>
-<h4>设置</h4>
-<ul>
-  <li>左下角「设置」→ 模型设置（改 API 地址 / Key / 模型）与面板内存上限，保存即生效；也可重启服务、退出登录。</li>
-</ul>
+</ol>
+<h4 id="settings">设置</h4>
+${FIG.settings}
+<ol>
+  <li>左下角「设置」→ 模型设置：改 API 地址 / Key / 模型，保存即生效。</li>
+  <li>可配置面板内存上限、重启服务、退出登录。</li>
+</ol>
 
-<h3>五、工具与安全</h3>
+<h3 id="security">工具与安全</h3>
+${FIG.confirm}
 <table>
   <tr><th>工具</th><th>用途</th><th>权限</th></tr>
   <tr><td>run_command</td><td>执行命令检查 / 操作</td><td>只读自动执行；删除 / 修改 / 安装类需确认</td></tr>
@@ -576,9 +957,9 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>apply_fix</td><td>执行修复命令</td><td>必须确认</td></tr>
   <tr><td>clear_history</td><td>清空会话历史</td><td>自动执行</td></tr>
 </table>
-<p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。面板里的敏感操作（关端口、改配置、文件写操作、证书续签等）还需重输登录密码。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
+<p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
 
-<h3>六、配置与进阶</h3>
+<h3 id="advanced">配置与进阶</h3>
 <ul>
   <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>。</li>
   <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
@@ -587,7 +968,7 @@ Nginx 配置有问题吗，帮我看看
   <li>重置模型 / 服务商：面板「模型设置」保存即生效；或 <code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code>。</li>
 </ul>
 
-<h3>七、常见问题</h3>
+<h3 id="faq">常见问题</h3>
 <table>
   <tr><th>现象</th><th>处理</th></tr>
   <tr><td>向导提示"无法连接"</td><td>服务器访问不了该 API 地址，检查外网 / 防火墙 / 地址</td></tr>
@@ -596,21 +977,27 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>对话报 LLM API 400</td><td>多为会话上下文异常，点「重启服务」一键修复</td></tr>
   <tr><td>监控显示 N/A</td><td>对应组件没装（如没装 Docker），不影响其他功能</td></tr>
   <tr><td>忘记面板密码</td><td>在服务器运行 <code>fixflow reset-password</code></td></tr>
-</table>`;
+</table>
 
-I18N.en["help.body"] = `<h3>1. What is it</h3>
+`;
+
+I18N.en["help.body"] = `
+<h3 id="get-started">Getting Started</h3>
+<h4 id="what-is">What is Fixflow</h4>
 <p>Fixflow is an AI ops assistant installed on your own server. Describe a problem in plain language and it will run commands to check the server, find the cause, and apply a fix after your confirmation. All delete / modify / install operations require your confirmation.</p>
 
-<h3>2. Quick Start</h3>
-<ul>
-  <li>Run <code>fixflow</code> to enter the setup wizard: choose provider → paste API Key → pick model → choose whether to start the panel.</li>
+<h4 id="quick-start">Quick Start</h4>
+${FIG.setup}
+<ol>
+  <li>Install: <code>npm i -g fixflow</code>, then run <code>fixflow</code> to enter the setup wizard.</li>
+  <li>Wizard: choose provider → paste API Key → pick model → choose whether to start the panel.</li>
   <li>When you choose to start the panel, a self-check runs after setup; seeing "All OK" means success.</li>
-  <li>Open the panel: the setup wizard prints the access URL (like <code>http://SERVER_IP:PORT/RANDOM_PATH/</code>); run <code>fixflow default</code> on the server to print it again if you forget the port / entry path.</li>
+  <li>Open the panel: the wizard prints the access URL (like <code>http://SERVER_IP:PORT/RANDOM_PATH/</code>); run <code>fixflow default</code> on the server to print it again if you forget the port / entry path.</li>
   <li>Run a self-check anytime: <code>fixflow doctor</code>.</li>
-</ul>
+</ol>
 
-<h3>3. Command Line (CLI)</h3>
-<h4>Subcommands</h4>
+<h3 id="cli">Command Line (CLI)</h3>
+<h4 id="cli-sub">Subcommands</h4>
 <table>
   <tr><th>Command</th><th>Effect</th></tr>
   <tr><td><code>fixflow</code></td><td>Setup wizard if unconfigured; otherwise start chatting</td></tr>
@@ -622,12 +1009,12 @@ I18N.en["help.body"] = `<h3>1. What is it</h3>
   <tr><td><code>fixflow uninstall</code></td><td>Uninstall (stop service + remove global package, keep config)</td></tr>
   <tr><td><code>fixflow --version</code></td><td>Show version</td></tr>
 </table>
-<h4>Chat examples</h4>
+<h4 id="cli-examples">Chat examples</h4>
 <pre>Check disk space and report
 Which ports are open on the firewall
 Is my Nginx config OK?
 Clean logs older than 30 days under /var/log</pre>
-<h4>Built-in commands</h4>
+<h4 id="cli-builtin">Built-in commands</h4>
 <table>
   <tr><th>Action</th><th>Effect</th></tr>
   <tr><td><code>help</code> / <code>?</code></td><td>Show help</td></tr>
@@ -637,61 +1024,153 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>Ctrl+C (task running)</td><td>Abort current task (also interrupts the model request)</td></tr>
   <tr><td>Ctrl+C (idle)</td><td>Exit session</td></tr>
 </table>
-
-<h3>4. Web Panel</h3>
-<h4>Account</h4>
-<ul>
-  <li>Register on first visit (username + password + captcha), then log in; session lasts 12 hours.</li>
+<h3 id="web">Login &amp; Panel Layout</h3>
+<h4 id="account">Account &amp; Login</h4>
+${FIG.account}
+<ol>
+  <li>Register on first visit (username + password + captcha), then log in with the same account.</li>
   <li>Password rule: at least 8 characters with letters, digits and special characters.</li>
-  <li>Click the account name (top-right) → "Change Password" (requires the current password; you must log in again afterwards).</li>
+  <li>Sessions last 12 hours; click the account name (top-right) → "Change Password" (requires the current password; log in again afterwards).</li>
   <li>Forgot password: click "Forgot password?" on the login page, or run <code>fixflow reset-password</code> on the server.</li>
-</ul>
-<h4>Top bar</h4>
+</ol>
+<h4 id="topbar">Top Bar</h4>
+${FIG.topbar}
 <ul>
   <li><b>Help</b>: open this document.</li>
   <li><b>Language</b>: switch ZH / EN live (AI replies follow the panel language).</li>
   <li><b>Alerts</b>: the bell opens alert management.</li>
   <li><b>Theme</b>: light / dark.</li>
+  <li><b>Account menu</b>: restart service / change password / log out.</li>
 </ul>
-<h4>Monitoring (auto-refresh: overview ~3s, cards ~10s)</h4>
-<table>
-  <tr><th>Page</th><th>Content</th></tr>
-  <tr><td>Overview</td><td>Load / CPU / memory / disk rings; panel memory; traffic / disk IO / token charts</td></tr>
-  <tr><td>System</td><td>Health-check details, one-click report (copy / download .md)</td></tr>
-  <tr><td>Network</td><td>Listening ports, port lookup, connectivity check (ping)</td></tr>
-  <tr><td>Nginx</td><td>Status, config check, error log, view / edit / save-and-reload configs, service actions</td></tr>
-  <tr><td>Firewall</td><td>Status, allow rules, open-to-all port risks, one-click close port</td></tr>
-  <tr><td>Blacklist/Whitelist</td><td>Panel port IP access control (black / white lists, UFW only)</td></tr>
-  <tr><td>Databases</td><td>Connection management (PostgreSQL / MySQL / Redis / MongoDB / SQLite; add / edit / delete, enable / disable, test)</td></tr>
-  <tr><td>Docker</td><td>Containers with resource usage, images, start / stop / restart / remove, details, logs, prune dangling images</td></tr>
-  <tr><td>SSL Certificates</td><td>Auto-discovery + manual add, expiry bar and SAN, one-click renew, expiry alerts</td></tr>
-  <tr><td>Services</td><td>systemd service management: start / stop / restart / reload / auto-start, details &amp; dependencies, inline logs, status &amp; type filters, failed alerts</td></tr>
-  <tr><td>Logs</td><td>System service / Docker container log search, filtering, follow, copy / export, AI analysis</td></tr>
-</table>
-<h4>AI Chat</h4>
+
+<h3 id="monitor">Monitoring</h3>
+<h4 id="view-overview">Overview</h4>
+${FIG.layout}
+<p>Auto-refresh: overview ~3s, cards ~10s.</p>
 <ul>
-  <li>Type directly; replies stream word by word; image upload supported.</li>
+  <li>Four ring cards: load / CPU / memory / disk usage.</li>
+  <li>Panel process memory card.</li>
+  <li>Charts: network traffic, disk IO, token usage trends.</li>
+  <li>The left sidebar switches to System / Network and other sub-pages.</li>
+</ul>
+<h4 id="view-system">System</h4>
+${FIG.system}
+<ol>
+  <li>View each health-check detail (services / resources / key component status).</li>
+  <li>Click "Generate report" to summarize; copy or download the .md file.</li>
+  <li>Handle failing components first.</li>
+</ol>
+<h4 id="view-network">Network</h4>
+${FIG.network}
+<ol>
+  <li>"Listening ports": view all listening ports and their processes.</li>
+  <li>"Port lookup": enter a port to find which process uses it.</li>
+  <li>"Connectivity": ping a target to check reachability.</li>
+</ol>
+<h3 id="nginx-fw">Nginx &amp; Firewall</h3>
+<h4 id="view-nginx">Nginx</h4>
+${FIG.nginx}
+<ol>
+  <li>Check running status and version at the top.</li>
+  <li>"Validate" checks syntax; "Error log" shows recent failures.</li>
+  <li>Click a config file to view / edit; click "Save &amp; reload" to apply.</li>
+  <li>Service actions: start / stop / restart.</li>
+</ol>
+<p class="help-tip">Validate before editing. If save-and-reload fails, the page reports the error and keeps the original config.</p>
+
+<h4 id="view-firewall">Firewall</h4>
+${FIG.firewall}
+<ol>
+  <li>Check firewall status and allow rules.</li>
+  <li>Ports open to the whole internet are marked as a risk.</li>
+  <li>"Close port" removes the allow rule (sensitive action, requires re-entering the login password).</li>
+</ol>
+<h4 id="view-acl">Blacklist / Whitelist</h4>
+${FIG.acl}
+<ol>
+  <li>IP access control for the panel port; requires UFW enabled.</li>
+  <li><b>Blacklist</b>: blocked IPs; <b>Whitelist</b>: only allowed IPs.</li>
+  <li>Adding / removing entries takes effect immediately.</li>
+</ol>
+
+<h3 id="resources">Resources</h3>
+<h4 id="view-databases">Databases</h4>
+${FIG.databases}
+<ol>
+  <li>Click "Add", pick the type (PostgreSQL / MySQL / Redis / MongoDB / SQLite), fill in host, user and password.</li>
+  <li>"Test" verifies the config; "Enable / Disable" toggles management; "Delete" removes the connection.</li>
+  <li>Unhealthy connections are marked with an alert state.</li>
+</ol>
+<h4 id="view-docker">Docker</h4>
+${FIG.docker}
+<ol>
+  <li>Container list: check status and CPU / memory usage.</li>
+  <li>Actions: start / stop / restart / remove; view details and logs.</li>
+  <li>Image list: prune dangling images to free disk.</li>
+</ol>
+<h4 id="view-ssl">SSL Certificates</h4>
+${FIG.ssl}
+<ol>
+  <li>Certificates on the server are auto-discovered; you can also add sites manually.</li>
+  <li>Each card shows the expiry bar and SAN domains; expiring soon is highlighted.</li>
+  <li>"Renew" updates with one click (sensitive action, requires the login password).</li>
+  <li>Expiry alerts fire through the metric rules in "Alert Management".</li>
+</ol>
+<h4 id="view-services">Services</h4>
+${FIG.systemd}
+<ol>
+  <li>systemd service list, filterable by status / type.</li>
+  <li>Actions: start / stop / restart / reload / enable on boot.</li>
+  <li>Open a service for details, dependencies and inline logs.</li>
+  <li>Failed services trigger an alert.</li>
+</ol>
+<h4 id="view-store">App Store</h4>
+${FIG.store}
+<ol>
+  <li>Browse available software; check descriptions and versions.</li>
+  <li>Click "Install" to install (install actions prompt for confirmation and the login password).</li>
+</ol>
+<h4 id="view-logs">Logs</h4>
+${FIG.logs}
+<ol>
+  <li>Pick the source: system services / Docker container logs.</li>
+  <li>Search and filter by keyword; "Follow" streams live output.</li>
+  <li>Copy / export logs, or click "AI analyze" to have the model interpret errors.</li>
+</ol>
+<h3 id="interact">Chat, Terminal &amp; Alerts</h3>
+<h4 id="chat">Agent Chat</h4>
+${FIG.chat}
+<ol>
+  <li>Type directly and let the assistant work; replies stream word by word; image upload is supported.</li>
   <li>Operations that change the system show a "Change Approval" card and run only after you confirm.</li>
+  <li>Sensitive actions (close port, config changes, file writes, cert renewal, etc.) also require re-entering the login password.</li>
   <li>"Clear history" above the input clears the session; "Terminal" opens the side terminal.</li>
-</ul>
-<h4>Terminal &amp; File Manager</h4>
-<ul>
+</ol>
+<p class="help-tip">You can stop generation / abort a task at any time while it runs.</p>
+
+<h4 id="fs-terminal">Terminal &amp; File Manager</h4>
+${FIG.fs}
+<ol>
   <li>A built-in web terminal to run commands inside the panel.</li>
   <li>File manager below: browse, new folder, upload / download / edit / rename / delete.</li>
   <li>The "Files" button in the terminal bar collapses / expands the file module (state is remembered).</li>
-</ul>
-<h4>Alert Management (bell, top-right)</h4>
-<ul>
+</ol>
+<h4 id="alerts">Alert Management (bell, top-right)</h4>
+${FIG.alerts}
+<ol>
   <li><b>Daily alerts</b>: configure SMTP, set a daily time and instruction; the model generates and emails a report.</li>
-  <li><b>Metric alerts</b>: set panel URL / webhook; rules on CPU / memory / disk / network / TCP sessions with threshold, duration and level (P1–P5); incidents can be claimed / resolved.</li>
+  <li><b>Metric alerts</b>: set the panel URL / webhook; rules on CPU / memory / disk / network / TCP sessions with threshold, duration and level (P1–P5); incidents can be claimed / resolved.</li>
   <li><b>Panel memory</b>: set the panel process memory limit in "Settings"; a banner appears at the top when exceeded (alert only, no service interruption).</li>
-</ul>
-<h4>Settings</h4>
-<ul>
-  <li>Bottom-left "Settings" → model settings (API URL / Key / model) and panel memory limit, takes effect on save; also restart service and log out.</li>
-</ul>
+</ol>
+<h4 id="settings">Settings</h4>
+${FIG.settings}
+<ol>
+  <li>Bottom-left "Settings" → model settings: change API URL / Key / model, takes effect on save.</li>
+  <li>Also configure the panel memory limit, restart the service, and log out.</li>
+</ol>
 
-<h3>5. Tools &amp; Security</h3>
+<h3 id="security">Tools &amp; Security</h3>
+${FIG.confirm}
 <table>
   <tr><th>Tool</th><th>Purpose</th><th>Permission</th></tr>
   <tr><td>run_command</td><td>Run commands to check / operate</td><td>Read-only auto; delete / modify / install need confirmation</td></tr>
@@ -699,9 +1178,9 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>apply_fix</td><td>Apply fix commands</td><td>Always confirm</td></tr>
   <tr><td>clear_history</td><td>Clear session history</td><td>Auto</td></tr>
 </table>
-<p>Every write / delete / modify operation asks for confirmation first: type <code>y</code> in the CLI, or click "Confirm" in the panel. Sensitive panel actions (close port, config changes, file writes, certificate renewal, etc.) also require re-entering the login password. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
+<p>Every write / delete / modify operation asks for confirmation first: type <code>y</code> in the CLI, or click "Confirm" in the panel. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
 
-<h3>6. Configuration &amp; Advanced</h3>
+<h3 id="advanced">Configuration &amp; Advanced</h3>
 <ul>
   <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>.</li>
   <li>Environment overrides: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
@@ -710,7 +1189,7 @@ Clean logs older than 30 days under /var/log</pre>
   <li>Reset model / provider: save in "Model Settings", or <code>rm -rf ~/.config/fixflow</code> then re-run <code>fixflow</code>.</li>
 </ul>
 
-<h3>7. FAQ</h3>
+<h3 id="faq">FAQ</h3>
 <table>
   <tr><th>Symptom</th><th>Fix</th></tr>
   <tr><td>Wizard says "cannot connect"</td><td>Server cannot reach the API URL; check network / firewall / address</td></tr>
@@ -719,7 +1198,9 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>Chat gets LLM API 400</td><td>Usually a bad session context; click "Restart service"</td></tr>
   <tr><td>Monitoring shows N/A</td><td>Component not installed (e.g. no Docker); other features unaffected</td></tr>
   <tr><td>Forgot panel password</td><td>Run <code>fixflow reset-password</code> on the server</td></tr>
-</table>`;
+</table>
+
+`;
 
 function t(key) {
   return I18N[curLang][key] || I18N.zh[key] || key;
@@ -736,6 +1217,8 @@ function applyLang(lang) {
     else el.textContent = t(key);
   });
   document.querySelectorAll("[data-i18n-html]").forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+  if (window.buildHelpToc) window.buildHelpToc();
+  else setTimeout(() => window.buildHelpToc && window.buildHelpToc(), 0);
   const titleEl = document.getElementById("view-title");
   if (titleEl && titleEl.dataset.i18nTitle) titleEl.textContent = t(titleEl.dataset.i18nTitle);
 }

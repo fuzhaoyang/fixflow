@@ -22,6 +22,7 @@ import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuU
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
 import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
+import { detectPkgManager, resolvePkgName, listInstalledCmd, parseInstalledNames, searchCmd, parseSearch, versionsCmd, parseVersions, installCmd, uninstallCmd, withPmLock, pmErrorHint } from "../pkgs.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 const VERSION = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")).version || "0.0.0";
@@ -46,17 +47,6 @@ const STORE_PKGS = [
   { name: "rsync", desc: "高效文件同步与备份工具，支持增量传输、远程同步与压缩，是数据备份与迁移的标准方案。" },
 ];
 
-// 解析 dpkg-query 输出，返回已安装包名集合（兼容多架构后缀 :amd64）
-export function parseInstalledDpkg(stdout) {
-  const out = new Set();
-  for (const line of String(stdout || "").split("\n")) {
-    if (!line.includes("install ok installed")) continue;
-    const pkg = line.trim().split(/\s+/).pop().split(":")[0];
-    if (pkg) out.add(pkg);
-  }
-  return out;
-}
-
 // 从 apt 输出行中提取进度百分比（APT::Status-Fd 协议 STATUS 行 / Progress 样式），拿不到返回 null
 export function parseAptPct(line) {
   const m = String(line || "").match(/STATUS:\s*(\d{1,3})/i) || String(line || "").match(/Progress:\s*\[\s*(\d{1,3})%/i);
@@ -76,24 +66,6 @@ export function parseNginxStatus(text) {
   if (rd) out.reading = +rd[1];
   if (wr) out.writing = +wr[1];
   if (wt) out.waiting = +wt[1];
-  return out;
-}
-
-// 解析 `LC_ALL=C apt-cache policy <pkg>` 输出
-export function parseAptPolicy(text) {
-  const t = String(text || "");
-  const out = { installed: null, candidate: null, versions: [] };
-  const inst = t.match(/^\s*Installed:\s*(.+)$/m);
-  if (inst && inst[1].trim() && inst[1].trim() !== "(none)") out.installed = inst[1].trim();
-  const cand = t.match(/^\s*Candidate:\s*(.+)$/m);
-  if (cand && cand[1].trim()) out.candidate = cand[1].trim();
-  let inTable = false;
-  for (const line of t.split("\n")) {
-    if (/^Version table:/i.test(line.trim())) { inTable = true; continue; }
-    if (!inTable) continue;
-    const m = line.match(/^\s*(\*\*\*)?\s*(\S+)\s+(\d+)\s*$/);
-    if (m) out.versions.push({ version: m[2], priority: +m[3], isInstalled: !!m[1] });
-  }
   return out;
 }
 
@@ -331,6 +303,7 @@ export async function startWeb(config = {}, deps = {}) {
   const sslCache = createTtlCache(30000);
   const logsSourcesCache = createTtlCache(10000);
   const installedCache = createTtlCache(5000);
+  const pkgManagerCache = createTtlCache(60000);
   const waiters = new Map();
   let seq = 0;
   const configPath = config.configPath || defaultConfigPath();
@@ -1424,23 +1397,31 @@ export async function startWeb(config = {}, deps = {}) {
         }
       } else if (url.pathname === "/api/store" && req.method === "GET") {
         const q = String(url.searchParams.get("q") || "").trim();
-        const installed = await installedCache("dpkg", async () => {
-          const dpkg = await execCmd("dpkg-query -W -f='${Status} ${Package}\\n' 2>/dev/null", { timeout: 10000, maxOutput: 2 * 1024 * 1024 }).catch(() => ({ stdout: "" }));
-          return parseInstalledDpkg(dpkg.stdout || "");
+        const pm = await pkgManagerCache("detect", () => detectPkgManager({ run: execCmd }));
+        if (pm.family === "none") { sendJson(res, { apps: [], q, error: "未检测到支持的包管理器（apt/dnf/yum/apk/pacman/zypper）" }); return; }
+        let installed;
+        try {
+          installed = await installedCache("inst:" + pm.family, async () => {
+            const cmd = listInstalledCmd(pm.family);
+            const r = cmd ? await withPmLock(() => execCmd(cmd, { timeout: 10000, maxOutput: 2 * 1024 * 1024 })).catch(() => ({ exitCode: 1, stdout: "", stderr: "" })) : { exitCode: 1, stdout: "", stderr: "" };
+            if (r.exitCode !== 0) throw new Error(pmErrorHint(r.stderr || r.stdout) || "读取已安装软件列表失败");
+            return parseInstalledNames(r.stdout || "", pm.family);
+          });
+        } catch (e) { sendJson(res, { apps: [], q, error: String(e.message || e) }); return; }
+        let apps = STORE_PKGS.map((p) => {
+          const name = resolvePkgName(pm.family, p.name);
+          return { ...p, name, installed: installed.has(name) };
         });
-        let apps = STORE_PKGS.map((p) => ({ ...p, installed: installed.has(p.name) }));
         if (q) {
           const ql = q.toLowerCase();
           apps = apps.filter((a) => a.name.toLowerCase().includes(ql) || (a.desc || "").toLowerCase().includes(ql));
-          const search = await execCmd(`apt-cache search -n ${JSON.stringify(q)} 2>/dev/null | head -50`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
-          const found = (search.stdout || "").split("\n").filter(Boolean).map((l) => {
-            const sep = l.indexOf(" - ");
-            const name = (sep > 0 ? l.slice(0, sep) : l).trim();
-            const desc = sep > 0 ? l.slice(sep + 3).trim() : "";
-            return { name, desc, installed: installed.has(name), searched: true };
-          });
-          const known = new Set(apps.map((a) => a.name));
-          apps = [...apps, ...found.filter((f) => !known.has(f.name))];
+          const sc = searchCmd(pm.family, q);
+          if (sc) {
+            const search = await withPmLock(() => execCmd(sc, { timeout: 15000 })).catch(() => ({ stdout: "" }));
+            const found = parseSearch(search.stdout || "", pm.family).map((f) => ({ ...f, installed: installed.has(f.name), searched: true }));
+            const known = new Set(apps.map((a) => a.name));
+            apps = [...apps, ...found.filter((f) => !known.has(f.name))];
+          }
         }
         res.writeHead(200, { "Content-Type": "application/json", "Cache-Control": "no-store" });
         res.end(JSON.stringify({ apps, q }));
@@ -1452,16 +1433,21 @@ export async function startWeb(config = {}, deps = {}) {
         if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
         const ver = String(version || "").trim();
         if (ver && !/^[A-Za-z0-9:._~+-]+$/.test(ver)) { sendJson(res, { error: "非法的版本号" }, 400); return; }
+        const pm = await pkgManagerCache("detect", () => detectPkgManager({ run: execCmd }));
+        if (pm.family === "none") { sendJson(res, { error: "未检测到支持的包管理器" }, 400); return; }
         const isInstall = url.pathname.endsWith("/install");
-        const op = isInstall ? "install -y" : "purge -y";
+        const cmd = isInstall ? installCmd(pm.family, name, ver) : uninstallCmd(pm.family, name);
+        if (!cmd) { sendJson(res, { error: "暂不支持该包管理器的安装操作" }, 400); return; }
         res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache", Connection: "keep-alive" });
         res.flushHeaders?.();
         const send = (type, data) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ type, ...data })}\n\n`); };
         const aborted = new AbortController();
         res.on("close", () => aborted.abort());
-        const wrapped = sudoCmd(`DEBIAN_FRONTEND=noninteractive apt-get -o APT::Status-Fd=1 ${op} ${name}${ver ? "=" + ver : ""} 2>&1`, password);
+        const wrapped = sudoCmd(`${cmd} 2>&1`, password);
         let lastPct = -1;
+        let tail = "";
         const onLine = (line) => {
+          tail = (tail + "\n" + line).slice(-2000);
           if (APT_PROTO_RE.test(line)) {
             const pct = parseAptPct(line);
             if (pct !== null && pct !== lastPct) { lastPct = pct; send("progress", { pct }); }
@@ -1469,17 +1455,21 @@ export async function startWeb(config = {}, deps = {}) {
           }
           if (line.trim()) send("log", { line: line.slice(0, 500) });
         };
-        const r = await spawnLines(wrapped, { onLine, timeout: 300000, signal: aborted.signal });
-        installedCache.clear("dpkg");
-        send("done", { ok: r.exitCode === 0 && !r.aborted, exitCode: r.exitCode, aborted: r.aborted });
+        const r = await withPmLock(() => spawnLines(wrapped, { onLine, timeout: 300000, signal: aborted.signal }));
+        installedCache.clear("inst:" + pm.family);
+        const ok = r.exitCode === 0 && !r.aborted;
+        send("done", { ok, exitCode: r.exitCode, aborted: r.aborted, hint: ok ? null : (pmErrorHint(tail) || null) });
         res.end();
       } else if (url.pathname === "/api/app/nginx/load" && req.method === "GET") {
         sendJson(res, await collectNginxLoad({ run: execCmd }));
       } else if (url.pathname === "/api/app/nginx/versions" && req.method === "GET") {
         const pkg = String(url.searchParams.get("pkg") || "nginx").trim();
         if (!/^[a-zA-Z0-9+._-]+$/.test(pkg)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
-        const r = await execCmd(`LC_ALL=C apt-cache policy ${pkg} 2>/dev/null`, { timeout: 15000 }).catch(() => ({ stdout: "" }));
-        sendJson(res, { pkg, ...parseAptPolicy(r.stdout || "") });
+        const pm = await pkgManagerCache("detect", () => detectPkgManager({ run: execCmd }));
+        if (pm.family === "none") { sendJson(res, { pkg, installed: null, candidate: null, versions: [], error: "未检测到支持的包管理器" }); return; }
+        const cmd = versionsCmd(pm.family, pkg);
+        const r = cmd ? await withPmLock(() => execCmd(cmd, { timeout: 15000 })).catch(() => ({ stdout: "" })) : { stdout: "" };
+        sendJson(res, { pkg, ...parseVersions(r.stdout || "", pm.family) });
       } else if (url.pathname === "/api/system/ops" && req.method === "GET") {
         sendJson(res, { ops: await readSysOps() });
       } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {

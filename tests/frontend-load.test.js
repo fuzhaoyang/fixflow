@@ -64,7 +64,7 @@ test("前端 script 链在 mock DOM 下可加载执行（拆分安全网）", ()
   });
 
   for (const src of srcs) {
-    const code = readFileSync(join(STATIC, src), "utf8");
+    const code = readFileSync(join(STATIC, src.split("?")[0]), "utf8");
     vm.runInContext(code, context, { filename: src });
   }
   assert.ok(true);

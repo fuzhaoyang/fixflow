@@ -285,6 +285,49 @@ const helpMask = document.getElementById("help-mask");
 document.querySelectorAll(".doc-btn").forEach((b) => b.addEventListener("click", () => { location.hash = "/help"; }));
 document.getElementById("help-close").onclick = () => { location.hash = "/" + lastRoute; };
 
+document.getElementById("help-toc-toggle").onclick = () => {
+  helpMask.classList.toggle("toc-collapsed");
+  localStorage.setItem("fixflow_toc", helpMask.classList.contains("toc-collapsed") ? "0" : "1");
+};
+if (localStorage.getItem("fixflow_toc") === "0") helpMask.classList.add("toc-collapsed");
+
+function buildHelpToc() {
+  const toc = document.getElementById("help-toc");
+  const body = document.getElementById("help-body");
+  if (!toc || !body) return;
+  if (window.__helpTocObs) window.__helpTocObs.disconnect();
+  const items = body.querySelectorAll("h3[id], h4[id]");
+  let html = "";
+  items.forEach((h) => {
+    const cls = h.tagName === "H3" ? "toc-l1" : "toc-l2";
+    html += `<button class="${cls}" data-toc="#${h.id}">${h.textContent}</button>`;
+  });
+  toc.innerHTML = html;
+  toc.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => {
+    document.querySelector(b.dataset.toc)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }));
+  window.__helpTocObs = new IntersectionObserver((entries) => {
+    entries.forEach((e) => {
+      if (e.isIntersecting) {
+        toc.querySelectorAll("button.active").forEach((x) => x.classList.remove("active"));
+        toc.querySelector(`[data-toc="#${e.target.id}"]`)?.classList.add("active");
+      }
+    });
+  }, { root: body, rootMargin: "-20% 0px -70% 0px" });
+  body.querySelectorAll("h3[id], h4[id]").forEach((h) => window.__helpTocObs.observe(h));
+}
+
+document.querySelectorAll("nav .group").forEach((g) => {
+  g.addEventListener("click", () => {
+    const collapsed = g.classList.toggle("collapsed");
+    let sib = g.nextElementSibling;
+    while (sib && sib.classList.contains("menu-item")) {
+      sib.hidden = collapsed;
+      sib = sib.nextElementSibling;
+    }
+  });
+});
+
 const restartMask = document.getElementById("restart-mask");
 const restartConfirmBtn = document.getElementById("restart-confirm");
 document.getElementById("restart-cancel").onclick = () => restartMask.classList.remove("show");
@@ -605,7 +648,8 @@ async function runStoreOp(op, pkg, password, version) {
             storeProgressBar.classList.remove("indeterminate");
             storeProgressBar.style.width = Math.max(0, Math.min(100, Number(ev.pct))) + "%";
           } else if (ev.type === "done") {
-            finish(Boolean(ev.ok), ev.ok ? t("store.doneMsg") : (isInstall ? t("store.installErr") : t("store.uninstallErr")));
+            const base = ev.ok ? t("store.doneMsg") : (isInstall ? t("store.installErr") : t("store.uninstallErr"));
+            finish(Boolean(ev.ok), ev.hint ? `${base}：${ev.hint}` : base);
             return;
           }
         }

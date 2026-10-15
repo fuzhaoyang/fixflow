@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseInstalledDpkg, parseAptPct } from "../src/web/server.js";
+import { parseInstalledDpkg } from "../src/pkgs.js";
+import { parseAptPct } from "../src/web/server.js";
 
 test("parseInstalledDpkg 全量输出识别已装包（含超出 50KB 截断点的包与多架构后缀）", () => {
   const lines = [];

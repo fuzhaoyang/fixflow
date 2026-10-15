@@ -49,7 +49,7 @@
     .layout { display: flex; height: 100vh; overflow: hidden; }
     /* 左侧菜单 */
     aside {
-      width: 240px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
+      width: 250px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--border);
       display: flex; flex-direction: column; padding: 12px 0; overflow: hidden;
       transition: width .25s ease, padding .25s ease, border-color .25s ease;
     }
@@ -67,7 +67,11 @@
     .brand-name { white-space: nowrap; }
     .brand-name small { display: block; font-size: 11px; font-weight: 400; color: var(--muted); margin-top: 2px; white-space: nowrap; }
     nav { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; }
-    nav .group { font-size: 11px; color: var(--muted); padding: 12px 16px 4px; white-space: nowrap; }
+    nav .group { font-size: 11px; color: var(--muted); padding: 12px 16px 4px; white-space: nowrap; display: flex; align-items: center; gap: 5px; cursor: pointer; user-select: none; }
+    nav .group:hover { color: var(--text); }
+    .group-arrow { width: 12px; height: 12px; flex-shrink: 0; transition: transform .2s ease; }
+    .group.collapsed .group-arrow { transform: rotate(-90deg); }
+    .menu-item[hidden] { display: none !important; }
     .menu-item {
       display: flex; align-items: center; gap: 10px; padding: 8px 16px; cursor: pointer;
       color: var(--text); border: none; background: none; text-align: left; font-size: 14px; white-space: nowrap;
@@ -251,7 +255,10 @@
     .help-back { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; min-width: 92px; padding: 0; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 13px; cursor: pointer; transition: border-color .18s, color .18s; }
     .help-back:hover { border-color: var(--accent); color: var(--accent); }
     .help-back svg { width: 16px; height: 16px; }
-    .help-body { flex: 1; overflow-y: auto; padding: 20px 28px 60px; max-width: 880px; margin: 0 auto; width: 100%; color: var(--text); font-size: 14px; line-height: 1.8; }
+    .help-toc-toggle { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--panel2); color: var(--text); cursor: pointer; transition: border-color .18s, color .18s; }
+    .help-toc-toggle:hover { border-color: var(--accent); color: var(--accent); }
+    .help-toc-toggle svg { width: 16px; height: 16px; }
+    .help-body { flex: 1; min-width: 0; overflow-y: auto; padding: 20px 28px 60px; max-width: 66%; width: 100%; color: var(--text); font-size: 14px; line-height: 1.8; }
     .help-body h3 { color: var(--accent); font-size: 16px; margin: 26px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 6px; }
     .help-body h4 { font-size: 14px; margin: 16px 0 6px; }
     .help-body table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 8px 0; }
@@ -260,6 +267,41 @@
     .help-body code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
     .help-body pre { background: var(--code-bg); padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; }
     .help-body ul { margin: 6px 0; padding-left: 20px; }
+    .help-body ol { margin: 6px 0; padding-left: 22px; }
+    .help-body li { margin: 4px 0; }
+    .help-tip { background: var(--warn-bg); border-left: 3px solid var(--warn); padding: 8px 12px; border-radius: 0 8px 8px 0; color: var(--text); margin: 8px 0; }
+    .help-layout { flex: 1; display: flex; min-height: 0; }
+    .help-toc { flex: 0 0 250px; min-width: 0; overflow-y: auto; padding: 14px 10px 40px; border-right: 1px solid var(--border); background: var(--panel); transition: flex-basis .25s ease, padding .25s ease, border-color .25s ease; }
+    .help-mask.toc-collapsed .help-toc { flex-basis: 0; padding: 0; border-right: 0; }
+    .help-mask.toc-collapsed .help-body { max-width: none; }
+    .help-toc button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--muted); font-size: 13px; line-height: 1.9; padding: 5px 10px; border-radius: 6px; cursor: pointer; font-family: inherit; }
+    .help-toc .toc-l1 { color: var(--text); font-weight: 600; margin-top: 6px; }
+    .help-toc .toc-l2 { padding-left: 22px; }
+    .help-toc button:hover { background: var(--hover); color: var(--text); }
+    .help-toc button.active { background: rgba(76,141,255,.14); color: var(--accent); }
+    .help-fig { width: 100%; height: auto; margin: 12px 0; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 6px; }
+    .help-fig .fg-panel { fill: var(--panel2); stroke: var(--border); stroke-width: 1; }
+    .help-fig .fg-btn { fill: var(--panel); stroke: var(--border); stroke-width: 1; }
+    .help-fig .fg-btn-accent { fill: var(--accent); }
+    .help-fig .fg-accent { fill: var(--accent); }
+    .help-fig .fg-ok { fill: var(--ok); }
+    .help-fig .fg-warn { fill: var(--warn); }
+    .help-fig .fg-bad { fill: var(--bad); }
+    .help-fig .fg-bar { fill: var(--accent); }
+    .help-fig .fg-head { fill: var(--text); font-size: 13px; font-weight: 600; font-family: var(--font-ui); }
+    .help-fig .fg-text { fill: var(--muted); font-size: 12px; font-family: var(--font-ui); }
+    .help-fig .fg-btn-txt { fill: var(--text); font-size: 11px; font-family: var(--font-ui); }
+    .help-fig .fg-btn-txt-accent { fill: #fff; font-size: 11px; font-family: var(--font-ui); }
+    .help-fig .fg-line { fill: none; stroke: var(--border); stroke-width: 1.5; }
+    .help-fig .fg-arrow { fill: none; stroke: var(--accent); stroke-width: 2; }
+    .help-fig .fg-arrow-head { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .help-fig .fg-chart-line { fill: none; stroke: var(--accent); stroke-width: 2; opacity: .6; }
+    @media (max-width: 768px) {
+      .help-layout { flex-direction: column; }
+      .help-toc { width: 100%; overflow-x: auto; overflow-y: hidden; display: flex; border-right: 0; border-bottom: 1px solid var(--border); padding: 8px; white-space: nowrap; }
+      .help-toc button { width: auto; display: inline-block; }
+      .help-toc .toc-l2 { padding-left: 10px; }
+    }
     .search-box {
       margin-left: 16px; padding: 6px 12px; width: 200px; border-radius: var(--r-sm);
       border: 1px solid var(--border); background: var(--bg); color: var(--text);

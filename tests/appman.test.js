@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseNginxStatus, parseAptPolicy } from "../src/web/server.js";
+import { parseNginxStatus } from "../src/web/server.js";
+import { parseAptPolicy } from "../src/pkgs.js";
 
 test("parseNginxStatus 解析 stub_status 输出", () => {
   const out = parseNginxStatus("Active connections: 291 \nserver accepts handled requests\n 16630948 16630948 31070465 \nReading: 6 Writing: 179 Waiting: 106 ");

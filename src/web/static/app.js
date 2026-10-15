@@ -472,6 +472,7 @@ async function loadStore() {
   try {
     const res = await fetch(`api/store${q ? `?q=${encodeURIComponent(q)}` : ""}`);
     const data = await res.json();
+    if (data.error) { storeBody.innerHTML = `<div class="store-empty">${escapeHtml(data.error)}</div>`; return; }
     storeApps = data.apps || [];
   } catch { storeApps = []; }
   renderStore();

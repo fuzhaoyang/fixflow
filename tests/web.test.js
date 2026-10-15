@@ -1671,11 +1671,11 @@ test("前端拆分：markdown 定义/调用分离且无重复定义", async () =
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const html = await (await fetch(`${base}/`)).text();
-  assert.match(html, /<script src="markdown\.js"><\/script>/);
-  assert.match(html, /<script src="monitor\.js"><\/script>/);
-  assert.match(html, /<script src="chat\.js"><\/script>/);
-  assert.match(html, /<script src="fs\.js"><\/script>/);
-  assert.match(html, /<script src="settings\.js"><\/script>/);
+  assert.match(html, /<script src="markdown\.js(?:\?v=\d+)?"><\/script>/);
+  assert.match(html, /<script src="monitor\.js(?:\?v=\d+)?"><\/script>/);
+  assert.match(html, /<script src="chat\.js(?:\?v=\d+)?"><\/script>/);
+  assert.match(html, /<script src="fs\.js(?:\?v=\d+)?"><\/script>/);
+  assert.match(html, /<script src="settings\.js(?:\?v=\d+)?"><\/script>/);
   const md = await (await fetch(`${base}/markdown.js`)).text();
   assert.match(md, /function renderMarkdown/);
   const chat = await (await fetch(`${base}/chat.js`)).text();
@@ -1688,6 +1688,7 @@ test("前端拆分：markdown 定义/调用分离且无重复定义", async () =
 
 test("应用管理：/api/app/nginx/versions 解析 apt-cache policy 输出", async () => {
   const run = async (cmd) => {
+    if (cmd.includes("command -v")) return { exitCode: 0, stdout: "/usr/bin/apt-get\n", stderr: "" };
     if (cmd.includes("apt-cache policy")) return { exitCode: 0, stdout: "nginx:\n  Installed: 1.2.3-1\n  Candidate: 1.2.3-1\n  Version table:\n *** 1.2.3-1 500\n     1.1.0 100\n", stderr: "" };
     return { exitCode: 0, stdout: "", stderr: "" };
   };
