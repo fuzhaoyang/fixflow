@@ -252,6 +252,17 @@
     .help-header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border); }
     .help-header h2 { font-size: 16px; margin: 0; color: var(--text); }
     .help-tools { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .help-search-wrap { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--panel2); transition: border-color .18s; }
+    .help-search-wrap:focus-within { border-color: var(--accent); }
+    .help-search-wrap svg { width: 14px; height: 14px; color: var(--muted); flex-shrink: 0; }
+    .help-search-wrap input { border: 0; background: none; color: var(--text); outline: none; width: 170px; font-size: 13px; font-family: inherit; }
+    .help-search-wrap input::placeholder { color: var(--muted); }
+    #help-search-clear { display: none; align-items: center; justify-content: center; width: 18px; height: 18px; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; }
+    #help-search-clear svg { width: 12px; height: 12px; }
+    #help-search-clear.show { display: inline-flex; }
+    .help-body mark { background: color-mix(in srgb, var(--warn) 40%, transparent); color: inherit; padding: 0 2px; border-radius: 3px; }
+    .help-search-empty { display: none; align-items: center; justify-content: center; padding: 60px 20px; color: var(--muted); font-size: 14px; }
+    .help-search-empty.show { display: flex; }
     .help-back { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 34px; min-width: 92px; padding: 0; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--panel2); color: var(--text); font-size: 13px; cursor: pointer; transition: border-color .18s, color .18s; }
     .help-back:hover { border-color: var(--accent); color: var(--accent); }
     .help-back svg { width: 16px; height: 16px; }

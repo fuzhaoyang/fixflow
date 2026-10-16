@@ -322,6 +322,82 @@ document.querySelectorAll("nav .group").forEach((g) => {
   });
 });
 
+// ---------- 帮助文档搜索 ----------
+const helpSearchInput = document.getElementById("help-search");
+const helpSearchClear = document.getElementById("help-search-clear");
+const helpSearchEmpty = document.getElementById("help-search-empty");
+let helpSearchTimer = null;
+
+function resetHelpSearch() {
+  if (helpSearchTimer) { clearTimeout(helpSearchTimer); helpSearchTimer = null; }
+  helpSearchInput.value = "";
+  applyHelpSearch("");
+}
+
+function applyHelpSearch(q) {
+  const body = document.getElementById("help-body");
+  if (!body) return;
+  q = q.trim().toLowerCase();
+  body.querySelectorAll("mark").forEach((m) => m.replaceWith(document.createTextNode(m.textContent)));
+  const blocks = [...body.children];
+  helpSearchEmpty.classList.toggle("show", false);
+  if (!q) {
+    blocks.forEach((el) => { el.style.display = ""; });
+    helpSearchClear.classList.remove("show");
+    return;
+  }
+  helpSearchClear.classList.add("show");
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+  const textNodes = [];
+  while (walker.nextNode()) {
+    const t = walker.currentNode;
+    if (t.parentElement.closest("mark")) continue;
+    if (t.nodeValue.toLowerCase().includes(q)) textNodes.push(t);
+  }
+  for (const t of textNodes) {
+    const frag = document.createDocumentFragment();
+    let rest = t.nodeValue;
+    let lower = rest.toLowerCase();
+    let idx = lower.indexOf(q);
+    while (idx !== -1) {
+      frag.appendChild(document.createTextNode(rest.slice(0, idx)));
+      const m = document.createElement("mark");
+      m.textContent = rest.slice(idx, idx + q.length);
+      frag.appendChild(m);
+      rest = rest.slice(idx + q.length);
+      lower = rest.toLowerCase();
+      idx = lower.indexOf(q);
+    }
+    frag.appendChild(document.createTextNode(rest));
+    t.replaceWith(frag);
+  }
+  let any = false;
+  blocks.forEach((el) => {
+    if (el.tagName === "H3") {
+      el.style.display = el.textContent.toLowerCase().includes(q) ? "" : "none";
+      if (el.style.display !== "none") any = true;
+    } else if (el.tagName === "H4") {
+      el.style.display = el.textContent.toLowerCase().includes(q) ? "" : "none";
+    } else {
+      const show = el.textContent.toLowerCase().includes(q);
+      el.style.display = show ? "" : "none";
+    }
+  });
+  const first = blocks.find((el) => el.style.display !== "none" && (el.tagName === "H3" || el.tagName === "H4"));
+  if (!any || !first) {
+    helpSearchEmpty.classList.toggle("show", blocks.length > 0);
+  } else {
+    first.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
+helpSearchInput.addEventListener("input", () => {
+  if (helpSearchTimer) clearTimeout(helpSearchTimer);
+  helpSearchTimer = setTimeout(() => applyHelpSearch(helpSearchInput.value), 150);
+});
+helpSearchClear.addEventListener("click", resetHelpSearch);
+window.addEventListener("hashchange", () => { if (location.hash === "#/help") resetHelpSearch(); });
+
 const restartMask = document.getElementById("restart-mask");
 const restartConfirmBtn = document.getElementById("restart-confirm");
 document.getElementById("restart-cancel").onclick = () => restartMask.classList.remove("show");

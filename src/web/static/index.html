@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title data-i18n="app.title">Fixflow 服务器运维面板</title>
-  <link rel="stylesheet" href="app.css?v=5">
+  <link rel="stylesheet" href="app.css?v=6">
 </head>
 <body>
 <script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
@@ -830,6 +830,11 @@
   <div class="help-header">
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a2 2 0 012-2h13v16H6a2 2 0 00-2 2z"/><path d="M4 5v14"/></svg><span data-i18n="help.title">Fixflow 使用文档</span></h2>
     <div class="help-tools">
+      <div class="help-search-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input id="help-search" type="text" placeholder="搜索帮助内容…" data-i18n="help.searchPh" data-i18n-attr="placeholder">
+        <button id="help-search-clear" title="清空搜索" data-i18n="help.searchClear" data-i18n-attr="title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
       <button class="lang-btn" title="切换语言" data-i18n="tool.langToggle" data-i18n-attr="title">EN</button>
       <button class="theme-btn" title="切换主题" data-i18n="tool.themeToggle" data-i18n-attr="title"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
       <button class="help-back" id="help-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg><span data-i18n="help.back">返回</span></button>
@@ -837,6 +842,7 @@
   </div>
   <div class="help-layout">
     <nav class="help-toc" id="help-toc"></nav>
+    <div class="help-search-empty" id="help-search-empty"><span data-i18n="help.searchNone">未找到匹配内容，换个关键词试试</span></div>
     <div class="help-body" id="help-body" data-i18n-html="help.body">
     <h3 id="get-started">入门</h3>
     <p>Fixflow 是装在你自己服务器上的 AI 运维助手。用中文描述问题，它会调用命令检查服务器、定位问题，并在你确认后执行修复。所有删除 / 修改 / 安装类操作都必须经你确认。</p>
@@ -988,13 +994,13 @@ Nginx 配置有问题吗，帮我看看
     </div>
   </div>
 </div>
-<script src="i18n.js?v=5"></script>
-<script src="markdown.js?v=5"></script>
-<script src="app.js?v=5"></script>
-<script src="monitor.js?v=5"></script>
-<script src="chat.js?v=5"></script>
-<script src="fs.js?v=5"></script>
-<script src="settings.js?v=5"></script>
-<script src="appman.js?v=5"></script>
+<script src="i18n.js?v=6"></script>
+<script src="markdown.js?v=6"></script>
+<script src="app.js?v=6"></script>
+<script src="monitor.js?v=6"></script>
+<script src="chat.js?v=6"></script>
+<script src="fs.js?v=6"></script>
+<script src="settings.js?v=6"></script>
+<script src="appman.js?v=6"></script>
 </body>
 </html>

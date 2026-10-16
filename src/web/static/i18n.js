@@ -199,7 +199,7 @@ const I18N_ZH = {
   "net.pingOk": "可达", "net.pingFail": "不可达",
   "net.aiPrompt": "请帮我诊断当前服务器的网络状况，分析以下信息并给出建议：",
   "net.aiListen": "\n监听端口：", "net.aiConn": "\n连接最多的端口：", "net.aiNic": "\n网卡状态：", "net.aiNone": "无",
-  "help.title": "Fixflow 使用文档", "help.btn": "帮助文档", "help.back": "返回",
+  "help.title": "Fixflow 使用文档", "help.btn": "帮助文档", "help.back": "返回", "help.searchPh": "搜索帮助内容…", "help.searchClear": "清空搜索", "help.searchNone": "未找到匹配内容，换个关键词试试",
   "sys.os": "当前系统：{os} · {arch}", "sys.uptime": "持续运行：{up}",
   "sys.infoTitle": "系统信息", "sys.kernel": "内核", "sys.hostname": "主机名", "sys.arch": "架构", "sys.cpuModel": "CPU 型号", "sys.cpuCount": "CPU 核数", "sys.memTotal": "总内存", "sys.swapTotal": "Swap 总量", "sys.tz": "时区",
   "sys.healthTitle": "健康检查", "sys.loadTitle": "系统负载", "sys.loadHint": "1/5/15 分钟平均负载，持续超过 {n}（核数）说明任务在排队。",
@@ -435,7 +435,7 @@ const I18N_EN = {
   "net.pingOk": "reachable", "net.pingFail": "unreachable",
   "net.aiPrompt": "Please diagnose this server's network status. Analyze the following and give advice:",
   "net.aiListen": "\nListening ports: ", "net.aiConn": "\nTop connection ports: ", "net.aiNic": "\nNIC states: ", "net.aiNone": "none",
-  "help.title": "Fixflow Docs", "help.btn": "Help", "help.back": "Back",
+  "help.title": "Fixflow Docs", "help.btn": "Help", "help.back": "Back", "help.searchPh": "Search docs…", "help.searchClear": "Clear search", "help.searchNone": "No matches. Try another keyword.",
   "sys.os": "System: {os} · {arch}", "sys.uptime": "Uptime: {up}",
   "sys.infoTitle": "System Info", "sys.kernel": "Kernel", "sys.hostname": "Hostname", "sys.arch": "Arch", "sys.cpuModel": "CPU model", "sys.cpuCount": "CPU cores", "sys.memTotal": "Total memory", "sys.swapTotal": "Swap total", "sys.tz": "Timezone",
   "sys.healthTitle": "Health Check", "sys.loadTitle": "System Load", "sys.loadHint": "1/5/15-min load average; sustained above {n} (cores) means tasks are queuing.",
@@ -541,6 +541,8 @@ I18N.zh["help.body"] = `
 <h3 id="get-started">入门</h3>
 <h4 id="what-is">它是什么</h4>
 <p>Fixflow 是装在你自己服务器上的 AI 运维助手。用中文描述问题，它会调用命令检查服务器、定位问题，并在你确认后执行修复。所有删除 / 修改 / 安装类操作都必须经你确认。</p>
+<p>它能做什么：检查磁盘、内存、CPU、网络与关键服务状态；排查 Nginx、数据库、Docker 等组件故障；生成诊断报告；按你的指令执行运维操作。</p>
+<p>它不会做什么：未经确认不会改动系统；已执行的修改无法自动回滚，所以重要操作前请仔细阅读审批单。</p>
 
 <h4 id="quick-start">快速开始</h4>
 ${FIG.setup}
@@ -551,6 +553,7 @@ ${FIG.setup}
   <li>访问面板：向导结束会打印访问地址（形如 <code>http://服务器IP:端口/随机入口/</code>）；忘记入口 / 端口时运行 <code>fixflow default</code> 重新查看。</li>
   <li>随时自检：<code>fixflow doctor</code>。</li>
 </ol>
+<p class="help-tip">安装后若服务器开有防火墙，安装流程会自动放行面板端口；如手动部署遇到访问不通，先运行 <code>fixflow doctor</code> 查看面板是否在监听。</p>
 
 <h3 id="cli">命令行（CLI）</h3>
 <h4 id="cli-sub">子命令</h4>
@@ -580,21 +583,26 @@ Nginx 配置有问题吗，帮我看看
   <tr><td>Ctrl+C（任务运行中）</td><td>中止当前任务（同时中断模型请求）</td></tr>
   <tr><td>Ctrl+C（空闲时）</td><td>退出会话</td></tr>
 </table>
+<p class="help-tip">任务运行中命令会被逐条展示并实时输出；需要系统权限的操作会先弹确认，输入 <code>y</code> 才会执行。</p>
+
 <h3 id="web">登录与面板布局</h3>
 <h4 id="account">账号与登录</h4>
 ${FIG.account}
 <ol>
-  <li>首次访问注册账号（用户名 + 密码 + 验证码），之后用同一账号登录。</li>
+  <li>首次访问注册账号（用户名 + 密码 + 验证码），之后用同一账号登录。验证码图片点击可刷新。</li>
   <li>密码要求：8-24 位，且同时包含字母、数字和特殊字符。</li>
-  <li>登录后会话 12 小时有效；点右上角账号名 → 「修改密码」（需输入当前密码，修改后需重新登录）。</li>
+  <li>登录后会话 12 小时有效；单账号单会话——新登录会自动踢掉旧会话，旧页面会收到提示并跳回登录页。</li>
+  <li>点右上角账号名 → 「修改密码」（需输入当前密码，修改后需重新登录）。</li>
   <li>忘记密码：登录页点「忘记密码？」查看说明，或在服务器运行 <code>fixflow reset-password</code>。</li>
 </ol>
 <h4 id="topbar">顶部栏</h4>
 ${FIG.topbar}
 <ul>
-  <li><b>帮助文档</b>：打开本说明。</li>
+  <li><b>视图标题与搜索框</b>：某些页面提供快捷搜索（如搜索服务）。</li>
+  <li><b>模型状态</b>：显示当前模型，点击可直接进入模型设置。</li>
+  <li><b>帮助文档</b>：打开本说明（支持关键词搜索）。</li>
   <li><b>语言</b>：中 / EN 实时切换（AI 回复语言跟随面板语言）。</li>
-  <li><b>告警</b>：铃铛打开告警管理。</li>
+  <li><b>告警</b>：铃铛打开告警管理；有未处理告警时铃铛会带红点。</li>
   <li><b>主题</b>：亮 / 暗切换。</li>
   <li><b>账号菜单</b>：重启服务 / 修改密码 / 退出登录。</li>
 </ul>
@@ -604,78 +612,83 @@ ${FIG.topbar}
 ${FIG.layout}
 <p>监控总览自动刷新（总览约 3 秒、卡片约 10 秒）：</p>
 <ul>
-  <li>四张环形图：负载 / CPU / 内存 / 磁盘使用率。</li>
+  <li>四张环形图：负载 / CPU / 内存 / 磁盘使用率，鼠标悬停可看具体数值。</li>
   <li>面板自身内存占用卡片。</li>
   <li>图表区：网络流量、磁盘 IO、Token 用量趋势。</li>
-  <li>左下角菜单可切换到系统、网络等子页。</li>
+  <li>左下角菜单可切换到系统、网络等子页；任何异常项会标红并汇总为告警。</li>
 </ul>
 <h4 id="view-system">系统</h4>
 ${FIG.system}
 <ol>
-  <li>查看各项健康检查明细（服务 / 资源 / 关键组件状态）。</li>
-  <li>点「生成报告」一键汇总，可复制或下载 .md 文件。</li>
-  <li>有异常项时优先处理告警提示的组件。</li>
+  <li>查看各项健康检查明细（服务 / 资源 / 关键组件状态），正常项标绿、异常标红。</li>
+  <li>点「生成报告」一键汇总诊断结果，可复制或下载 .md 文件分享给同事。</li>
+  <li>有异常项时优先处理告警提示的组件，再逐项排查其余。</li>
 </ol>
 <h4 id="view-network">网络</h4>
 ${FIG.network}
 <ol>
-  <li>「端口监听」：查看当前所有监听端口及其进程。</li>
-  <li>「端口占用」：输入端口号查询被哪个进程占用。</li>
+  <li>「端口监听」：查看当前所有监听端口及其进程，确认是否有意外暴露的服务。</li>
+  <li>「端口占用」：输入端口号查询被哪个进程占用，常用于排查端口冲突。</li>
   <li>「连通性检测」：输入目标地址做 ping，看网络是否可达。</li>
+  <li>「远端探测」：对公网地址 + 端口做 TCP 探测，确认外部能否访问。</li>
+  <li>每个面板都可以让 AI 结合当前数据做分析，给出排查建议。</li>
 </ol>
 <h3 id="nginx-fw">Nginx 与防火墙</h3>
 <h4 id="view-nginx">Nginx</h4>
 ${FIG.nginx}
 <ol>
-  <li>顶部查看运行状态与版本。</li>
-  <li>「校验配置」检查语法；「错误日志」查看最近报错。</li>
+  <li>顶部查看运行状态与版本；未安装时会提示并给出安装引导。</li>
+  <li>「校验配置」检查语法，改配置前建议先校验；「错误日志」查看最近报错。</li>
   <li>点击配置文件名查看 / 编辑内容，保存后点「保存重载」生效。</li>
   <li>服务操作：启动 / 停止 / 重启。</li>
 </ol>
-<p class="help-tip">改配置前建议先校验，保存重载失败时页面会报错并保持原配置。</p>
+<p class="help-tip">保存重载失败时页面会报错并保持原配置，不会让服务进入损坏状态。</p>
 
 <h4 id="view-firewall">防火墙</h4>
 ${FIG.firewall}
 <ol>
-  <li>查看防火墙状态与放行规则列表。</li>
-  <li>「对全网开放」的端口会标红提示风险。</li>
+  <li>查看防火墙状态与放行规则列表（基于 UFW）。</li>
+  <li>「对全网开放」的端口会标红提示风险，建议限制来源 IP。</li>
   <li>点「关闭端口」可一键移除放行（敏感操作，需重输登录密码）。</li>
+  <li>手动在服务器上放行的规则会自动同步显示到这里。</li>
 </ol>
 <h4 id="view-acl">黑白名单</h4>
 ${FIG.acl}
 <ol>
   <li>针对面板端口做 IP 访问控制，需已启用 UFW 防火墙。</li>
-  <li><b>黑名单</b>：禁止的 IP；<b>白名单</b>：仅允许的 IP。</li>
-  <li>新增 / 删除条目立即生效。</li>
+  <li><b>黑名单</b>：禁止这些 IP 访问面板；<b>白名单</b>：仅允许这些 IP 访问（其余一律拒绝）。</li>
+  <li>新增 / 删除条目立即生效；编辑时可选择放行端口范围。</li>
 </ol>
+<p class="help-tip">白名单模式下务必先加入自己的 IP，否则可能把自己挡在面板外。</p>
 
 <h3 id="resources">资源管理</h3>
 <h4 id="view-databases">数据库</h4>
 ${FIG.databases}
 <ol>
   <li>点「添加」选择类型（PostgreSQL / MySQL / Redis / MongoDB / SQLite），填地址、账号密码。</li>
-  <li>「测试连接」验证配置；「启用 / 停用」切换是否纳入管理；「删除」移除该连接。</li>
-  <li>连接异常时列表会标记告警状态。</li>
+  <li>「测试连接」验证配置是否正确；「启用 / 停用」切换是否纳入管理。</li>
+  <li>「删除」移除该连接（只删面板里的配置，不影响数据库本身）。</li>
+  <li>连接异常时列表会标记告警状态，可在「告警管理」配置数据库指标规则。</li>
 </ol>
 <h4 id="view-docker">Docker</h4>
 ${FIG.docker}
 <ol>
-  <li>容器列表：查看状态与 CPU / 内存占用。</li>
-  <li>操作：启动 / 停止 / 重启 / 删除容器；查看详情与日志。</li>
-  <li>镜像列表：可清理悬空镜像释放磁盘。</li>
+  <li>容器列表：查看状态与 CPU / 内存占用，状态异常会标红。</li>
+  <li>操作：启动 / 停止 / 重启 / 删除容器；点容器可查看详情与实时日志。</li>
+  <li>镜像列表：可清理悬空镜像释放磁盘空间。</li>
 </ol>
 <h4 id="view-ssl">SSL 证书</h4>
 ${FIG.ssl}
 <ol>
-  <li>自动发现服务器上的证书，也可手动添加站点。</li>
-  <li>每张卡显示到期进度与 SAN 域名；即将到期会标黄。</li>
+  <li>自动发现服务器上的证书，也可手动添加站点（本地或远程）。</li>
+  <li>每张卡显示到期进度与 SAN 域名；即将到期会标黄、已过期标红。</li>
   <li>点「续签」一键更新（敏感操作，需重输登录密码）。</li>
-  <li>到期告警通过「告警管理」的指标规则触发。</li>
+  <li>到期告警通过「告警管理」的指标规则触发，可设置提前 N 天提醒。</li>
 </ol>
 <h4 id="view-services">服务</h4>
 ${FIG.systemd}
 <ol>
-  <li>systemd 服务列表，可按状态 / 类型筛选。</li>
+  <li>systemd 服务列表，可按状态（运行 / 失败 / 全部）与类型筛选。</li>
   <li>操作：启动 / 停止 / 重启 / 重载 / 开机自启。</li>
   <li>点开详情：依赖关系、内嵌日志查看。</li>
   <li>failed 状态的服务会触发告警提示。</li>
@@ -683,31 +696,33 @@ ${FIG.systemd}
 <h4 id="view-store">软件商店</h4>
 ${FIG.store}
 <ol>
-  <li>浏览可选软件，查看说明与版本。</li>
-  <li>点「安装」执行安装（安装类操作会弹确认，需重输登录密码）。</li>
+  <li>浏览内置精选软件，也可按关键词搜索 apt / dnf / yum / apk / pacman / zypper 源里的软件。</li>
+  <li>查看软件说明、可用版本与是否已安装。</li>
+  <li>点「安装」执行安装（安装类操作会弹确认，需重输登录密码），安装进度实时显示。</li>
+  <li>已安装的软件可卸载；不同发行版会自动换算包名（如 docker.io → docker）。</li>
 </ol>
 <h4 id="view-logs">日志</h4>
 ${FIG.logs}
 <ol>
-  <li>选择来源：系统服务 / Docker 容器日志。</li>
+  <li>选择来源：系统服务 / Docker 容器日志，来源列表缓存 10 秒。</li>
   <li>搜索过滤关键字、按需「跟随」实时输出。</li>
-  <li>复制 / 导出日志；或点「AI 分析」让模型解读报错。</li>
+  <li>复制 / 导出日志；或点「AI 分析」让模型解读报错，给出修复建议。</li>
 </ol>
 <h3 id="interact">对话、终端与告警</h3>
 <h4 id="chat">Agent 对话</h4>
 ${FIG.chat}
 <ol>
-  <li>直接打字让助手干活，回复逐字显示；支持上传图片。</li>
-  <li>会改动系统的操作会弹「变更审批单」，确认后才执行。</li>
+  <li>直接打字让助手干活，回复逐字显示；支持上传图片让模型看图。</li>
+  <li>会改动系统的操作会弹「变更审批单」，展示命令与影响，确认后才执行。</li>
   <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输登录密码。</li>
   <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
 </ol>
-<p class="help-tip">任务运行中可随时停止生成 / 中断任务。</p>
+<p class="help-tip">任务运行中可随时停止生成 / 中断任务；请勿在审批单未读清前点确认。</p>
 
 <h4 id="fs-terminal">终端与文件管理</h4>
 ${FIG.fs}
 <ol>
-  <li>内置 Web 终端，可直接在面板里执行命令。</li>
+  <li>内置 Web 终端，可直接在面板里执行命令，输出实时回流。</li>
   <li>下方文件管理器：浏览目录、新建文件夹、上传 / 下载 / 编辑 / 重命名 / 删除文件。</li>
   <li>点终端栏「文件」按钮可折叠 / 展开文件模块（状态会记住）。</li>
 </ol>
@@ -721,7 +736,7 @@ ${FIG.alerts}
 <h4 id="settings">设置</h4>
 ${FIG.settings}
 <ol>
-  <li>左下角「设置」→ 模型设置：改 API 地址 / Key / 模型，保存即生效。</li>
+  <li>左下角「设置」→ 模型设置：改 API 地址 / Key / 模型，保存即生效，可测试连通性。</li>
   <li>可配置面板内存上限、重启服务、退出登录。</li>
 </ol>
 
@@ -744,6 +759,17 @@ ${FIG.confirm}
   <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
   <li>重置模型 / 服务商：面板「模型设置」保存即生效；或 <code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code>。</li>
 </ul>
+<h4 id="adv-reverse-proxy">nginx 反向代理示例</h4>
+<pre>server {
+  listen 443 ssl;
+  server_name panel.example.com;
+  location / {
+    proxy_pass http://127.0.0.1:46833;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}</pre>
+<p>反向代理后访问 <code>https://panel.example.com/面板入口/</code> 即可；若想隐藏端口，可在面板配置里关闭公网端口放行。</p>
 
 <h3 id="faq">常见问题</h3>
 <table>
@@ -754,6 +780,10 @@ ${FIG.confirm}
   <tr><td>对话报 LLM API 400</td><td>多为会话上下文异常，点「重启服务」一键修复</td></tr>
   <tr><td>监控显示 N/A</td><td>对应组件没装（如没装 Docker），不影响其他功能</td></tr>
   <tr><td>忘记面板密码</td><td>在服务器运行 <code>fixflow reset-password</code></td></tr>
+  <tr><td>面板被踢下线 / 提示已在别处登录</td><td>账号已在另一处登录，属单会话保护；重新登录即可</td></tr>
+  <tr><td>软件商店搜索无结果</td><td>确认软件源可用（<code>apt update</code> 或对应包管理器刷新源）后再试</td></tr>
+  <tr><td>如何彻底重置</td><td><code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code>（会清空全部配置与历史）</td></tr>
+  <tr><td>如何卸载</td><td><code>fixflow uninstall</code>：停服务 + 卸载全局包，配置保留</td></tr>
 </table>
 
 `;
@@ -762,6 +792,8 @@ I18N.en["help.body"] = `
 <h3 id="get-started">Getting Started</h3>
 <h4 id="what-is">What is Fixflow</h4>
 <p>Fixflow is an AI ops assistant installed on your own server. Describe a problem in plain language and it will run commands to check the server, find the cause, and apply a fix after your confirmation. All delete / modify / install operations require your confirmation.</p>
+<p>What it can do: check disk, memory, CPU, network and key service status; troubleshoot Nginx, databases, Docker and other components; generate diagnostic reports; and run ops tasks you ask for.</p>
+<p>What it will NOT do: it never modifies the system without your approval, and executed changes cannot be rolled back automatically — so read the approval form carefully before confirming.</p>
 
 <h4 id="quick-start">Quick Start</h4>
 ${FIG.setup}
@@ -772,6 +804,7 @@ ${FIG.setup}
   <li>Open the panel: the wizard prints the access URL (like <code>http://SERVER_IP:PORT/RANDOM_PATH/</code>); run <code>fixflow default</code> on the server to print it again if you forget the port / entry path.</li>
   <li>Run a self-check anytime: <code>fixflow doctor</code>.</li>
 </ol>
+<p class="help-tip">The installer auto-opens the panel port in your firewall. If the panel is unreachable after a manual setup, run <code>fixflow doctor</code> to check whether it is listening.</p>
 
 <h3 id="cli">Command Line (CLI)</h3>
 <h4 id="cli-sub">Subcommands</h4>
@@ -801,21 +834,26 @@ Clean logs older than 30 days under /var/log</pre>
   <tr><td>Ctrl+C (task running)</td><td>Abort current task (also interrupts the model request)</td></tr>
   <tr><td>Ctrl+C (idle)</td><td>Exit session</td></tr>
 </table>
+<p class="help-tip">While a task runs, commands are shown one by one with live output. Privileged operations pop a confirmation first — type <code>y</code> to proceed.</p>
+
 <h3 id="web">Login &amp; Panel Layout</h3>
 <h4 id="account">Account &amp; Login</h4>
 ${FIG.account}
 <ol>
-  <li>Register on first visit (username + password + captcha), then log in with the same account.</li>
+  <li>Register on first visit (username + password + captcha), then log in with the same account. Click the captcha image to refresh it.</li>
   <li>Password rule: at least 8 characters with letters, digits and special characters.</li>
-  <li>Sessions last 12 hours; click the account name (top-right) → "Change Password" (requires the current password; log in again afterwards).</li>
+  <li>Sessions last 12 hours. One account, one session: a new login kicks out the old one, and the old page shows a notice and returns to the login screen.</li>
+  <li>Click the account name (top-right) → "Change Password" (requires the current password; log in again afterwards).</li>
   <li>Forgot password: click "Forgot password?" on the login page, or run <code>fixflow reset-password</code> on the server.</li>
 </ol>
 <h4 id="topbar">Top Bar</h4>
 ${FIG.topbar}
 <ul>
-  <li><b>Help</b>: open this document.</li>
+  <li><b>View title &amp; search box</b>: some pages offer a quick search (e.g. filter services).</li>
+  <li><b>Model status</b>: shows the current model; click to open model settings.</li>
+  <li><b>Help</b>: open this document (keyword search supported).</li>
   <li><b>Language</b>: switch ZH / EN live (AI replies follow the panel language).</li>
-  <li><b>Alerts</b>: the bell opens alert management.</li>
+  <li><b>Alerts</b>: the bell opens alert management; a red dot means unhandled alerts.</li>
   <li><b>Theme</b>: light / dark.</li>
   <li><b>Account menu</b>: restart service / change password / log out.</li>
 </ul>
@@ -823,161 +861,184 @@ ${FIG.topbar}
 <h3 id="monitor">Monitoring</h3>
 <h4 id="view-overview">Overview</h4>
 ${FIG.layout}
-<p>Auto-refresh: overview ~3s, cards ~10s.</p>
+<p>The overview auto-refreshes (overview every ~3s, cards every ~10s):</p>
 <ul>
-  <li>Four ring cards: load / CPU / memory / disk usage.</li>
-  <li>Panel process memory card.</li>
-  <li>Charts: network traffic, disk IO, token usage trends.</li>
-  <li>The left sidebar switches to System / Network and other sub-pages.</li>
+  <li>Four gauges: load / CPU / memory / disk usage; hover for exact values.</li>
+  <li>A card for the panel's own memory usage.</li>
+  <li>Chart area: network traffic, disk IO, token usage trends.</li>
+  <li>The left menu switches to System, Network and other sub-pages; any anomaly is marked red and rolled up as an alert.</li>
 </ul>
 <h4 id="view-system">System</h4>
 ${FIG.system}
 <ol>
-  <li>View each health-check detail (services / resources / key component status).</li>
-  <li>Click "Generate report" to summarize; copy or download the .md file.</li>
-  <li>Handle failing components first.</li>
+  <li>Review each health check (services / resources / key components); healthy items are green, anomalies red.</li>
+  <li>Click "Generate Report" to produce a diagnostic summary — copy it or download the .md to share.</li>
+  <li>When anomalies exist, handle the components flagged by alerts first, then the rest.</li>
 </ol>
 <h4 id="view-network">Network</h4>
 ${FIG.network}
 <ol>
-  <li>"Listening ports": view all listening ports and their processes.</li>
-  <li>"Port lookup": enter a port to find which process uses it.</li>
-  <li>"Connectivity": ping a target to check reachability.</li>
+  <li>"Listening ports": all listening ports and their processes — check for unexpected exposures.</li>
+  <li>"Port in use": type a port number to find which process occupies it (handy for port conflicts).</li>
+  <li>"Connectivity": ping a target to test reachability.</li>
+  <li>"Remote probe": TCP probe a public host + port to confirm external access.</li>
+  <li>Each panel lets the AI analyze current data and suggest next steps.</li>
 </ol>
 <h3 id="nginx-fw">Nginx &amp; Firewall</h3>
 <h4 id="view-nginx">Nginx</h4>
 ${FIG.nginx}
 <ol>
-  <li>Check running status and version at the top.</li>
-  <li>"Validate" checks syntax; "Error log" shows recent failures.</li>
-  <li>Click a config file to view / edit; click "Save &amp; reload" to apply.</li>
+  <li>Check running status and version at the top; if Nginx is not installed, a hint with install guidance appears.</li>
+  <li>"Validate config" checks syntax — validate before editing; "Error log" shows recent errors.</li>
+  <li>Click a config file to view / edit it; save then "Save &amp; reload" to apply.</li>
   <li>Service actions: start / stop / restart.</li>
 </ol>
-<p class="help-tip">Validate before editing. If save-and-reload fails, the page reports the error and keeps the original config.</p>
+<p class="help-tip">If a reload fails, the page reports the error and keeps the original config — your service never ends up broken.</p>
 
 <h4 id="view-firewall">Firewall</h4>
 ${FIG.firewall}
 <ol>
-  <li>Check firewall status and allow rules.</li>
-  <li>Ports open to the whole internet are marked as a risk.</li>
-  <li>"Close port" removes the allow rule (sensitive action, requires re-entering the login password).</li>
+  <li>View firewall status and the allow-rule list (UFW-based).</li>
+  <li>Ports open to the whole internet are marked red — restrict source IPs.</li>
+  <li>"Close port" removes an allow rule in one click (sensitive action, requires re-entering the login password).</li>
+  <li>Rules added manually on the server are synced and shown here automatically.</li>
 </ol>
 <h4 id="view-acl">Blacklist / Whitelist</h4>
 ${FIG.acl}
 <ol>
-  <li>IP access control for the panel port; requires UFW enabled.</li>
-  <li><b>Blacklist</b>: blocked IPs; <b>Whitelist</b>: only allowed IPs.</li>
-  <li>Adding / removing entries takes effect immediately.</li>
+  <li>IP access control for the panel port; requires UFW to be enabled.</li>
+  <li><b>Blacklist</b>: block these IPs from the panel; <b>Whitelist</b>: only allow these IPs (everything else is denied).</li>
+  <li>Entries apply immediately; you may also pick an allowed port range when editing.</li>
 </ol>
+<p class="help-tip">In whitelist mode, add your own IP first or you may lock yourself out of the panel.</p>
 
 <h3 id="resources">Resources</h3>
 <h4 id="view-databases">Databases</h4>
 ${FIG.databases}
 <ol>
-  <li>Click "Add", pick the type (PostgreSQL / MySQL / Redis / MongoDB / SQLite), fill in host, user and password.</li>
-  <li>"Test" verifies the config; "Enable / Disable" toggles management; "Delete" removes the connection.</li>
-  <li>Unhealthy connections are marked with an alert state.</li>
+  <li>Click "Add" to pick a type (PostgreSQL / MySQL / Redis / MongoDB / SQLite) and fill in host, credentials.</li>
+  <li>"Test connection" validates the config; "Enable / Disable" toggles management.</li>
+  <li>"Delete" removes the connection (panel config only — the database itself is untouched).</li>
+  <li>Failed connections are flagged; configure database metrics in "Alert management".</li>
 </ol>
 <h4 id="view-docker">Docker</h4>
 ${FIG.docker}
 <ol>
-  <li>Container list: check status and CPU / memory usage.</li>
-  <li>Actions: start / stop / restart / remove; view details and logs.</li>
-  <li>Image list: prune dangling images to free disk.</li>
+  <li>Container list: status and CPU / memory usage; abnormal states are red.</li>
+  <li>Actions: start / stop / restart / remove containers; click a container for details and live logs.</li>
+  <li>Image list: clean up dangling images to free disk space.</li>
 </ol>
 <h4 id="view-ssl">SSL Certificates</h4>
 ${FIG.ssl}
 <ol>
-  <li>Certificates on the server are auto-discovered; you can also add sites manually.</li>
-  <li>Each card shows the expiry bar and SAN domains; expiring soon is highlighted.</li>
-  <li>"Renew" updates with one click (sensitive action, requires the login password).</li>
-  <li>Expiry alerts fire through the metric rules in "Alert Management".</li>
+  <li>Certificates on the server are discovered automatically; you can also add sites manually (local or remote).</li>
+  <li>Each card shows expiry progress and SAN domains; about to expire is yellow, expired is red.</li>
+  <li>"Renew" renews in one click (sensitive action, requires re-entering the login password).</li>
+  <li>Expiry alerts are driven by metric rules in "Alert management" — set a reminder N days in advance.</li>
 </ol>
 <h4 id="view-services">Services</h4>
 ${FIG.systemd}
 <ol>
-  <li>systemd service list, filterable by status / type.</li>
-  <li>Actions: start / stop / restart / reload / enable on boot.</li>
-  <li>Open a service for details, dependencies and inline logs.</li>
+  <li>systemd service list, filterable by status (running / failed / all) and type.</li>
+  <li>Actions: start / stop / restart / reload / enable at boot.</li>
+  <li>Open details: dependencies and embedded logs.</li>
   <li>Failed services trigger an alert.</li>
 </ol>
 <h4 id="view-store">App Store</h4>
 ${FIG.store}
 <ol>
-  <li>Browse available software; check descriptions and versions.</li>
-  <li>Click "Install" to install (install actions prompt for confirmation and the login password).</li>
+  <li>Browse built-in curated software, or search apt / dnf / yum / apk / pacman / zypper repositories by keyword.</li>
+  <li>Check descriptions, available versions and whether already installed.</li>
+  <li>"Install" runs the install (install actions pop a confirmation and require re-entering the login password); progress shows live.</li>
+  <li>Installed apps can be uninstalled; package names are mapped across distros (e.g. docker.io → docker).</li>
 </ol>
 <h4 id="view-logs">Logs</h4>
 ${FIG.logs}
 <ol>
-  <li>Pick the source: system services / Docker container logs.</li>
-  <li>Search and filter by keyword; "Follow" streams live output.</li>
-  <li>Copy / export logs, or click "AI analyze" to have the model interpret errors.</li>
+  <li>Pick a source: system services / Docker container logs (the source list is cached for 10s).</li>
+  <li>Filter by keyword, or "follow" for live tail output.</li>
+  <li>Copy / export logs; or "AI analyze" to have the model interpret errors and suggest fixes.</li>
 </ol>
 <h3 id="interact">Chat, Terminal &amp; Alerts</h3>
 <h4 id="chat">Agent Chat</h4>
 ${FIG.chat}
 <ol>
-  <li>Type directly and let the assistant work; replies stream word by word; image upload is supported.</li>
-  <li>Operations that change the system show a "Change Approval" card and run only after you confirm.</li>
-  <li>Sensitive actions (close port, config changes, file writes, cert renewal, etc.) also require re-entering the login password.</li>
-  <li>"Clear history" above the input clears the session; "Terminal" opens the side terminal.</li>
+  <li>Type naturally and let the assistant work; replies stream word by word. You can upload images for the model to see.</li>
+  <li>System-changing operations pop a "change approval form" showing the commands and impact — confirm before it runs.</li>
+  <li>Sensitive actions (close a port, change config, write files, renew certs…) also require re-entering the login password.</li>
+  <li>"Clear history" above the input resets the session; "Terminal" opens the built-in terminal on the right.</li>
 </ol>
-<p class="help-tip">You can stop generation / abort a task at any time while it runs.</p>
+<p class="help-tip">You can stop generation / interrupt a task anytime; don't confirm an approval form before reading it.</p>
 
 <h4 id="fs-terminal">Terminal &amp; File Manager</h4>
 ${FIG.fs}
 <ol>
-  <li>A built-in web terminal to run commands inside the panel.</li>
-  <li>File manager below: browse, new folder, upload / download / edit / rename / delete.</li>
+  <li>A built-in web terminal runs commands right in the panel, with live output.</li>
+  <li>The file manager below browses directories and can create folders, upload / download / edit / rename / delete files.</li>
   <li>The "Files" button in the terminal bar collapses / expands the file module (state is remembered).</li>
 </ol>
 <h4 id="alerts">Alert Management (bell, top-right)</h4>
 ${FIG.alerts}
 <ol>
-  <li><b>Daily alerts</b>: configure SMTP, set a daily time and instruction; the model generates and emails a report.</li>
-  <li><b>Metric alerts</b>: set the panel URL / webhook; rules on CPU / memory / disk / network / TCP sessions with threshold, duration and level (P1–P5); incidents can be claimed / resolved.</li>
-  <li><b>Panel memory</b>: set the panel process memory limit in "Settings"; a banner appears at the top when exceeded (alert only, no service interruption).</li>
+  <li><b>Daily report</b>: configure an SMTP mailbox, set a daily time and instruction — the model generates and sends the report automatically.</li>
+  <li><b>Metric alerts</b>: set the panel public URL / webhook; configure thresholds, duration and level (P1–P5) for CPU / memory / disk / network traffic / TCP sessions; events can be acknowledged and recovered.</li>
+  <li><b>Panel memory</b>: set a process memory limit in "Settings"; when exceeded, a banner appears at the top (advisory only — service keeps running).</li>
 </ol>
 <h4 id="settings">Settings</h4>
 ${FIG.settings}
 <ol>
-  <li>Bottom-left "Settings" → model settings: change API URL / Key / model, takes effect on save.</li>
-  <li>Also configure the panel memory limit, restart the service, and log out.</li>
+  <li>"Settings" (bottom-left) → Model settings: change API base URL / key / model, save to apply, and test connectivity.</li>
+  <li>Also configure the panel memory limit, restart the service, or log out.</li>
 </ol>
 
 <h3 id="security">Tools &amp; Security</h3>
 ${FIG.confirm}
 <table>
   <tr><th>Tool</th><th>Purpose</th><th>Permission</th></tr>
-  <tr><td>run_command</td><td>Run commands to check / operate</td><td>Read-only auto; delete / modify / install need confirmation</td></tr>
-  <tr><td>read_file</td><td>Read logs, configs</td><td>Auto</td></tr>
-  <tr><td>apply_fix</td><td>Apply fix commands</td><td>Always confirm</td></tr>
+  <tr><td>run_command</td><td>Run commands to inspect / operate</td><td>Read-only auto; delete / modify / install need confirmation</td></tr>
+  <tr><td>read_file</td><td>Read logs and configs</td><td>Auto</td></tr>
+  <tr><td>apply_fix</td><td>Run fix commands</td><td>Always requires confirmation</td></tr>
   <tr><td>clear_history</td><td>Clear session history</td><td>Auto</td></tr>
 </table>
-<p>Every write / delete / modify operation asks for confirmation first: type <code>y</code> in the CLI, or click "Confirm" in the panel. Executed changes cannot be undone automatically, but everything is confirmed beforehand.</p>
+<p>Every write / delete / modify operation asks for confirmation before running: type <code>y</code> in the CLI or click "Confirm" in the panel. Executed changes cannot be rolled back automatically, but nothing changes without a confirmation step first.</p>
 
 <h3 id="advanced">Configuration &amp; Advanced</h3>
 <ul>
   <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>.</li>
-  <li>Environment overrides: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
-  <li>The panel listens on <code>0.0.0.0</code>, protected by a random port + random entry path (requests without the entry prefix return 404); it tries to open the local firewall port on startup. Bind a domain via an nginx reverse proxy, or enable built-in HTTPS (self-signed).</li>
-  <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; log at <code>~/.config/fixflow/cli.log</code>.</li>
-  <li>Reset model / provider: save in "Model Settings", or <code>rm -rf ~/.config/fixflow</code> then re-run <code>fixflow</code>.</li>
+  <li>Environment variables override: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
+  <li>The panel listens on <code>0.0.0.0</code> and is protected by a "random port + random entry path" (requests without the entry prefix get 404); it tries to open the port in the local firewall on startup. You can reverse-proxy with nginx to a domain, or enable built-in HTTPS (self-signed).</li>
+  <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; logs at <code>~/.config/fixflow/cli.log</code>.</li>
+  <li>Reset model / provider: save in panel "Model settings"; or <code>rm -rf ~/.config/fixflow</code> and run <code>fixflow</code> again.</li>
 </ul>
+<h4 id="adv-reverse-proxy">nginx reverse proxy example</h4>
+<pre>server {
+  listen 443 ssl;
+  server_name panel.example.com;
+  location / {
+    proxy_pass http://127.0.0.1:46833;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+  }
+}</pre>
+<p>After proxying, visit <code>https://panel.example.com/PANEL_PATH/</code>; to hide the port, disable the public firewall rule for it in the panel config.</p>
 
 <h3 id="faq">FAQ</h3>
 <table>
   <tr><th>Symptom</th><th>Fix</th></tr>
-  <tr><td>Wizard says "cannot connect"</td><td>Server cannot reach the API URL; check network / firewall / address</td></tr>
-  <tr><td>"API Key invalid"</td><td>Copy and paste the Key again</td></tr>
-  <tr><td>Panel won't open</td><td>Run <code>fixflow doctor</code>; if not running, run <code>fixflow web</code></td></tr>
-  <tr><td>Chat gets LLM API 400</td><td>Usually a bad session context; click "Restart service"</td></tr>
-  <tr><td>Monitoring shows N/A</td><td>Component not installed (e.g. no Docker); other features unaffected</td></tr>
+  <tr><td>Wizard says "cannot connect"</td><td>The server cannot reach that API endpoint — check network / firewall / address</td></tr>
+  <tr><td>"Invalid API Key"</td><td>Copy and paste the key again</td></tr>
+  <tr><td>Panel won't open</td><td>Run <code>fixflow doctor</code>; if not running, start with <code>fixflow web</code></td></tr>
+  <tr><td>LLM API 400 during chat</td><td>Usually a broken session context — click "Restart service" to fix in one go</td></tr>
+  <tr><td>Monitoring shows N/A</td><td>The component isn't installed (e.g. no Docker) — other features still work</td></tr>
   <tr><td>Forgot panel password</td><td>Run <code>fixflow reset-password</code> on the server</td></tr>
+  <tr><td>Kicked out / "logged in elsewhere"</td><td>Single-session protection — just log in again</td></tr>
+  <tr><td>Store search returns nothing</td><td>Make sure the package sources are fresh (e.g. <code>apt update</code>) and try again</td></tr>
+  <tr><td>How to fully reset</td><td><code>rm -rf ~/.config/fixflow</code> then run <code>fixflow</code> again (wipes all config and history)</td></tr>
+  <tr><td>How to uninstall</td><td><code>fixflow uninstall</code>: stop service + remove global package, keep config</td></tr>
 </table>
 
 `;
+
 
 function t(key) {
   return I18N[curLang][key] || I18N.zh[key] || key;
