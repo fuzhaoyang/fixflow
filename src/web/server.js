@@ -1623,6 +1623,12 @@ export async function startWeb(config = {}, deps = {}) {
         const css = await readFile(join(STATIC, "xterm.css"));
         res.writeHead(200, { "Content-Type": "text/css; charset=utf-8" });
         res.end(css);
+      } else if (url.pathname.startsWith("/fig/")) {
+        const name = url.pathname.slice("/fig/".length);
+        if (!/^[\w.-]+\.png$/.test(name)) { res.writeHead(404); res.end("Not Found"); return; }
+        const img = await readFile(join(STATIC, "fig", name));
+        res.writeHead(200, { "Content-Type": "image/png", "Cache-Control": "no-cache" });
+        res.end(img);
       } else {
         res.writeHead(404); res.end("Not Found");
       }
