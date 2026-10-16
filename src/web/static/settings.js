@@ -285,12 +285,6 @@ const helpMask = document.getElementById("help-mask");
 document.querySelectorAll(".doc-btn").forEach((b) => b.addEventListener("click", () => { location.hash = "/help"; }));
 document.getElementById("help-close").onclick = () => { location.hash = "/" + lastRoute; };
 
-document.getElementById("help-toc-toggle").onclick = () => {
-  helpMask.classList.toggle("toc-collapsed");
-  localStorage.setItem("fixflow_toc", helpMask.classList.contains("toc-collapsed") ? "0" : "1");
-};
-if (localStorage.getItem("fixflow_toc") === "0") helpMask.classList.add("toc-collapsed");
-
 function buildHelpToc() {
   const toc = document.getElementById("help-toc");
   const body = document.getElementById("help-body");
