@@ -1064,6 +1064,7 @@ async function refreshAlerts() {
     document.getElementById("alert-port").value = alertCache.smtp?.port || "";
     document.getElementById("alert-user").value = alertCache.smtp?.user || "";
     document.getElementById("alert-from").value = alertCache.smtp?.from || "";
+    document.getElementById("alert-to").value = alertCache.smtp?.to || "";
     renderAlertList();
     renderAlertHist();
   } catch {}
@@ -1101,6 +1102,7 @@ document.getElementById("alert-smtp-save").onclick = async () => {
     user: document.getElementById("alert-user").value.trim(),
     pass: document.getElementById("alert-pass").value,
     from: document.getElementById("alert-from").value.trim(),
+    to: document.getElementById("alert-to").value.trim(),
   };
   await fetch("api/alerts/smtp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   document.getElementById("alert-pass").value = "";

@@ -80,6 +80,21 @@ export function diffFailedServices(prev, now) {
   return { newFailures: (now || []).filter((s) => !p.has(s)), recoveries: (prev || []).filter((s) => !n.has(s)) };
 }
 
+export function parseDownState({ exitCode = 1, stdout = "" } = {}) {
+  const state = String(stdout || "").trim();
+  return { up: exitCode === 0, found: exitCode !== 4, state };
+}
+
+export function diffDownServices(prev = {}, now = {}) {
+  const events = [];
+  for (const [name, cur] of Object.entries(now)) {
+    const wasDown = prev[name]?.found && !prev[name]?.up;
+    if (cur.found && !cur.up && !wasDown) events.push({ kind: "down", name, state: cur.state });
+    else if (wasDown && cur.up) events.push({ kind: "recovered", name });
+  }
+  return events;
+}
+
 function formatMb(mb) {
   const n = Number(mb) || 0;
   return n >= 1024 ? `${(n / 1024).toFixed(1)} GB` : `${n} MB`;

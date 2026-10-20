@@ -32,6 +32,7 @@ export async function createAlertsManager({ config, configPath, exec = runComman
     await writeCfg({ alertSmtp: {
       host: s.host ?? cur.host ?? "", port: s.port ?? cur.port ?? "", user: s.user ?? cur.user ?? "",
       pass: s.pass ? s.pass : (cur.pass || ""), from: s.from ?? cur.from ?? "",
+      to: s.to ?? cur.to ?? "",
     } });
   };
   const historyFor = async (id) => history[id] || [];

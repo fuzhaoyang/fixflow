@@ -202,6 +202,7 @@ fixflow
 | `databases` | 数据库连接列表 | `[]` |
 | `sslSites` | SSL 证书监控列表 | `[]` |
 | `pingTargets` | 连通性检测目标 | `[]` |
+| `downServices` | 服务异常关闭监控（非 active 即发邮件，收件人填「告警→邮箱配置」） | `["nginx"]` |
 | `lang` / `theme` | 面板语言 / 主题 | `zh` / `dark` |
 
 环境变量可覆盖（优先级更高）：`FIXFLOW_API_KEY` / `FIXFLOW_BASE_URL` / `FIXFLOW_MODEL`。安装时直接用环境变量可免交互：

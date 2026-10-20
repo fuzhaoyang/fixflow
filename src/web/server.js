@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
 import { createSession } from "../core.js";
-import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices, collectSystemd, collectConnectionSummary, collectDocker, parseWho } from "../metrics.js";
+import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices, parseDownState, diffDownServices, collectSystemd, collectConnectionSummary, collectDocker, parseWho } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
@@ -291,6 +291,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.sslSites = normalizeSslSites(config.sslSites);
   config.sslAlerts = config.sslAlerts || { webhook: "", smtp: {} };
   config.pingTargets = config.pingTargets || [];
+  config.downServices = Array.isArray(config.downServices) ? config.downServices.map((s) => String(s).trim()).filter(Boolean) : ["nginx"];
   config.lang = config.lang === "en" ? "en" : "zh";
   config.theme = config.theme === "light" ? "light" : "dark";
   config.fsCollapsed = config.fsCollapsed === true;
@@ -570,6 +571,28 @@ export async function startWeb(config = {}, deps = {}) {
   let failedTimer = null;
   if (!deps.noAlertsTimer && config.apiKey) failedTimer = setInterval(checkFailedServices, 60000);
 
+  let lastDown = null;
+  const checkDownServices = async () => {
+    try {
+      const now = {};
+      for (const s of config.downServices || []) {
+        const r = await execCmd(`systemctl is-active ${s}`);
+        now[s] = parseDownState(r);
+      }
+      if (lastDown === null) { lastDown = now; return; }
+      const events = diffDownServices(lastDown, now);
+      lastDown = now;
+      const st = await alertsManager.smtp();
+      for (const e of events) {
+        if (!st.to) return;
+        if (e.kind === "down") await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务异常关闭：${e.name}`, `服务 ${e.name} 已停止（systemd 状态 ${e.state}），请检查。`);
+        else await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务已恢复：${e.name}`, `服务 ${e.name} 已恢复正常。`);
+      }
+    } catch {}
+  };
+  let downTimer = null;
+  if (!deps.noAlertsTimer) downTimer = setInterval(checkDownServices, 60000);
+
   async function collectStatus() {
     const [uptime, mem, df, nproc, osRelease, uname, procUptime] = await Promise.all([
       runCommand("uptime"),
@@ -772,7 +795,7 @@ export async function startWeb(config = {}, deps = {}) {
         const st = await alertsManager.smtp();
         const history = {};
         for (const a of alerts) history[a.id] = (await alertsManager.history(a.id)).slice(0, 3);
-        sendJson(res, { alerts, smtp: { host: st.host, port: st.port, user: st.user, from: st.from, hasPass: Boolean(st.pass) }, history });
+        sendJson(res, { alerts, smtp: { host: st.host, port: st.port, user: st.user, from: st.from, to: st.to, hasPass: Boolean(st.pass) }, history });
       } else if (url.pathname === "/api/alerts" && req.method === "POST") {
         const body = await readBody(req);
         const { name, instruction, time, recipients } = JSON.parse(body || "{}");
@@ -805,8 +828,8 @@ export async function startWeb(config = {}, deps = {}) {
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/alerts/smtp" && req.method === "POST") {
         const body = await readBody(req);
-        const { host, port, user, pass, from } = JSON.parse(body || "{}");
-        await alertsManager.saveSmtp({ host, port, user, pass, from });
+        const { host, port, user, pass, from, to } = JSON.parse(body || "{}");
+        await alertsManager.saveSmtp({ host, port, user, pass, from, to });
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/alerts/run" && req.method === "POST") {
         const body = await readBody(req);
@@ -1688,6 +1711,6 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

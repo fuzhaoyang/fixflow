@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf, buildDbTestCommand, testDbConnection, parseFailedServices, diffFailedServices } from "../src/metrics.js";
+import { collectAll, collectSystem, collectNetwork, collectConnectionSummary, collectNicHealth, collectDnsRoute, collectRemoteProbe, collectDatabases, collectSystemd, collectUserProcs, collectSslAll, collectConnectivity, collectPorts, collectFirewall, collectNginxLogs, collectPyProcesses, collectDbSlow, collectDockerDetail, collectLogSources, collectLogs, parseUfwStatus, parseFirewalld, parseIptablesRules, parseConnections, parseUfwPolicy, parseNginxListens, listNginxConfs, readNginxConf, writeNginxConf, buildDbTestCommand, testDbConnection, parseFailedServices, diffFailedServices, parseDownState, diffDownServices } from "../src/metrics.js";
 
 test("collectAll 返回全部模块（失败显示 N/A 不抛错）", async () => {
   const r = await collectAll({ databases: [] });
@@ -453,4 +453,22 @@ test("parseFailedServices / diffFailedServices", () => {
   assert.deepEqual(d.recoveries, ["old.service"]);
   assert.deepEqual(diffFailedServices(null, ["x"]).newFailures, ["x"]);
   assert.deepEqual(diffFailedServices(["x"], ["x"]).newFailures, []);
+});
+
+test("parseDownState 解析 systemctl is-active 结果", () => {
+  assert.deepEqual(parseDownState({ exitCode: 0, stdout: "active\n" }), { up: true, found: true, state: "active" });
+  assert.deepEqual(parseDownState({ exitCode: 3, stdout: "inactive" }), { up: false, found: true, state: "inactive" });
+  assert.deepEqual(parseDownState({ exitCode: 3, stdout: "failed" }), { up: false, found: true, state: "failed" });
+  assert.deepEqual(parseDownState({ exitCode: 4, stdout: "inactive" }), { up: false, found: false, state: "inactive" });
+});
+
+test("diffDownServices 只在状态变化时产生 down/recovered", () => {
+  const up = { up: true, found: true };
+  const down = { up: false, found: true, state: "inactive" };
+  assert.deepEqual(diffDownServices({ nginx: up }, { nginx: down }), [{ kind: "down", name: "nginx", state: "inactive" }]);
+  assert.deepEqual(diffDownServices({ nginx: down }, { nginx: down }), []);
+  assert.deepEqual(diffDownServices({ nginx: down }, { nginx: up }), [{ kind: "recovered", name: "nginx" }]);
+  assert.deepEqual(diffDownServices({}, { nginx: down }), [{ kind: "down", name: "nginx", state: "inactive" }]);
+  assert.deepEqual(diffDownServices({ nginx: down }, { nginx: { up: false, found: false, state: "inactive" } }), []);
+  assert.deepEqual(diffDownServices({ nginx: { up: false, found: false, state: "inactive" } }, { nginx: down }), [{ kind: "down", name: "nginx", state: "inactive" }]);
 });

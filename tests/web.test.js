@@ -1386,6 +1386,19 @@ test("/api/alerts 增删改查与鉴权", async () => {
   w.close();
 });
 
+test("/api/alerts/smtp 保存 SMTP 与收件人 to", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const save = await fetch(`${base}/api/alerts/smtp`, { method: "POST", headers: H, body: JSON.stringify({ host: "smtp.x.com", port: "465", user: "u", pass: "p", from: "f@x.com", to: "ops@x.com" }) });
+  assert.equal(save.status, 200);
+  const list = await (await fetch(`${base}/api/alerts`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.smtp.host, "smtp.x.com");
+  assert.equal(list.smtp.to, "ops@x.com");
+  w.close();
+});
+
 test("/api/alerts/run 手动执行成功（mock 会话与 sendmail）", async () => {
   const calls = [];
   const w = await makeServer({}, {

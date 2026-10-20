@@ -36,6 +36,14 @@ test("配置新增 sslSites 与 pingTargets", () => {
   assert.deepEqual(cfg2.pingTargets, ["1.1.1.1"]);
 });
 
+test("downServices 默认监控 nginx，可配置覆盖", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  assert.deepEqual(loadConfig({ filePath: file }).downServices, ["nginx"]);
+  writeFileSync(file, JSON.stringify({ downServices: ["nginx", "mysql", " "] }));
+  assert.deepEqual(loadConfig({ filePath: file }).downServices, ["nginx", "mysql"]);
+});
+
 test("sslSites 旧字符串数组自动迁移为对象数组", () => {
   const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
   const file = join(dir, "config.json");
