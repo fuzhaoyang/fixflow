@@ -36,21 +36,23 @@ API Key 相当于"大模型的钥匙"，去模型服务商官网注册一个账�
 
 ## 二、安装
 
-### 方式 A：一键脚本（推荐新手）
+> 安装需要 root 权限：会注册 systemd 面板服务，并尝试放行本机防火墙端口。
 
-把 `install.sh` 和 `fixflow-0.1.0.tgz` 放到服务器同一目录，然后：
-
-```bash
-bash install.sh
-```
-
-脚本会自动检查 Node.js、安装 Fixflow。**如果提示没有 Node.js**，按它给的提示先装 Node（约 1 分钟），再重新跑一遍。
-
-### 方式 B：npm 全局安装
+### 方式 A：npm 全局安装（推荐）
 
 ```bash
-npm i -g ./fixflow-0.1.0.tgz
+sudo npm i -g fixflow
 ```
+
+### 方式 B：离线安装
+
+内网或没有 npm 源时，把 `fixflow-0.1.0.tgz` 传到服务器，然后：
+
+```bash
+sudo npm i -g ./fixflow-0.1.0.tgz
+```
+
+如果同目录还提供了 `install.sh`，也可以直接 `bash install.sh`，脚本会先检查 Node.js 再自动安装。
 
 ### 检查装好没有
 
@@ -208,7 +210,7 @@ fixflow
 环境变量可覆盖（优先级更高）：`FIXFLOW_API_KEY` / `FIXFLOW_BASE_URL` / `FIXFLOW_MODEL`。安装时直接用环境变量可免交互：
 
 ```bash
-FIXFLOW_API_KEY=sk-xxx FIXFLOW_BASE_URL=https://api.deepseek.com/v1 FIXFLOW_MODEL=deepseek-chat npm i -g ./fixflow-0.1.0.tgz
+sudo FIXFLOW_API_KEY=sk-xxx FIXFLOW_BASE_URL=https://api.deepseek.com/v1 FIXFLOW_MODEL=deepseek-chat npm i -g fixflow
 ```
 
 ### 常用运维命令

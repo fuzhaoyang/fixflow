@@ -53,7 +53,7 @@ async function printPanelAddress(config, configPath, { log, lanIPs, publicIP }) 
   if (!pub) log("    （公网 IP 获取失败；可运行 fixflow default 重查）");
 }
 
-const SIZE_NOTE = "包体参考：全量安装包 ~483KB(tgz) / ~2.3MB(解压)；面板（echarts+web）约占 1.6MB；仅 CLI 核心约 0.7MB。";
+const SIZE_NOTE = "包体参考：全量安装包 ~4.3MB(tgz) / ~5.3MB(解压)。";
 
 export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerPath = RECONFIGURE_FLAG, env = process.env, write = writeFileSync, log = console.log, install = installService, restart = restartIfActive, askPanel = defaultAskPanel, lanIPs = defaultLanIPs, publicIP = defaultPublicIP } = {}) {
   const panelEnabled = panelFromEnv(env) ?? (await askPanel()) ?? true;
@@ -85,7 +85,7 @@ export async function runPostinstall({ configPath = DEFAULT_CONFIG_PATH, markerP
       log(`  ${SIZE_NOTE}`);
       log("  想随时启用面板：运行 fixflow web，或重新安装时选 Y。");
     }
-    log("  或用环境变量自动配置：FIXFLOW_API_KEY=... FIXFLOW_BASE_URL=... FIXFLOW_MODEL=... npm i -g fixflow-0.1.0.tgz");
+    log("  或用环境变量自动配置：FIXFLOW_API_KEY=... FIXFLOW_BASE_URL=... FIXFLOW_MODEL=... npm i -g fixflow");
     log("  ⚠ 卸载请务必运行 fixflow uninstall（会停服务+卸载包），不要直接用 npm uninstall。");
     return { done: false, reason: "需运行 fixflow 配置", restarted: r.active, panelEnabled };
   }

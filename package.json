@@ -3,6 +3,24 @@
   "version": "0.1.0",
   "type": "module",
   "description": "服务器运维 AI Agent CLI + Web 面板",
+  "author": "fuzhaoyang <932647051@qq.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fuzhaoyang/fixflow.git"
+  },
+  "homepage": "https://github.com/fuzhaoyang/fixflow#readme",
+  "bugs": {
+    "url": "https://github.com/fuzhaoyang/fixflow/issues"
+  },
+  "keywords": [
+    "ops",
+    "server",
+    "ai",
+    "agent",
+    "monitoring",
+    "systemd"
+  ],
   "bin": {
     "fixflow": "bin/fixflow.js"
   },
@@ -14,6 +32,7 @@
   ],
   "scripts": {
     "test": "node --test tests/",
+    "prepublishOnly": "npm test",
     "postinstall": "node scripts/postinstall.js",
     "uninstall": "node scripts/uninstall.js"
   },
