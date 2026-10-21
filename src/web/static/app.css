@@ -842,7 +842,8 @@
     .welcome h2 { font-size: 22px; margin: 0 0 8px; }
     .welcome p { color: var(--muted); line-height: 1.8; font-size: 14px; margin: 0 0 20px; }
     .welcome .tag-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 20px; }
-    .welcome .tag { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; font-size: 13px; color: var(--text); }
+    .welcome .tag { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 5px 14px; font-size: 13px; color: var(--text); cursor: pointer; transition: border-color .18s, background .18s; }
+    .welcome .tag:hover { border-color: var(--accent); background: var(--panel2); }
     .welcome .tip { font-size: 12px; color: var(--muted); opacity: .8; }
     /* 登录 / 注册 */
     #auth-mask {

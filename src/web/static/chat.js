@@ -55,9 +55,16 @@ function renderWelcome() {
   <h2>${t("chat.welcomeTitle")}</h2>
   <p>${t("chat.welcomeSub")}</p>
   <div class="tag-list">
-    <span class="tag">${icon("monitor")} ${t("chat.tagSys")}</span><span class="tag">${icon("globe")} ${t("chat.tagNet")}</span><span class="tag">${icon("server")} ${t("chat.tagNginx")}</span><span class="tag">${icon("shield")} ${t("chat.tagFw")}</span><span class="tag">${icon("database")} ${t("chat.tagDb")}</span><span class="tag">${icon("box")} ${t("chat.tagDocker")}</span><span class="tag">${icon("sparkles")} ${t("chat.tagFix")}</span>
+    <button class="tag" type="button">${icon("monitor")} ${t("chat.tagSys")}</button><button class="tag" type="button">${icon("globe")} ${t("chat.tagNet")}</button><button class="tag" type="button">${icon("server")} ${t("chat.tagNginx")}</button><button class="tag" type="button">${icon("shield")} ${t("chat.tagFw")}</button><button class="tag" type="button">${icon("database")} ${t("chat.tagDb")}</button><button class="tag" type="button">${icon("box")} ${t("chat.tagDocker")}</button><button class="tag" type="button">${icon("sparkles")} ${t("chat.tagFix")}</button>
   </div>
   <p class="tip">${t("chat.welcomeTip")}</p>`;
+  ctx.welcome.querySelectorAll(".tag").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (busy) return;
+      ctx.input.value = el.textContent.trim();
+      send();
+    });
+  });
 }
 renderWelcome();
 
