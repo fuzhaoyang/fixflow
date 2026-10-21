@@ -12,6 +12,7 @@ import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, form
 import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
 import { collectSslAll, detectRenewTool, renewCert, checkSslAlerts, sendWebhook, sendEmail } from "../ssl.js";
 import { createUsageStore } from "../usage.js";
+import { createMonitorHistory, aggregateMinute } from "../monitor-history.js";
 import { createAlertsManager } from "../alerts.js";
 import { lanIPs, publicIP } from "../netip.js";
 import { buildUrls } from "../panel-access.js";
@@ -498,6 +499,15 @@ export async function startWeb(config = {}, deps = {}) {
 
   const monitor = createMonitor();
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
+  const monitorHistory = await createMonitorHistory({ filePath: config.monitorHistoryPath || join(dirname(configPath), "monitor-history.jsonl") });
+  let lastCaptureT = Math.floor(Date.now() / 1000) - 60;
+  const historyTimer = setInterval(async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const pick = (arr) => (arr || []).filter((p) => p.t > lastCaptureT && p.t <= now);
+    const agg = aggregateMinute(pick(monitor.net().samples), pick(monitor.io().samples), pick(monitor.trend().samples));
+    lastCaptureT = now;
+    if (agg) await monitorHistory.add(agg).catch(() => {});
+  }, 60000);
   const prewarmTimer = setTimeout(() => collectExtras().catch(() => {}), 3000);
   const metricsWarmTimer = setTimeout(() => { metricsCache("metrics", () => collectAll(config)).catch(() => {}); }, 2000);
   let alertTimer = null;
@@ -787,6 +797,9 @@ export async function startWeb(config = {}, deps = {}) {
           panelMem: { usedMB: Math.round(process.memoryUsage().rss / 1024 / 1024), limitMB: config.memLimitMB },
           extras: await collectExtras(),
         });
+      } else if (url.pathname === "/api/monitor-history" && req.method === "GET") {
+        const minutes = Math.max(1, Math.min(7 * 24 * 60, Number(url.searchParams.get("minutes")) || 60));
+        sendJson(res, monitorHistory.query(minutes));
       } else if (url.pathname === "/api/usage" && req.method === "GET") {
         const days = parseInt(url.searchParams.get("days") || "30", 10);
         sendJson(res, { days: usageStore.daily(Number.isFinite(days) ? days : 30) });
@@ -1711,6 +1724,6 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(historyTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

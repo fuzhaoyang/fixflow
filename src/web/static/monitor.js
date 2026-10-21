@@ -7,7 +7,11 @@ let unitDivider = 1;
 let tokenUnit = 1000000;
 let trafficTab = "traffic";
 let unitTouched = false;
-let rangePoints = 900;
+let rangeMinutes = 15;
+let histCache = null;
+let histLoadedAt = 0;
+const histMode = () => rangeMinutes > 60;
+const rangePointCount = () => (histMode() ? rangeMinutes : rangeMinutes * 60);
 
 function fmtRate(v) {
   const x = (v || 0) / (unitDivider || 1);
@@ -188,9 +192,10 @@ function renderKpi() {
 }
 
 function chartData(mode) {
-  const points = mode === "traffic" ? overviewData?.net : overviewData?.io;
+  const src = histMode() ? histCache : overviewData;
+  const points = mode === "traffic" ? src?.net : src?.io;
   if (!points?.length) return null;
-  const pts = points.slice(-rangePoints);
+  const pts = points.slice(-rangePointCount());
   if (!pts.length) return null;
   const labels = pts.map((p) => {
     const d = new Date(p.t * 1000);
@@ -350,7 +355,8 @@ function hexToRgba(hex, a) {
 function renderChart() {
   const draw = () => {
     if (trafficTab === "trend") {
-      drawTrendChart(document.getElementById("trend-chart"), overviewData?.trend || [], "ov-trend-legend");
+      const trend = (histMode() ? histCache?.trend : overviewData?.trend) || [];
+      drawTrendChart(document.getElementById("trend-chart"), trend, "ov-trend-legend");
       return;
     }
     if (trafficTab === "token") {
@@ -447,6 +453,7 @@ async function refreshOverview() {
     const nics = (overviewData.nics || []).filter((n) => n !== "lo");
     sel.innerHTML = `<option value="all" data-i18n="ov.all">${t("ov.all")}</option>` + nics.map((n) => `<option>${escapeHtml(n)}</option>`).join("");
     if (nics.includes(prev)) sel.value = prev;
+    if (histMode() && Date.now() - histLoadedAt > 60000) await loadMonitorHistory();
     renderChart();
     if (currentFilter === "system") drawSystemTrend();
     if (currentFilter === "network") drawNetTraffic();
@@ -510,7 +517,14 @@ function switchTrafficTab(mode) {
   renderChart();
 }
 document.getElementById("nic-select").onchange = (e) => { nicFilter = e.target.value; renderChart(); };
-document.getElementById("range-select").onchange = (e) => { rangePoints = Number(e.target.value) || 900; renderChart(); };
+document.getElementById("range-select").onchange = async (e) => { rangeMinutes = Number(e.target.value) || 15; if (histMode()) await loadMonitorHistory(); renderChart(); };
+async function loadMonitorHistory() {
+  try {
+    const res = await fetch(`api/monitor-history?minutes=${rangeMinutes}`);
+    histCache = await res.json();
+  } catch { histCache = null; }
+  histLoadedAt = Date.now();
+}
 document.getElementById("unit-select").onchange = (e) => {
   unitTouched = true;
   unitDivider = e.target.value === "MB/s" ? 1024 * 1024 : 1;

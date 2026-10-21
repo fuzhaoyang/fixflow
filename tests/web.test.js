@@ -1719,3 +1719,38 @@ test("应用管理：/api/app/nginx/versions 解析 apt-cache policy 输出", as
   assert.equal(bad.status, 400);
   w.close();
 });
+
+test("/api/monitor-history 返回一周聚合历史并按分钟窗口过滤", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-mh-api-"));
+  const file = join(dir, "monitor-history.jsonl");
+  const now = Math.floor(Date.now() / 1000);
+  writeFileSync(file, [
+    { t: now - 30, up: { eth0: 1 }, down: { eth0: 2 }, read: 3, write: 4, cpu: 5, mem: 6, disk: 7 },
+    { t: now - 7200, up: { eth0: 8 }, down: { eth0: 9 }, read: 10, write: 11, cpu: 12, mem: 13, disk: 14 },
+  ].map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const w = await makeServer({ monitorHistoryPath: file });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const res = await fetch(`${base}/api/monitor-history?minutes=60`, { headers: { Cookie: cookie } });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.deepEqual(data.trend, [{ t: now - 30, cpu: 5, mem: 6, disk: 7 }]);
+  assert.deepEqual(data.io, [{ t: now - 30, read: { all: 3 }, write: { all: 4 } }]);
+  assert.deepEqual(data.net, [{ t: now - 30, up: { eth0: 1 }, down: { eth0: 2 } }]);
+  w.close();
+});
+
+test("总览时间范围下拉支持一周，前端按分钟切换历史数据源", async () => {
+  const dir = new URL("../src/web/static/", import.meta.url);
+  const html = readFileSync(new URL("index.html", dir), "utf8");
+  const range = html.match(/<select id="range-select"[\s\S]*?<\/select>/)[0];
+  for (const v of ["5", "15", "30", "60", "360", "1440", "10080"]) {
+    assert.match(range, new RegExp(`<option value="${v}"`));
+  }
+  const js = frontJs();
+  assert.match(js, /api\/monitor-history\?minutes=/);
+  assert.match(js, /rangeMinutes/);
+  const monitorJs = readFileSync(new URL("monitor.js", dir), "utf8");
+  assert.doesNotMatch(monitorJs, /function loadHistory\b/, "monitor.js 不得定义 loadHistory，会与 chat.js 同名覆盖");
+  assert.match(monitorJs, /function loadMonitorHistory\b/);
+});
