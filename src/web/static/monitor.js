@@ -798,16 +798,21 @@ function renderSdDetail(s) {
   </div>`;
 }
 
+function sortCommonFirst(list) {
+  const isCommon = (name) => COMMON_SERVICE_KEYWORDS.some((k) => name.toLowerCase().includes(k));
+  return [...list].sort((a, b) => isCommon(b.name) - isCommon(a.name));
+}
+
 function renderSystemd(m) {
   if (!m?.services) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
   const services = m.services || [];
   const summary = m.summary || {};
   const q = (searchBox.value || "").trim().toLowerCase();
-  const list = services.filter((s) =>
+  const list = sortCommonFirst(services.filter((s) =>
     (sysStateFilter === "all" || s.state === sysStateFilter) &&
     (sysTypeFilter === "all" || s.unitType === sysTypeFilter) &&
     (!q || s.name.toLowerCase().includes(q))
-  );
+  ));
   const summaryHtml = `<div class="sys-summary">
     <span class="ok">${t("srv.summaryActive")} <b>${summary.active ?? 0}</b></span>
     <span class="bad">${t("srv.summaryFailed")} <b>${summary.failed ?? 0}</b></span>

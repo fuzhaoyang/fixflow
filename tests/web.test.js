@@ -947,12 +947,53 @@ test("/api/logs 拉取 service 日志（journalctl）", async () => {
   w.close();
 });
 
+test("/api/logs 拉取 pm2 日志", async () => {
+  const calls = [];
+  const w = await makeServer({}, { runCommand: async (cmd) => {
+    calls.push(cmd);
+    return { exitCode: 0, stdout: "pm2 line\n", stderr: "" };
+  } });
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await registerAndLogin(base);
+  const headers = { "Content-Type": "application/json", Cookie: cookie };
+  const r = await fetch(`${base}/api/logs`, { method: "POST", headers, body: JSON.stringify({ pm2: "api", lines: 50 }) });
+  const data = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(data.source, "pm2");
+  assert.ok(calls.some((c) => c.includes("pm2 logs api --lines 50")));
+  w.close();
+});
+
 test("/api/logs 缺参返回 400", async () => {
   const w = await makeServer();
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const r = await fetch(`${base}/api/logs`, { method: "POST", headers: { "Content-Type": "application/json", Cookie: cookie }, body: JSON.stringify({}) });
   assert.equal(r.status, 400);
+  w.close();
+});
+
+test("日志页含常用/全部切换与 pm2 分组", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  for (const v of ["common", "all"]) assert.match(body, new RegExp(`data-logs-src="${v}"`));
+  const js = frontJs();
+  assert.match(js, /COMMON_SERVICE_KEYWORDS/);
+  assert.match(js, /logs\.srcCommon/);
+  assert.match(js, /logs\.srcAll/);
+  assert.match(js, /pm2/);
+  w.close();
+});
+
+test("服务页常用服务排在最前且不新增来源 tab", async () => {
+  const w = await makeServer();
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const body = await (await fetch(`${base}/`)).text();
+  assert.doesNotMatch(body, /data-sys-src=/);
+  const monitorJs = readFileSync(new URL("../src/web/static/monitor.js", import.meta.url), "utf8");
+  assert.match(monitorJs, /COMMON_SERVICE_KEYWORDS/);
+  assert.match(monitorJs, /sortCommonFirst\(/);
   w.close();
 });
 

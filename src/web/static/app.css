@@ -561,6 +561,9 @@
     .store-card .store-uninstall:hover { background: color-mix(in srgb, var(--bad) 85%, #fff); }
     .store-empty { color: var(--muted); text-align: center; padding: 60px 0; }
     .logs-side { width: 240px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; background: var(--panel); }
+    .logs-src-tabs { display: flex; gap: 4px; padding: 8px 10px 0; }
+    .logs-src-tab { flex: 1; padding: 5px 8px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+    .logs-src-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
     .logs-search { padding: 10px; border-bottom: 1px solid var(--border); }
     .logs-search input { width: 100%; box-sizing: border-box; }
     .logs-list { flex: 1; overflow-y: auto; padding: 6px; }

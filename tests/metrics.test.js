@@ -288,6 +288,30 @@ test("collectLogSources 解析 systemd 单元与 docker 容器", async () => {
   assert.equal(r.dockerAvailable, true);
 });
 
+test("collectLogSources 解析 pm2 进程列表", async () => {
+  const run = async (cmd) => {
+    if (cmd.startsWith("systemctl")) return { exitCode: 0, stdout: "", stderr: "" };
+    if (cmd.startsWith("docker")) return { exitCode: 1, stdout: "", stderr: "docker 不可用" };
+    if (cmd.startsWith("pm2 jlist")) return { exitCode: 0, stdout: JSON.stringify([
+      { name: "api", pm2_env: { status: "online" } },
+      { name: "worker", pm2_env: { status: "stopped" } },
+    ]), stderr: "" };
+    return { exitCode: 1, stdout: "", stderr: "" };
+  };
+  const r = await collectLogSources({ run });
+  assert.deepEqual(r.pm2, [{ name: "api", status: "online" }, { name: "worker", status: "stopped" }]);
+  assert.equal(r.pm2Available, true);
+});
+
+test("collectLogSources pm2 未安装或输出异常时返回空列表", async () => {
+  const run = async (cmd) => cmd.startsWith("pm2 jlist")
+    ? { exitCode: 127, stdout: "pm2: command not found", stderr: "" }
+    : { exitCode: 0, stdout: "", stderr: "" };
+  const r = await collectLogSources({ run });
+  assert.deepEqual(r.pm2, []);
+  assert.equal(r.pm2Available, false);
+});
+
 test("collectLogs 拼 systemd 单元命令并限行数", async () => {
   let seen = null;
   const run = async (cmd) => { seen = cmd; return { exitCode: 0, stdout: "line1\nline2\n", stderr: "" }; };
@@ -304,6 +328,15 @@ test("collectLogs docker 容器走 docker logs 且限行数上限", async () => 
   const r = await collectLogs({ container: "web_app", lines: 99999 }, { run });
   assert.equal(r.source, "docker");
   assert.match(seen, /docker logs --tail 5000 --timestamps web_app/);
+});
+
+test("collectLogs pm2 进程走 pm2 logs 并限行数", async () => {
+  let seen = null;
+  const run = async (cmd) => { seen = cmd; return { exitCode: 0, stdout: "pm2 line\n", stderr: "" }; };
+  const r = await collectLogs({ pm2: "api", lines: 50 }, { run });
+  assert.equal(r.source, "pm2");
+  assert.equal(r.target, "api");
+  assert.match(seen, /pm2 logs api --lines 50 --nostream/);
 });
 
 test("collectLogs 缺参返回错误", async () => {

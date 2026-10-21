@@ -787,9 +787,10 @@ export async function collectDbSlow({ databases = [] }) {
 }
 
 export async function collectLogSources({ run = runCommand } = {}) {
-  const [sys, docker] = await Promise.all([
+  const [sys, docker, pm2] = await Promise.all([
     run("systemctl list-units --type=service --all --no-legend --plain --no-pager"),
     run("docker ps -a --format '{{.Names}} | {{.Status}}' 2>/dev/null"),
+    run("pm2 jlist 2>/dev/null"),
   ]);
   const systemd = (sys.stdout || "").split("\n").filter(Boolean).map((l) => {
     const parts = l.trim().replace(/^●\s*/, "").split(/\s+/);
@@ -800,11 +801,21 @@ export async function collectLogSources({ run = runCommand } = {}) {
     const i = l.indexOf(" | ");
     return { name: i > -1 ? l.slice(0, i).trim() : l.trim(), status: i > -1 ? l.slice(i + 3).trim() : "" };
   });
-  return { systemd, docker: dockerCtrs, dockerAvailable: docker.exitCode === 0 };
+  let pm2List = null;
+  if (pm2.exitCode === 0) {
+    try {
+      pm2List = (JSON.parse(pm2.stdout || "[]") || []).map((p) => ({ name: String(p.name || ""), status: p.pm2_env?.status || "unknown" })).filter((p) => p.name);
+    } catch {}
+  }
+  return { systemd, docker: dockerCtrs, dockerAvailable: docker.exitCode === 0, pm2: pm2List || [], pm2Available: pm2List !== null };
 }
 
-export async function collectLogs({ service = "", container = "", lines = 100 } = {}, { run = runCommand } = {}) {
+export async function collectLogs({ service = "", container = "", pm2 = "", lines = 100 } = {}, { run = runCommand } = {}) {
   const n = Math.max(1, Math.min(Number(lines) || 100, 5000));
+  if (pm2) {
+    const r = await run(`pm2 logs ${pm2} --lines ${n} --nostream 2>&1`);
+    return { source: "pm2", target: pm2, exitCode: r.exitCode, content: r.stdout || "" };
+  }
   if (container) {
     const r = await run(`docker logs --tail ${n} --timestamps ${container} 2>&1`);
     return { source: "docker", target: container, exitCode: r.exitCode, content: r.stdout || "" };

@@ -200,9 +200,11 @@ document.querySelectorAll(".menu-item").forEach((item) => {
 });
 
 // ---------- 日志页 ----------
-let logSources = { systemd: [], docker: [], dockerAvailable: false };
+let logSources = { systemd: [], docker: [], pm2: [], dockerAvailable: false, pm2Available: false };
 let logTarget = null;
 let logFollow = true;
+const COMMON_SERVICE_KEYWORDS = ["nginx", "apache2", "httpd", "mysql", "mariadb", "postgresql", "postgres", "redis", "mongodb", "mongod", "docker"];
+let logSourceTab = "common";
 const logsBody = document.getElementById("logs-body");
 const logsList = document.getElementById("logs-list");
 const logsFilter = document.getElementById("logs-filter");
@@ -219,26 +221,39 @@ async function loadLogSources() {
 }
 function renderLogList() {
   const kw = (logsFilter.value || "").trim().toLowerCase();
-  const sys = logSources.systemd.filter((s) => !kw || s.name.toLowerCase().includes(kw));
-  const dock = (logSources.docker || []).filter((c) => !kw || c.name.toLowerCase().includes(kw));
+  const common = logSourceTab === "common";
+  const isCommon = (name) => COMMON_SERVICE_KEYWORDS.some((k) => name.toLowerCase().includes(k));
+  const sys = logSources.systemd.filter((s) => (!common || isCommon(s.name)) && (!kw || s.name.toLowerCase().includes(kw)));
+  const dock = (logSources.docker || []).filter((c) => (!common || /up|running/i.test(c.status || "")) && (!kw || c.name.toLowerCase().includes(kw)));
+  const pm2 = (logSources.pm2 || []).filter((p) => !kw || p.name.toLowerCase().includes(kw));
   const item = (s, src) => {
-    const state = src === "docker" ? (s.status || "").toLowerCase() : (s.state || "").toLowerCase();
-    const dot = /up|running/.test(state) ? "ok" : /exit|fail|error|degraded/.test(state) ? "err" : state === "active" ? "act" : "stop";
-    const cls = logTarget && logTarget.source === src && logTarget.target === (src === "docker" ? s.name : s.name) ? " active" : "";
-    return `<div class="logs-item${cls}" data-src="${src}" data-name="${escapeHtml(s.name)}" data-target="${escapeHtml(src === "docker" ? s.name : s.name)}"><span class="dot ${dot}"></span><span>${escapeHtml(s.name)}</span><span class="grp">${src === "docker" ? "docker" : "sys"}</span><span class="tail">${src === "docker" ? escapeHtml((s.status || "").slice(0, 12)) : ""}</span></div>`;
+    const state = (src === "docker" || src === "pm2" ? s.status : s.state) || "";
+    const st = state.toLowerCase();
+    const dot = /up|running|online/.test(st) ? "ok" : /exit|fail|error|degraded|stopped/.test(st) ? "err" : st === "active" ? "act" : "stop";
+    const cls = logTarget && logTarget.source === src && logTarget.target === s.name ? " active" : "";
+    const grp = src === "docker" ? "docker" : src === "pm2" ? "pm2" : "sys";
+    const tail = src === "docker" ? (s.status || "").slice(0, 12) : src === "pm2" ? (s.status || "").slice(0, 10) : "";
+    return `<div class="logs-item${cls}" data-src="${src}" data-name="${escapeHtml(s.name)}" data-target="${escapeHtml(s.name)}"><span class="dot ${dot}"></span><span>${escapeHtml(s.name)}</span><span class="grp">${grp}</span><span class="tail">${escapeHtml(tail)}</span></div>`;
   };
   const head = (label) => `<div class="logs-item" style="cursor:default;font-weight:700;font-size:11px;color:var(--muted);pointer-events:none">${label}</div>`;
   logsList.innerHTML = (sys.length ? head(t("logs.sysGroup")) + sys.map((s) => item(s, "systemd")).join("") : "")
-    + (dock.length ? head(t("logs.dockerGroup")) + dock.map((c) => item(c, "docker")).join("") : "");
-  if (!sys.length && !dock.length) logsList.innerHTML = `<div class="logs-item" style="color:var(--muted)">${t("logs.none")}</div>`;
+    + (dock.length ? head(t("logs.dockerGroup")) + dock.map((c) => item(c, "docker")).join("") : "")
+    + (pm2.length ? head(t("logs.pm2Group")) + pm2.map((p) => item(p, "pm2")).join("") : "");
+  if (!sys.length && !dock.length && !pm2.length) logsList.innerHTML = `<div class="logs-item" style="color:var(--muted)">${t("logs.none")}</div>`;
 }
 logsFilter.addEventListener("input", renderLogList);
+document.querySelectorAll(".logs-src-tab").forEach((tab) => tab.addEventListener("click", () => {
+  logSourceTab = tab.dataset.logsSrc;
+  document.querySelectorAll(".logs-src-tab").forEach((x) => x.classList.toggle("active", x === tab));
+  renderLogList();
+}));
 logsList.addEventListener("click", (e) => {
   const it = e.target.closest("[data-name]");
   if (!it) return;
-  const isDocker = it.dataset.src === "docker";
-  logTarget = { source: isDocker ? "docker" : "systemd", target: it.dataset.name };
-  document.getElementById("logs-target").textContent = (isDocker ? t("logs.dockerPrefix") : "") + it.dataset.name;
+  const src = it.dataset.src;
+  logTarget = { source: src, target: it.dataset.name };
+  const prefix = src === "docker" ? t("logs.dockerPrefix") : src === "pm2" ? "PM2 " : "";
+  document.getElementById("logs-target").textContent = prefix + it.dataset.name;
   logsBody.innerHTML = `<pre class="logs-empty">${t("logs.loading")}</pre>`;
   aiAnalyze.style.display = "none";
   renderLogList();
@@ -250,7 +265,7 @@ async function loadLog() {
     const res = await fetch("api/logs", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(logTarget.source === "docker" ? { container: logTarget.target, lines: Number(logsLines.value) } : { service: logTarget.target, lines: Number(logsLines.value) }),
+      body: JSON.stringify(logTarget.source === "docker" ? { container: logTarget.target, lines: Number(logsLines.value) } : logTarget.source === "pm2" ? { pm2: logTarget.target, lines: Number(logsLines.value) } : { service: logTarget.target, lines: Number(logsLines.value) }),
     });
     const data = await res.json();
     renderLog(data.content || (data.error || t("logs.empty")));

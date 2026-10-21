@@ -780,9 +780,9 @@ export async function startWeb(config = {}, deps = {}) {
         sendJson(res, await logsSourcesCache("logs-sources", () => collectLogSources({ run: execCmd })));
       } else if (url.pathname === "/api/logs" && req.method === "POST") {
         const body = await readBody(req);
-        const { service, container, lines } = JSON.parse(body || "{}");
-        if (!service && !container) { sendJson(res, { error: "缺少服务或容器名" }, 400); return; }
-        sendJson(res, await collectLogs({ service: String(service || ""), container: String(container || ""), lines }, { run: execCmd }));
+        const { service, container, pm2, lines } = JSON.parse(body || "{}");
+        if (!service && !container && !pm2) { sendJson(res, { error: "缺少服务或容器名" }, 400); return; }
+        sendJson(res, await collectLogs({ service: String(service || ""), container: String(container || ""), pm2: String(pm2 || ""), lines }, { run: execCmd }));
       } else if (url.pathname === "/api/overview") {
         const net = monitor.net();
         const io = monitor.io();
