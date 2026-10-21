@@ -435,7 +435,7 @@ export async function startWeb(config = {}, deps = {}) {
       try { res.write(data); } catch { clients.delete(res); }
     }
   };
-  const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: { ...process.env, PROMPT_COMMAND: 'printf "\\033]2;%s\\007" "$PWD"' } }));
+  const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", PROMPT_COMMAND: 'printf "\\033]2;%s\\007" "$PWD"' } }));
   let termShell = null;
   let termBuffer = "";
   let termGen = 0;
