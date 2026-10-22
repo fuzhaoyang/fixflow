@@ -68,8 +68,6 @@ function renderWelcome() {
 }
 renderWelcome();
 
-function hideWelcome() { ctx.welcome.style.display = "none"; }
-
 // ---------- 历史记录（服务端文件存储） ----------
 async function loadHistory() {
   try {
@@ -92,7 +90,6 @@ function restoreHistory() {
 }
 
 function renderMsg(text, cls, images) {
-  hideWelcome();
   const item = document.createElement("div");
   item.className = "message-item " + (cls === "user" ? "user" : "bot");
   item.innerHTML = `
@@ -159,7 +156,6 @@ function hideTyping() {
 
 // ---------- 对话 ----------
 function addMsg(text, cls, { raw = false, images } = {}) {
-  hideWelcome();
   if (cls === "user" || cls === "assistant") {
     chatHistory.push({ role: cls, text, ...(images && images.length ? { images } : {}) });
     saveHistory();
@@ -525,8 +521,7 @@ async function loadModelStatus() {
 }
 modelStatus.addEventListener("click", () => openSettings());
 
-function addSimpleMsg(text, cls, { keepWelcome = false } = {}) {
-  if (!keepWelcome) hideWelcome();
+function addSimpleMsg(text, cls) {
   const div = document.createElement("div");
   div.className = "msg " + cls;
   if (cls === "error") div.innerHTML = icon("xCircle") + "<span>" + escapeHtml(text) + "</span>";

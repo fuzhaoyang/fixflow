@@ -529,7 +529,7 @@ function connectStream() {
       openClearModal();
     } else if (ev.type === "clear") {
       clearHistory();
-      addSimpleMsg(t("chat.cleared"), "system", { keepWelcome: true });
+      addSimpleMsg(t("chat.cleared"), "system");
     } else if (ev.type === "done") {
       finishStreaming();
       setBusy(false);
