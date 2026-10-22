@@ -29,11 +29,14 @@ fi
 echo "✅ Node.js $(node -v)"
 
 # 2) 定位安装包
-TGZ="${1:-$(pwd)/fixflow-0.1.0.tgz}"
-if [ ! -f "$TGZ" ]; then
-  echo "❌ 未找到安装包：$TGZ"
-  echo "   请将 fixflow-0.1.0.tgz 放到当前目录，或作为参数指定路径："
-  echo "   bash install.sh /path/to/fixflow-0.1.0.tgz"
+TGZ="${1:-}"
+if [ -z "$TGZ" ]; then
+  TGZ=$(find . -maxdepth 1 -name 'fixflow-*.tgz' -print 2>/dev/null | sort -V | tail -n1)
+fi
+if [ -z "$TGZ" ] || [ ! -f "$TGZ" ]; then
+  echo "❌ 未找到安装包"
+  echo "   请将 fixflow-*.tgz 放到当前目录，或作为参数指定路径："
+  echo "   bash install.sh /path/to/fixflow-<版本>.tgz"
   exit 1
 fi
 

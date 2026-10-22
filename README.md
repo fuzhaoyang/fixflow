@@ -1,5 +1,7 @@
 # Fixflow 运维管家
 
+[![npm](https://img.shields.io/npm/v/fixflow.svg)](https://www.npmjs.com/package/fixflow)
+
 Fixflow 是一款装在你自己服务器上的 **AI 运维助手**。用大白话说话，它就能帮你检查服务器、发现问题、并（在你确认后）动手修好。
 
 ```
@@ -46,13 +48,13 @@ sudo npm i -g fixflow
 
 ### 方式 B：离线安装
 
-内网或没有 npm 源时，把 `fixflow-0.1.0.tgz` 传到服务器，然后：
+内网或没有 npm 源时，把 `fixflow-*.tgz` 安装包传到服务器，然后：
 
 ```bash
-sudo npm i -g ./fixflow-0.1.0.tgz
+sudo npm i -g ./fixflow-*.tgz
 ```
 
-如果同目录还提供了 `install.sh`，也可以直接 `bash install.sh`，脚本会先检查 Node.js 再自动安装。
+如果同目录还提供了 `install.sh`，也可以直接 `bash install.sh`，脚本会自动匹配最新的 `fixflow-*.tgz`，并先检查 Node.js。
 
 ### 检查装好没有
 

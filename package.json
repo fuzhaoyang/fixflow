@@ -39,6 +39,9 @@
   "engines": {
     "node": ">=18"
   },
+  "os": [
+    "linux"
+  ],
   "devDependencies": {
     "uipro-cli": "^2.2.3"
   }
