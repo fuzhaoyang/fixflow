@@ -754,6 +754,16 @@
     .clear-btn:hover { color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); }
     .clear-btn.active { color: var(--accent); }
     .clear-btn svg { width: 14px; height: 14px; }
+    .chat-head { display: flex; justify-content: flex-end; align-items: center; padding: 8px 16px 0; background: var(--panel); }
+    .msg-footer { margin-top: 2px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 11px; line-height: 1.6; color: var(--muted); }
+    .kb-btn { color: var(--text); }
+    .kb-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .kb-btn:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    .kb-dot { display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radius: 50%; background: var(--muted); }
+    .kb-dot.ok { background: var(--ok); }
+    .kb-dot.bad { background: var(--bad); }
+    .kb-status.ok { color: var(--ok); }
+    .kb-status.bad { color: var(--bad); }
     .input-container { position: relative; padding: 0 16px 12px; background: var(--panel); border-top: 1px solid var(--border); }
     #input {
       width: 100%; height: 120px; resize: none; padding: 12px 14px 44px;

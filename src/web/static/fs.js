@@ -486,7 +486,7 @@ function connectStream() {
   es.onmessage = (e) => {
     const ev = JSON.parse(e.data);
     if (ev.type === "term") termAppend(ev.data);
-    else if (ev.type === "text") addMsg(ev.text, "assistant");
+    else if (ev.type === "text") addMsg(ev.text, "assistant", { source: ev.source, usage: ev.usage });
     else if (ev.type === "delta") {
       hideTyping();
       streamingText += ev.text;
@@ -532,6 +532,7 @@ function connectStream() {
       addSimpleMsg(t("chat.cleared"), "system");
     } else if (ev.type === "done") {
       finishStreaming();
+      attachTurnFooter({ source: ev.source || "model", usage: ev.usage });
       setBusy(false);
       hideTyping();
     } else if (ev.type === "aborted") {

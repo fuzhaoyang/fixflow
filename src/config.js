@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
+import { normalizeKnowledge } from "./kb.js";
 
 export async function readJsonFile(path) {
   try { return JSON.parse(await readFile(path, "utf8")); } catch { return {}; }
@@ -75,5 +76,6 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     tls: file.tls !== false,
     httpsPort: file.httpsPort || 8443,
     trustProxy: file.trustProxy === true,
+    knowledge: normalizeKnowledge(file.knowledge),
   };
 }

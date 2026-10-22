@@ -326,6 +326,12 @@
     </div>
     <div class="content" id="view-chat">
       <div class="chat-pane">
+      <div class="chat-head">
+        <button class="clear-btn kb-btn" id="kb-btn" title="知识库" data-i18n="kb.title" data-i18n-attr="title">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v18H6.5A2.5 2.5 0 014 18.5z"/><path d="M4 18.5A2.5 2.5 0 016.5 16H20"/></svg>
+          <span data-i18n="kb.title">知识库</span><span class="kb-dot" id="kb-dot"></span>
+        </button>
+      </div>
       <div id="log">
         <div class="welcome" id="welcome"></div>
       </div>
@@ -987,6 +993,35 @@ Nginx 配置有问题吗，帮我看看
   <span data-i18n="ai.title">提问AI？</span>
 </button>
 
+<div class="modal-mask" id="kb-mask">
+  <div class="modal">
+    <button class="modal-close" id="kb-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 5.5A2.5 2.5 0 016.5 3H20v18H6.5A2.5 2.5 0 014 18.5z"/><path d="M4 18.5A2.5 2.5 0 016.5 16H20"/></svg><span data-i18n="kb.modalTitle">知识库接入</span></h2>
+    <div class="field">
+      <label data-i18n="kb.url">知识库完整地址</label>
+      <input id="kb-url" type="text" placeholder="http://localhost:8000/api/ask/stream">
+    </div>
+    <div class="field">
+      <label data-i18n="kb.token">Token</label>
+      <input id="kb-token" type="password" autocomplete="new-password" placeholder="X-API-Key">
+    </div>
+    <div class="field">
+      <label data-i18n="kb.timeout">超时（秒）</label>
+      <input id="kb-timeout" type="number" min="1" max="300" value="60">
+    </div>
+    <div class="field">
+      <label data-i18n="kb.missText">未命中关键词</label>
+      <input id="kb-miss" type="text" value="未找到相关信息">
+    </div>
+    <div class="hint kb-status" id="kb-status"></div>
+    <div class="modal-actions">
+      <button class="btn" id="kb-test" data-i18n="kb.test">测试连接</button>
+      <button class="btn" id="kb-cancel" data-i18n="kb.cancel">取消</button>
+      <button class="btn" id="kb-save" data-i18n="kb.save">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 迷你 AI 聊天弹窗 -->
 <div class="ai-popup" id="ai-popup">
   <div class="ai-popup-head" id="ai-popup-head">
@@ -1014,5 +1049,6 @@ Nginx 配置有问题吗，帮我看看
 <script src="fs.js?v=6"></script>
 <script src="settings.js?v=6"></script>
 <script src="appman.js?v=6"></script>
+<script src="kb.js?v=7"></script>
 </body>
 </html>

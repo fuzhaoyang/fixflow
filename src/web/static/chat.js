@@ -85,11 +85,49 @@ function saveHistory() {
 function restoreHistory() {
   for (const msg of chatHistory) {
     if (msg.role === "user") renderMsg(msg.text, "user", msg.images);
-    else if (msg.role === "assistant") renderMsg(msg.text, "assistant");
+    else if (msg.role === "assistant") renderMsg(msg.text, "assistant", undefined, { source: msg.source, usage: msg.usage });
   }
 }
 
-function renderMsg(text, cls, images) {
+let turnAssistantEl = null;
+function footerHtml(meta) {
+  const lines = [];
+  if (meta.source === "model") {
+    const total = (meta.usage?.promptTokens || 0) + (meta.usage?.completionTokens || 0);
+    lines.push(t("chat.tokensUsed").replace("{n}", total > 0 ? total : "—"));
+  }
+  const source = meta.source === "kb" ? t("chat.sourceKb") : t("chat.sourceModel");
+  lines.push(t("chat.sourceLine").replace("{s}", source));
+  lines.push(t("chat.disclaimer"));
+  return lines.map((s) => `<div>${escapeHtml(s)}</div>`).join("");
+}
+function appendFooter(item, meta) {
+  if (!item || !meta) return;
+  const bubble = item.querySelector(".bubble");
+  if (!bubble) return;
+  const old = item.querySelector(".msg-footer");
+  if (old) old.remove();
+  const div = document.createElement("div");
+  div.className = "msg-footer";
+  div.innerHTML = footerHtml(meta);
+  bubble.appendChild(div);
+}
+function attachTurnFooter(meta) {
+  if (!meta) return;
+  const item = turnAssistantEl;
+  if (!item || !item.isConnected) return;
+  const bubble = item.querySelector(".bubble");
+  if (!bubble || !bubble.textContent.trim()) return;
+  appendFooter(item, meta);
+  const last = [...chatHistory].reverse().find((m) => m.role === "assistant");
+  if (last) {
+    last.source = meta.source || last.source;
+    if (meta.usage) last.usage = meta.usage;
+    saveHistory();
+  }
+}
+
+function renderMsg(text, cls, images, meta) {
   const item = document.createElement("div");
   item.className = "message-item " + (cls === "user" ? "user" : "bot");
   item.innerHTML = `
@@ -104,6 +142,10 @@ function renderMsg(text, cls, images) {
     ? imgs + (text ? `<div class="msg-text">${escapeHtml(text)}</div>` : "")
     : renderMarkdown(text);
   ctx.log.appendChild(item);
+  if (cls !== "user") {
+    turnAssistantEl = item;
+    if (meta) appendFooter(item, meta);
+  }
   scrollLog();
   return item;
 }
@@ -148,20 +190,31 @@ function showTyping() {
       ${[...t("chat.thinkingChars")].map((c) => `<span class="thinking">${c}</span>`).join("")}
       <span class="dot"></span><span class="dot"></span><span class="dot"></span>
     </div>`;
+  turnAssistantEl = null;
 }
 
 function hideTyping() {
-  if (typingEl) { typingEl.remove(); typingEl = null; }
+  if (typingEl) {
+    if (turnAssistantEl === typingEl) turnAssistantEl = null;
+    typingEl.remove();
+    typingEl = null;
+  }
 }
 
 // ---------- 对话 ----------
-function addMsg(text, cls, { raw = false, images } = {}) {
+function addMsg(text, cls, { raw = false, images, source, usage } = {}) {
   if (cls === "user" || cls === "assistant") {
-    chatHistory.push({ role: cls, text, ...(images && images.length ? { images } : {}) });
+    chatHistory.push({
+      role: cls, text,
+      ...(images && images.length ? { images } : {}),
+      ...(cls === "assistant" && source ? { source } : {}),
+      ...(cls === "assistant" && usage ? { usage } : {}),
+    });
     saveHistory();
   }
   if (cls === "assistant") hideTyping();
-  return renderMsg(text, cls, images);
+  const meta = cls === "assistant" && (source || usage) ? { source, usage } : undefined;
+  return renderMsg(text, cls, images, meta);
 }
 
 function setBusy(b) {
@@ -460,6 +513,7 @@ applyTheme(localStorage.getItem("fixflow_theme") === "light" ? "light" : "dark")
    (async () => { await loadHistory(); restoreHistory(); })();
 connectStream();
    loadModelStatus();
+   if (typeof kbLoad === "function") kbLoad();
    refreshAlerts();
    if (localStorage.getItem("termOpen") === "1") setTermOpen(true);
    fetch("api/config").then((r) => r.json()).then((cfg) => { applyLang(cfg.lang || "zh"); applyTheme(cfg.theme || "dark"); applyFsCollapsed(cfg.fsCollapsed !== false); localStorage.setItem("fixflow_lang", cfg.lang || "zh"); localStorage.setItem("fixflow_theme", cfg.theme || "dark"); renderWelcome(); if (currentFilter === "all" && overviewEl.style.display !== "none") refreshOverview(); else renderCards(); }).catch(() => {});
@@ -550,6 +604,7 @@ async function send() {
   pendingImages = [];
   if (ctx.preview) ctx.preview.innerHTML = "";
   ctx.charCount.textContent = "";
+  turnAssistantEl = null;
   addMsg(text, "user", { images: imgs });
   stickToBottom = true;
   setBusy(true);

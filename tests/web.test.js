@@ -96,13 +96,15 @@ test("静态页与监控接口登录后返回 200", async () => {
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const authHeaders = { Cookie: cookie };
-  const [page, app, metrics] = await Promise.all([
+  const [page, app, kb, metrics] = await Promise.all([
     fetch(`${base}/`, { headers: authHeaders }),
     fetch(`${base}/app.js`, { headers: authHeaders }),
+    fetch(`${base}/kb.js`, { headers: authHeaders }),
     fetch(`${base}/api/metrics`, { headers: authHeaders }),
   ]);
   assert.equal(page.status, 200);
   assert.equal(app.status, 200);
+  assert.equal(kb.status, 200);
   assert.equal(metrics.status, 200);
   const data = await metrics.json();
   assert.ok("system" in data && "docker" in data);

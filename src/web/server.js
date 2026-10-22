@@ -3,7 +3,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { spawn, spawnSync } from "node:child_process";
 import { readFile, writeFile, mkdir, readdir, lstat, rm, rename as fsRename, chmod } from "node:fs/promises";
 import { createReadStream, readFileSync } from "node:fs";
-import { timingSafeEqual } from "node:crypto";
+import { timingSafeEqual, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
 import { homedir } from "node:os";
@@ -24,6 +24,7 @@ import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
 import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
 import { detectPkgManager, resolvePkgName, listInstalledCmd, parseInstalledNames, searchCmd, parseSearch, versionsCmd, parseVersions, installCmd, uninstallCmd, withPmLock, pmErrorHint } from "../pkgs.js";
+import { normalizeKnowledge, isOpsQuestion, queryKnowledge, testKnowledge, maskToken, formatKbAnswer } from "../kb.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 const VERSION = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")).version || "0.0.0";
@@ -298,6 +299,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.fsCollapsed = config.fsCollapsed === true;
   config.memLimitMB = Number.isFinite(config.memLimitMB) && config.memLimitMB > 0 ? config.memLimitMB : 1024;
   config.dbConnections = normalizeDbConnections(config.dbConnections);
+  config.knowledge = normalizeKnowledge(config.knowledge);
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -308,6 +310,15 @@ export async function startWeb(config = {}, deps = {}) {
   const pkgManagerCache = createTtlCache(60000);
   const waiters = new Map();
   let seq = 0;
+  let kbSessionId = "fixflow-" + randomUUID();
+  let activeKbAbort = null;
+  let turnUsage = { promptTokens: 0, completionTokens: 0 };
+  const resetTurnUsage = () => { turnUsage = { promptTokens: 0, completionTokens: 0 }; };
+  const addTurnUsage = (u) => {
+    if (!u) return;
+    turnUsage.promptTokens += u.promptTokens || 0;
+    turnUsage.completionTokens += u.completionTokens || 0;
+  };
   const configPath = config.configPath || defaultConfigPath();
   const historyPath = config.historyPath || defaultHistoryPath();
   const termHistoryPath = config.termHistoryPath || defaultTermHistoryPath();
@@ -325,11 +336,18 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections, knowledge: config.knowledge };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
     await chmod(configPath, 0o600).catch(() => {});
   };
+  const persistKnowledge = async () => {
+    const existing = await readJsonFile(configPath);
+    await mkdir(dirname(configPath), { recursive: true });
+    await writeFile(configPath, JSON.stringify({ ...existing, knowledge: config.knowledge }, null, 2));
+    await chmod(configPath, 0o600).catch(() => {});
+  };
+  const maskedKnowledge = () => ({ ...config.knowledge, token: maskToken(config.knowledge.token) });
   const execCmd = deps.runCommand || runCommand;
   const fwVerify = (password) => verifySudo(password, { run: execCmd });
   const fwRun = (cmd, password, timeout) => runPrivileged(cmd, password, { run: execCmd, timeout });
@@ -493,7 +511,7 @@ export async function startWeb(config = {}, deps = {}) {
       waiters.set(id, resolve);
       broadcast({ type: "confirm", id, ...info });
     }),
-    onUsage: (u) => usageStore.record(u),
+    onUsage: (u) => { usageStore.record(u); addTurnUsage(u); },
     onClearRequest: () => broadcast({ type: "clearRequest" }),
   });
 
@@ -1042,6 +1060,27 @@ export async function startWeb(config = {}, deps = {}) {
         const result = await renewCert({ ...entry, cn: live.cn });
         sslCache.clear("ssl");
         sendJson(res, result);
+      } else if (url.pathname === "/api/kb" && req.method === "GET") {
+        sendJson(res, maskedKnowledge());
+      } else if (url.pathname === "/api/kb" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const prev = config.knowledge;
+        const next = normalizeKnowledge({ ...prev, ...body });
+        if (body.enabled === undefined) next.enabled = true;
+        if (/^••••/.test(String(body.token || "")) || !String(body.token ?? "").trim()) next.token = prev.token;
+        if (next.url && !/^https?:\/\//i.test(next.url)) { sendJson(res, { error: "完整地址需以 http:// 或 https:// 开头" }, 400); return; }
+        if (next.enabled && !next.url) { sendJson(res, { error: "启用知识库需填写完整地址" }, 400); return; }
+        config.knowledge = next;
+        await persistKnowledge();
+        const test = next.enabled ? await testKnowledge(next) : { ok: false, error: "未启用" };
+        sendJson(res, { ok: true, knowledge: maskedKnowledge(), test });
+      } else if (url.pathname === "/api/kb/test" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const prev = config.knowledge;
+        const next = normalizeKnowledge({ ...prev, ...body });
+        if (/^••••/.test(String(body.token || "")) || !String(body.token ?? "").trim()) next.token = prev.token;
+        if (!next.url) { sendJson(res, { ok: false, error: "请先填写知识库完整地址" }); return; }
+        sendJson(res, await testKnowledge(next));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
         sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
       } else if (url.pathname === "/api/config" && req.method === "POST") {
@@ -1078,14 +1117,42 @@ export async function startWeb(config = {}, deps = {}) {
         if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
         await writeHistoryFile(historyPath, []);
         session.clear();
+        kbSessionId = "fixflow-" + randomUUID();
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/chat" && req.method === "POST") {
         const body = await readBody(req);
         const { input, images = [] } = JSON.parse(body || "{}");
         sendJson(res, { ok: true });
-        session.send(input, images)
-          .then(() => broadcast({ type: "done" }))
-          .catch((e) => { console.error("[fixflow] 对话错误:", e?.message || e); broadcast({ type: "error", text: String(e) }); });
+        (async () => {
+          resetTurnUsage();
+          const kb = config.knowledge;
+          if (kb?.enabled && isOpsQuestion(input, kb.keywords)) {
+            const ctrl = new AbortController();
+            activeKbAbort = ctrl;
+            let kbResult = null;
+            try {
+              kbResult = await queryKnowledge(kb, input, { signal: ctrl.signal, sessionId: kbSessionId });
+            } catch (e) {
+              if (ctrl.signal.aborted) return;
+              console.error("[fixflow] 知识库查询失败:", e?.message || e);
+            } finally {
+              if (activeKbAbort === ctrl) activeKbAbort = null;
+            }
+            if (kbResult?.hit) {
+              const answer = formatKbAnswer(kbResult.answer, kbResult.sources, config.lang);
+              session.history.push({ role: "user", content: input });
+              session.history.push({ role: "assistant", content: answer });
+              broadcast({ type: "text", text: answer });
+              broadcast({ type: "done", source: "kb" });
+              return;
+            }
+          }
+          await session.send(input, images);
+          broadcast({ type: "done", source: "model", usage: turnUsage });
+        })().catch((e) => {
+          console.error("[fixflow] 对话错误:", e?.message || e);
+          broadcast({ type: "error", text: String(e) });
+        });
       } else if (url.pathname === "/api/confirm" && req.method === "POST") {
         const body = await readBody(req);
         const { id, ok } = JSON.parse(body || "{}");
@@ -1093,6 +1160,7 @@ export async function startWeb(config = {}, deps = {}) {
         if (resolve) { waiters.delete(id); resolve(Boolean(ok)); }
         sendJson(res, {});
       } else if (url.pathname === "/api/abort" && req.method === "POST") {
+        activeKbAbort?.abort();
         session.abort();
         broadcast({ type: "aborted" });
         sendJson(res, {});
@@ -1641,6 +1709,10 @@ export async function startWeb(config = {}, deps = {}) {
         res.end(js);
       } else if (url.pathname === "/appman.js") {
         const js = await readFile(join(STATIC, "appman.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
+      } else if (url.pathname === "/kb.js") {
+        const js = await readFile(join(STATIC, "kb.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
       } else if (url.pathname === "/app.css") {
