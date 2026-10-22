@@ -7,6 +7,30 @@ const fsEditContent = document.getElementById("fs-edit-content");
 const fsNewdir = document.getElementById("fs-newdir");
 const fsUploadBtn = document.getElementById("fs-upload-btn");
 const fsFile = document.getElementById("fs-file");
+const fsUpEl = document.getElementById("fs-upload-progress");
+const fsUpText = document.getElementById("fs-up-text");
+const fsUpPct = document.getElementById("fs-up-pct");
+const fsUpBar = document.getElementById("fs-up-bar");
+const fsUpCancel = document.getElementById("fs-up-cancel");
+let fsUpCancelCb = null;
+function fsUploadProgressStart(count, onCancel) {
+  fsUpCancelCb = onCancel;
+  fsUpText.textContent = t("fs.uploading").replace("{n}", count);
+  fsUpPct.textContent = "0%";
+  fsUpBar.style.width = "0%";
+  fsUpEl.classList.add("show");
+}
+function fsUploadProgressUpdate(loaded, total, index, count, name) {
+  const pct = total ? Math.min(100, Math.round((loaded / total) * 100)) : 0;
+  fsUpText.textContent = `${index}/${count} · ${name}`;
+  fsUpPct.textContent = pct + "%";
+  fsUpBar.style.width = pct + "%";
+}
+function fsUploadProgressEnd() {
+  fsUpEl.classList.remove("show");
+  fsUpCancelCb = null;
+}
+fsUpCancel.onclick = () => { if (fsUpCancelCb) fsUpCancelCb(); };
 const fsDownloadBtn = document.getElementById("fs-download");
 const fsEditBtn = document.getElementById("fs-edit");
 const fsRenameBtn = document.getElementById("fs-rename");
@@ -17,6 +41,9 @@ let fsSel = null;
 let fsSort = { key: "name", dir: -1 };
 let fsEditPath = "";
 const fsTreeState = {};
+const FS_MAX_FILES = 50;
+const FS_MAX_FILE = 50 * 1024 * 1024;
+const FS_MAX_BATCH = 200 * 1024 * 1024;
 const joinPath = (a, b) => (a === "/" ? "/" + b : a + "/" + b);
 
 function fsFileType(name) {
@@ -72,6 +99,7 @@ async function fsRevealPath(p) {
     await fsEnsureTree(cur);
     if (cur !== abs) fsTreeState[cur].expanded = true;
   }
+  fsPath = abs;
   fsRenderTree();
   fsLoadList(abs);
 }
@@ -104,7 +132,13 @@ async function fsLoadList(path) {
   fsItems = data.children;
   fsRenderList();
 }
-function fsRefresh() { fsRenderTree(); fsLoadList(fsPath); }
+async function fsRefresh() {
+  delete fsTreeState[fsPath];
+  const st = await fsEnsureTree(fsPath);
+  st.expanded = true;
+  fsRenderTree();
+  fsLoadList(fsPath);
+}
 function fsUpdateButtons() {
   const has = !!fsSel;
   const isFile = has && !fsSel.isDir;
@@ -113,6 +147,56 @@ function fsUpdateButtons() {
   fsRenameBtn.disabled = !has;
   fsDeleteBtn.disabled = !has;
 }
+let fsLastNav = 0;
+async function fsEnterDir(path) {
+  fsLastNav = Date.now();
+  await fsRevealPath(path);
+  fsTermCd(path);
+}
+let fsCtxEl = null;
+function fsHideCtx() { if (fsCtxEl) { fsCtxEl.remove(); fsCtxEl = null; } }
+function fsRenameItem(it, path) {
+  if (!it) return;
+  if (!path) path = joinPath(fsPath, it.name);
+  const name = prompt(t("fs.renamePrompt"), it.name);
+  if (!name || !name.trim()) return;
+  fsAskPassword(t("fs.renameTitle"), t("fs.renameText").replace("{old}", it.name).replace("{new}", name.trim()), { path, newName: name.trim() }, "rename");
+}
+function fsDeleteItem(it, path) {
+  if (!it) return;
+  if (!path) path = joinPath(fsPath, it.name);
+  fsAskPassword(t("fs.deleteTitle"), t("fs.deleteText").replace("{name}", it.name).replace("{note}", it.isDir ? t("fs.dirRecursive") : ""), { path }, "delete");
+}
+function fsCtxAction(act, it, path) {
+  if (act === "open") return fsEnterDir(path);
+  if (act === "rename") return fsRenameItem(it, path);
+  if (act === "delete") return fsDeleteItem(it, path);
+}
+function fsShowCtx(x, y, it, path) {
+  fsHideCtx();
+  const el = document.createElement("div");
+  el.className = "fs-ctx";
+  const add = (act, label, danger) => {
+    const d = document.createElement("div");
+    d.className = "fs-ctx-item" + (danger ? " danger" : "");
+    d.textContent = label;
+    d.onclick = (ev) => { ev.stopPropagation(); fsHideCtx(); fsCtxAction(act, it, path); };
+    el.appendChild(d);
+  };
+  if (it.isDir) add("open", t("fs.open"));
+  add("rename", t("fs.rename"));
+  add("delete", t("fs.delete"), true);
+  el.style.visibility = "hidden";
+  document.body.appendChild(el);
+  const r = el.getBoundingClientRect();
+  el.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 8)) + "px";
+  el.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 8)) + "px";
+  el.style.visibility = "";
+  fsCtxEl = el;
+}
+document.addEventListener("click", (e) => { if (fsCtxEl && !fsCtxEl.contains(e.target)) fsHideCtx(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") fsHideCtx(); });
+window.addEventListener("resize", fsHideCtx);
 fsTree.addEventListener("click", async (e) => {
   const item = e.target.closest(".fs-tree-item");
   if (!item) return;
@@ -127,25 +211,41 @@ fsTree.addEventListener("click", async (e) => {
   } else {
     const st = await fsEnsureTree(path);
     if (!st.expanded && st.dirs.length) st.expanded = true;
+    fsPath = path;
     fsRenderTree();
     fsLoadList(path);
     fsTermCd(path);
   }
 });
 fsTbody.addEventListener("click", (e) => {
-  const row = e.target.closest(".fs-row");
-  if (!row) return;
-  fsSel = fsItems.find((i) => i.name === row.dataset.name) || null;
-  fsRenderList();
-  fsUpdateButtons();
-});
-fsTbody.addEventListener("dblclick", (e) => {
+  if (e.detail > 1) return;
   const row = e.target.closest(".fs-row");
   if (!row) return;
   const it = fsItems.find((i) => i.name === row.dataset.name);
   if (!it) return;
-  if (it.isDir) { const np = joinPath(fsPath, it.name); fsLoadList(np); fsRenderTree(); fsTermCd(np); }
-  else fsEditFile(joinPath(fsPath, it.name));
+  if (it.isDir) { fsEnterDir(joinPath(fsPath, it.name)); return; }
+  fsSel = it;
+  fsRenderList();
+  fsUpdateButtons();
+});
+fsTbody.addEventListener("contextmenu", (e) => {
+  const row = e.target.closest(".fs-row");
+  if (!row) return;
+  e.preventDefault();
+  const it = fsItems.find((i) => i.name === row.dataset.name);
+  if (!it) return;
+  fsSel = it;
+  fsRenderList();
+  fsUpdateButtons();
+  fsShowCtx(e.clientX, e.clientY, it, joinPath(fsPath, it.name));
+});
+fsTbody.addEventListener("dblclick", (e) => {
+  if (Date.now() - fsLastNav < 500) return;
+  const row = e.target.closest(".fs-row");
+  if (!row) return;
+  const it = fsItems.find((i) => i.name === row.dataset.name);
+  if (!it || it.isDir) return;
+  fsEditFile(joinPath(fsPath, it.name));
 });
 document.querySelectorAll("#fs-table th[data-sort]").forEach((th) => {
   th.onclick = () => {
@@ -170,16 +270,8 @@ fsNewdir.onclick = () => {
   if (!name || !name.trim()) return;
   fsAskPassword(t("fs.mkdirTitle"), t("fs.mkdirText").replace("{path}", fsPath).replace("{name}", name.trim()), { path: fsPath, name: name.trim() }, "mkdir");
 };
-fsRenameBtn.onclick = () => {
-  if (!fsSel) return;
-  const name = prompt(t("fs.renamePrompt"), fsSel.name);
-  if (!name || !name.trim()) return;
-  fsAskPassword(t("fs.renameTitle"), t("fs.renameText").replace("{old}", fsSel.name).replace("{new}", name.trim()), { path: joinPath(fsPath, fsSel.name), newName: name.trim() }, "rename");
-};
-fsDeleteBtn.onclick = () => {
-  if (!fsSel) return;
-  fsAskPassword(t("fs.deleteTitle"), t("fs.deleteText").replace("{name}", fsSel.name).replace("{note}", fsSel.isDir ? t("fs.dirRecursive") : ""), { path: joinPath(fsPath, fsSel.name) }, "delete");
-};
+fsRenameBtn.onclick = () => fsRenameItem(fsSel);
+fsDeleteBtn.onclick = () => fsDeleteItem(fsSel);
 fsDownloadBtn.onclick = () => {
   if (!fsSel || fsSel.isDir) return;
   const a = document.createElement("a");
@@ -187,13 +279,25 @@ fsDownloadBtn.onclick = () => {
   a.download = fsSel.name;
   a.click();
 };
+function fsPickFiles(files, target = fsPath) {
+  if (fsUpCancelCb) return;
+  const list = [...files];
+  if (!list.length) return;
+  if (list.length > FS_MAX_FILES) { alert(t("fs.tooMany")); return; }
+  const total = list.reduce((n, f) => n + f.size, 0);
+  if (total > FS_MAX_BATCH) { alert(t("fs.batchTooBig")); return; }
+  const big = list.find((f) => f.size > FS_MAX_FILE);
+  if (big) { alert(`${big.name}: ${t("fs.sizeTooBig")}`); return; }
+  const text = list.length === 1
+    ? t("fs.uploadText").replace("{name}", list[0].name).replace("{size}", fsFmtSize(list[0].size)).replace("{path}", target)
+    : t("fs.uploadBatchText").replace("{n}", list.length).replace("{size}", fsFmtSize(total)).replace("{path}", target);
+  fsAskPassword(t("fs.uploadTitle"), text, { path: target, files: list }, "upload");
+}
 fsUploadBtn.onclick = () => fsFile.click();
 fsFile.addEventListener("change", () => {
-  const f = fsFile.files[0];
+  const files = [...fsFile.files];
   fsFile.value = "";
-  if (!f) return;
-  if (f.size > 50 * 1024 * 1024) { alert(t("fs.sizeTooBig")); return; }
-  fsAskPassword(t("fs.uploadTitle"), t("fs.uploadText").replace("{name}", f.name).replace("{size}", fsFmtSize(f.size)).replace("{path}", fsPath), { path: fsPath, file: f }, "upload");
+  fsPickFiles(files, fsPath);
 });
 [fsTree, document.querySelector(".fs-list-wrap")].forEach((el) => {
   el.addEventListener("dragover", (e) => e.preventDefault());
@@ -201,12 +305,9 @@ fsFile.addEventListener("change", () => {
     e.preventDefault();
     const files = [...(e.dataTransfer?.files || [])];
     if (!files.length) return;
-    const f = files[0];
-    if (files.length > 1) alert(t("fs.singleOnly"));
-    if (f.size > 50 * 1024 * 1024) { alert(t("fs.sizeTooBig")); return; }
     const treeItem = e.target.closest(".fs-tree-item");
     const target = treeItem ? treeItem.dataset.path : fsPath;
-    fsAskPassword(t("fs.uploadTitle"), t("fs.uploadText").replace("{name}", f.name).replace("{size}", fsFmtSize(f.size)).replace("{path}", target), { path: target, file: f }, "upload");
+    fsPickFiles(files, target);
   });
 });
 async function fsEditFile(path) {

@@ -387,7 +387,7 @@
             <button class="btn small" id="fs-rename" disabled data-i18n="fs.rename">重命名</button>
             <button class="btn small danger" id="fs-delete" disabled data-i18n="fs.delete">删除</button>
             <button class="btn small fs-close" id="fs-close" title="关闭文件" data-i18n="fs.closeFile" data-i18n-attr="title">✕</button>
-            <input type="file" id="fs-file" hidden>
+            <input type="file" id="fs-file" hidden multiple>
           </div>
           <div class="fs-body">
             <div class="fs-tree" id="fs-tree"></div>
@@ -404,6 +404,10 @@
                 <tbody id="fs-tbody"></tbody>
               </table>
             </div>
+          </div>
+          <div class="fs-upload-progress" id="fs-upload-progress">
+            <div class="fs-up-head"><span class="fs-up-text" id="fs-up-text"></span><span id="fs-up-pct">0%</span><button class="fs-up-cancel" id="fs-up-cancel" data-i18n="fs.cancelUpload">取消上传</button></div>
+            <div class="progress-track"><div class="progress-bar" id="fs-up-bar"></div></div>
           </div>
         </div>
       </div>

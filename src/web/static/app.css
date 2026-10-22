@@ -655,6 +655,17 @@
     .fs-table .fs-row.sel td:first-child { border-left: 3px solid var(--accent); font-weight: 600; }
     .fs-table .fs-row.sel td:first-child .ic { color: var(--accent); }
     .fs-row td { cursor: pointer; }
+    .fs-ctx { position: fixed; z-index: 2000; min-width: 120px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-sm); box-shadow: var(--shadow-pop); }
+    .fs-ctx-item { padding: 6px 10px; border-radius: 5px; font-size: 13px; color: var(--text); cursor: pointer; }
+    .fs-ctx-item:hover { background: var(--panel2); }
+    .fs-ctx-item.danger { color: var(--bad); }
+    .fs-upload-progress { display: none; padding: 8px 10px 0; border-top: 1px solid var(--border); background: var(--panel); }
+    .fs-upload-progress.show { display: block; }
+    .fs-up-head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+    .fs-up-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fs-up-cancel { background: none; border: none; color: var(--bad); cursor: pointer; font-size: 12px; padding: 0; }
+    .fs-up-cancel:hover { opacity: .8; }
+    .fs-upload-progress .progress-track { margin: 6px 0 8px; }
     #term-terminal .xterm { height: 100%; }
     #term-terminal .xterm-viewport { height: 100% !important; }
     .term-loading { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; gap: 8px; color: var(--muted); font-size: 13px; background: #0f172a; z-index: 5; }

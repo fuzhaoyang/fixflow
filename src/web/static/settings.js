@@ -518,6 +518,27 @@ document.addEventListener("click", (e) => {
 document.getElementById("proc-cancel").onclick = () => procMask.classList.remove("show");
 document.getElementById("proc-close").onclick = () => procMask.classList.remove("show");
 procMask.addEventListener("click", (e) => { if (e.target === procMask) procMask.classList.remove("show"); });
+function fsUploadOne(path, password, file, onProgress, state) {
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    state.xhr = xhr;
+    xhr.open("POST", "api/fs/upload");
+    xhr.responseType = "json";
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded); };
+    xhr.onload = () => {
+      let d = xhr.response;
+      if (!d) { try { d = JSON.parse(xhr.responseText || "{}"); } catch { d = {}; } }
+      resolve({ ok: xhr.status >= 200 && xhr.status < 300 && d.ok, status: xhr.status, error: d.error });
+    };
+    xhr.onerror = () => resolve({ ok: false, status: 0, error: t("fs.unreachable") });
+    xhr.onabort = () => resolve({ ok: false, aborted: true });
+    const fd = new FormData();
+    fd.append("path", path);
+    fd.append("password", password);
+    fd.append("file", file, file.name);
+    xhr.send(fd);
+  });
+}
 document.getElementById("proc-confirm").onclick = async () => {
   const errEl = document.getElementById("proc-err");
   const password = document.getElementById("proc-password").value.trim();
@@ -595,11 +616,46 @@ document.getElementById("proc-confirm").onclick = async () => {
       return;
     }
     if (isFs && fsOp === "upload") {
-      const fd = new FormData();
-      fd.append("path", procTarget.body.path);
-      fd.append("password", password);
-      fd.append("file", procTarget.body.file, procTarget.body.file.name);
-      res = await fetch("api/fs/upload", { method: "POST", body: fd });
+      const files = procTarget.body.files || [procTarget.body.file];
+      const totalBytes = files.reduce((n, f) => n + f.size, 0);
+      procMask.classList.remove("show");
+      const state = { cancel: false, xhr: null };
+      fsUploadProgressStart(files.length, () => {
+        state.cancel = true;
+        if (state.xhr) state.xhr.abort();
+      });
+      let ok = 0, doneBytes = 0, canceled = false;
+      const failed = [];
+      for (let i = 0; i < files.length; i++) {
+        if (state.cancel) { canceled = true; break; }
+        const file = files[i];
+        fsUploadProgressUpdate(doneBytes, totalBytes, i + 1, files.length, file.name);
+        const r = await fsUploadOne(procTarget.body.path, password, file, (loaded) => {
+          fsUploadProgressUpdate(doneBytes + Math.min(loaded, file.size), totalBytes, i + 1, files.length, file.name);
+        }, state);
+        if (r.aborted) { canceled = true; break; }
+        if (r.status === 403) {
+          fsUploadProgressEnd();
+          errEl.textContent = r.error || t("op.fail");
+          procMask.classList.add("show");
+          return;
+        }
+        if (r.ok) ok++;
+        else failed.push(`${file.name}: ${r.error || t("op.fail")}`);
+        doneBytes += file.size;
+        fsUploadProgressUpdate(doneBytes, totalBytes, i + 1, files.length, file.name);
+      }
+      fsUploadProgressEnd();
+      const skip = files.length - ok - failed.length;
+      if (canceled) {
+        alert(t("fs.uploadCanceled").replace("{ok}", ok).replace("{skip}", skip) + (failed.length ? "\n" + failed.join("\n") : ""));
+      } else if (failed.length) {
+        alert(t("fs.uploadResult").replace("{ok}", ok).replace("{fail}", failed.length) + "\n" + failed.join("\n"));
+      } else {
+        showSaveMsg(t("fs.uploadResult").replace("{ok}", ok).replace("{fail}", 0), "ok");
+      }
+      fsRefresh();
+      return;
     } else {
       const endpoint = isFw ? "api/firewall/close" : isFwCtl ? "api/firewall/control" : isNginxSave ? "api/nginx/conf" : isNginxOp ? "api/nginx/reload" : isFs ? `api/fs/${fsOp}` : isDockerOp ? "api/docker/op" : isDockerPrune ? "api/docker/prune" : isSdOp ? "api/systemd/op" : isDbTest ? "api/db/test" : isAclAdd ? "api/acl/add" : isAclDel ? "api/acl/remove" : `api/system/${procTarget.op}`;
       const payload = isFw
