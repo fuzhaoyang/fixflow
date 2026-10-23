@@ -204,3 +204,30 @@ test("/api/playbooks 保存、持久化与立即生效", async () => {
   await w.close();
 });
 
+test("启动时对账：服务已恢复的 open 事件自动 resolved 并生成复盘", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-inc-reconcile-"));
+  const cfg = join(dir, "config.json");
+  writeFileSync(cfg, "{}");
+  const now = Date.now();
+  const inc = {
+    id: "INC-open-001", fingerprint: "service:down:nginx", source: "service", service: "nginx", host: "h",
+    alertname: "服务 nginx 异常关闭", title: "服务 nginx 异常关闭", severity: 2, status: "open",
+    startedAt: now - 60000, lastSeen: now - 60000, resolvedAt: 0, labels: { unit: "nginx", kind: "down", state: "inactive" },
+    annotations: {}, timeline: [{ ts: now - 60000, text: "告警接入" }],
+    evidence: [{ kind: "service", command: "systemctl is-active nginx", output: "inactive", ts: now - 59000, ok: false }],
+    rca: null, playbookAt: 0, rcaAt: 0, retroId: null,
+  };
+  writeFileSync(join(dir, "incidents.json"), JSON.stringify({ incidents: [inc] }));
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg }, {
+    captchas: testCaptchas,
+    runCommand: async () => ({ stdout: "active\n", stderr: "", exitCode: 0 }),
+  });
+  await new Promise((r) => setTimeout(r, 4500));
+  const after = JSON.parse(readFileSync(join(dir, "incidents.json"), "utf8")).incidents.find((x) => x.id === inc.id);
+  assert.equal(after.status, "resolved");
+  assert.ok(after.retroId);
+  const retros = JSON.parse(readFileSync(join(dir, "retros.json"), "utf8"));
+  assert.ok(retros.some((c) => c.incidentId === inc.id));
+  await w.close();
+});
+

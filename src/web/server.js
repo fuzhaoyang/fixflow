@@ -530,6 +530,30 @@ export async function startWeb(config = {}, deps = {}) {
       labels: { metric: rule.metric, ruleId: rule.id, metricLabel: metricLabel(rule.metric) },
     });
   };
+  const reconcileOpenServiceIncidents = async () => {
+    const list = await listIncidents(incidentsPath);
+    for (const inc of list) {
+      if (inc.status === "resolved" || inc.source !== "service") continue;
+      const service = String(inc.service || "");
+      if (!service || service === "host" || service === "ssl") continue;
+      const r = await execCmd(`systemctl is-active ${service}`).catch(() => null);
+      if (String(r?.stdout || "").trim() !== "active") continue;
+      if (!inc.rca && (inc.evidence || []).length) startIncidentAnalysis(inc);
+      await syncPanelIncident({
+        id: inc.id,
+        fingerprint: inc.fingerprint,
+        source: "service",
+        service,
+        host: inc.host || hostname(),
+        title: inc.title,
+        severity: inc.severity || 2,
+        status: "resolved",
+        startedAt: inc.startedAt,
+        labels: inc.labels || {},
+      });
+    }
+  };
+  setTimeout(() => { reconcileOpenServiceIncidents().catch((e) => console.error("[fixflow] 事件对账失败:", e?.message || e)); }, 2000);
   const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", PROMPT_COMMAND: 'printf "\\033]2;%s\\007" "$PWD"' } }));
   let termShell = null;
   let termBuffer = "";

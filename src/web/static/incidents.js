@@ -18,6 +18,12 @@ const incTime = (ts) => {
   return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(curLang === "en" ? "en-US" : "zh-CN", { hour12: false });
 };
 const incStatus = (s) => s === "resolved" ? t("incident.resolved") : t("incident.open");
+const incTimeShort = (ts) => {
+  const d = new Date(ts);
+  if (Number.isNaN(d.getTime())) return "—";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 function renderIncidents() {
   const q = incidentQuery.trim().toLowerCase();
@@ -27,7 +33,7 @@ function renderIncidents() {
   incidentList.innerHTML = list.map((i) => `<div class="incident-card" data-incident="${escapeHtml(i.id)}">
     <div class="retro-card-head"><span class="tag ${i.severity <= 2 ? "bad" : "warn"}">P${escapeHtml(i.severity)}</span><span class="tag ${i.status === "resolved" ? "ok" : "bad"}">${escapeHtml(incStatus(i.status))}</span></div>
     <div class="retro-card-title">${escapeHtml(i.title)}</div>
-    <div class="retro-card-meta">${escapeHtml(i.service)} · ${escapeHtml(i.host)} · ${escapeHtml(incTime(i.startedAt))}</div>
+    <div class="retro-card-meta">${escapeHtml(i.service)} · ${escapeHtml(i.host)} · ${escapeHtml(incTimeShort(i.startedAt))} · ${escapeHtml(t("incident.statusLabel").replace("{s}", incStatus(i.status)))}</div>
     <div class="retro-card-summary">${escapeHtml(i.rcaSummary || t("incident.pending"))}</div>
   </div>`).join("");
 }
