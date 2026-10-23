@@ -6,7 +6,7 @@ import { createReadStream, readFileSync } from "node:fs";
 import { timingSafeEqual, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
-import { homedir } from "node:os";
+import { homedir, hostname } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices, parseDownState, diffDownServices, collectSystemd, collectConnectionSummary, collectDocker, parseWho } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
@@ -25,6 +25,12 @@ import { runCommand } from "../tools.js";
 import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
 import { detectPkgManager, resolvePkgName, listInstalledCmd, parseInstalledNames, searchCmd, parseSearch, versionsCmd, parseVersions, installCmd, uninstallCmd, withPmLock, pmErrorHint } from "../pkgs.js";
 import { normalizeKnowledge, isOpsQuestion, queryKnowledge, testKnowledge, maskToken, formatKbAnswer } from "../kb.js";
+import { createRetroFromIncident, readRetros, retroFilename } from "../retros.js";
+import { createOrMergeIncidents, listIncidents, getIncident, addEvidence, setIncidentRca, setRetroId, updateIncident } from "../incidents.js";
+import { collectEvidence, normalizePlaybooks } from "../incidents-playbook.js";
+import { analyzeIncident } from "../incidents-rca.js";
+import { addDeployment, readDeployments } from "../deployments.js";
+import { redactSecrets } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
 const VERSION = JSON.parse(readFileSync(fileURLToPath(new URL("../../package.json", import.meta.url)), "utf8")).version || "0.0.0";
@@ -300,6 +306,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.memLimitMB = Number.isFinite(config.memLimitMB) && config.memLimitMB > 0 ? config.memLimitMB : 1024;
   config.dbConnections = normalizeDbConnections(config.dbConnections);
   config.knowledge = normalizeKnowledge(config.knowledge);
+  config.playbooks = config.playbooks && typeof config.playbooks === "object" && !Array.isArray(config.playbooks) ? config.playbooks : {};
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -323,6 +330,9 @@ export async function startWeb(config = {}, deps = {}) {
   const historyPath = config.historyPath || defaultHistoryPath();
   const termHistoryPath = config.termHistoryPath || defaultTermHistoryPath();
   const panelAuditPath = config.panelAuditPath || defaultPanelAuditPath();
+  const retrosPath = config.retrosPath || join(dirname(configPath), "retros.json");
+  const incidentsPath = config.incidentsPath || join(dirname(configPath), "incidents.json");
+  const deploymentsPath = config.deploymentsPath || join(dirname(configPath), "deployments.jsonl");
   const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
   const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
   const readConfigFile = () => readJsonFile(configPath);
@@ -336,7 +346,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections, knowledge: config.knowledge };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections, knowledge: config.knowledge, playbooks: config.playbooks };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
     await chmod(configPath, 0o600).catch(() => {});
@@ -453,6 +463,73 @@ export async function startWeb(config = {}, deps = {}) {
       try { res.write(data); } catch { clients.delete(res); }
     }
   };
+  const allowedActionsFor = async (incident) => {
+    const out = new Map();
+    const pb = (config.playbooks || {})[incident.service] || {};
+    for (const [key, val] of Object.entries(pb.actions || {})) {
+      const command = typeof val === "string" ? val : val?.command;
+      if (!command) continue;
+      out.set(key, { key, label: (val && typeof val === "object" && val.label) || key, command, risk: (val && typeof val === "object" && val.risk) || "medium", source: "playbook" });
+    }
+    const latest = await readDeployments(deploymentsPath, { service: incident.service, limit: 1 }).catch(() => []);
+    if (latest[0]?.rollback) out.set("rollback", { key: "rollback", label: "回滚到上一版", command: String(latest[0].rollback), risk: "high", source: "deploy" });
+    return [...out.values()];
+  };
+  const incidentAnalyses = new Map();
+  const startIncidentAnalysis = (incident) => {
+    if (incidentAnalyses.has(incident.id)) return incidentAnalyses.get(incident.id);
+    const task = (async () => {
+      const evidence = await collectEvidence({ config, incident, deploymentsPath });
+      await addEvidence({ filePath: incidentsPath, id: incident.id, evidence });
+      const fresh = await getIncident(incidentsPath, incident.id) || incident;
+      const rca = await analyzeIncident({ config, incident: fresh, evidence });
+      if (rca) await setIncidentRca({ filePath: incidentsPath, id: incident.id, rca });
+      broadcast({ type: "incidents" });
+    })().catch((e) => console.error("[fixflow] 事件取证失败:", e?.message || e)).finally(() => incidentAnalyses.delete(incident.id));
+    incidentAnalyses.set(incident.id, task);
+    return task;
+  };
+  const finalizeIncident = async (incident) => {
+    try {
+      const pending = incidentAnalyses.get(incident.id);
+      if (pending) await pending.catch(() => {});
+      const fresh = await getIncident(incidentsPath, incident.id);
+      if (!fresh || fresh.retroId) return;
+      const card = await createRetroFromIncident({ filePath: retrosPath, incident: fresh });
+      if (card) await setRetroId({ filePath: incidentsPath, id: incident.id, retroId: card.id });
+      broadcast({ type: "incidents" });
+    } catch (e) { console.error("[fixflow] 复盘生成失败:", e?.message || e); }
+  };
+  const syncPanelIncident = async ({ id, fingerprint, source, service, host, title, severity, status, startedAt, labels, skipAnalysis = false }) => {
+    const { results } = await createOrMergeIncidents({
+      filePath: incidentsPath,
+      mergeOpen: true,
+      alerts: [{ id, fingerprint, source, service, host, alertname: title, title, severity, status, startedAt, labels }],
+    });
+    const r = results[0];
+    if (!r) return null;
+    if (r.resolved) { if (!skipAnalysis) finalizeIncident(r.incident); }
+    else if (r.created && !skipAnalysis) startIncidentAnalysis(r.incident);
+    broadcast({ type: "incidents" });
+    return r.incident;
+  };
+  const syncMetricAlert = (e) => {
+    const inc = e.incident || {};
+    const rule = e.rule || {};
+    const severity = inc.level || rule.level || 3;
+    return syncPanelIncident({
+      id: inc.id,
+      fingerprint: `metric:${inc.id}`,
+      source: "metric",
+      service: "host",
+      host: e.host,
+      title: `${metricLabel(rule.metric)} · ${rule.name || "指标告警"}`,
+      severity,
+      status: e.kind === "recovery" ? "resolved" : "firing",
+      startedAt: inc.startedAt || Date.now(),
+      labels: { metric: rule.metric, ruleId: rule.id, metricLabel: metricLabel(rule.metric) },
+    });
+  };
   const spawnShell = deps.spawnShell || (() => spawn("script", ["-qfc", "bash", "/dev/null"], { cwd: process.env.HOME || "/", env: { ...process.env, TERM: "xterm-256color", COLORTERM: "truecolor", PROMPT_COMMAND: 'printf "\\033]2;%s\\007" "$PWD"' } }));
   let termShell = null;
   let termBuffer = "";
@@ -540,6 +617,11 @@ export async function startWeb(config = {}, deps = {}) {
     onNotify: async (e) => {
       try {
         if (e.kind === "aggregate") {
+          for (const ev of e.events || []) syncMetricAlert({ kind: "firing", incident: ev.incident, rule: ev.rule, host: e.host }).catch((err) => console.error("[fixflow] 事件同步失败:", err?.message || err));
+        } else {
+          syncMetricAlert(e).catch((err) => console.error("[fixflow] 事件同步失败:", err?.message || err));
+        }
+        if (e.kind === "aggregate") {
           const to = [...new Set(e.events.flatMap((x) => x.rule.recipients || []))];
           let rootCause = "";
           try {
@@ -586,11 +668,14 @@ export async function startWeb(config = {}, deps = {}) {
       const { newFailures, recoveries } = diffFailedServices(lastFailedSet, failed);
       lastFailedSet = failed;
       const hook = config.sslAlerts.webhook || config.metricAlertWebhook;
+      const host = hostname();
       for (const s of newFailures) {
+        syncPanelIncident({ fingerprint: `service:failed:${s}`, source: "service", service: s, host, title: `服务 ${s} 进入 failed 状态`, severity: 2, status: "firing", startedAt: Date.now(), labels: { unit: s, kind: "failed" } }).catch(() => {});
         await sendWebhook(hook, { kind: "service-failed", unit: s });
         await sendEmail(config.sslAlerts.smtp, `[Fixflow] 服务进入失败状态：${s}`, `服务 ${s} 已进入 failed 状态，请检查。`);
       }
       for (const s of recoveries) {
+        syncPanelIncident({ fingerprint: `service:failed:${s}`, source: "service", service: s, host, title: `服务 ${s} 进入 failed 状态`, severity: 2, status: "resolved", startedAt: Date.now(), labels: { unit: s, kind: "failed" } }).catch(() => {});
         await sendWebhook(hook, { kind: "service-recovered", unit: s });
         await sendEmail(config.sslAlerts.smtp, `[Fixflow] 服务已恢复：${s}`, `服务 ${s} 已恢复正常。`);
       }
@@ -610,9 +695,14 @@ export async function startWeb(config = {}, deps = {}) {
       if (lastDown === null) { lastDown = now; return; }
       const events = diffDownServices(lastDown, now);
       lastDown = now;
-      const st = await alertsManager.smtp();
+      const host = hostname();
       for (const e of events) {
-        if (!st.to) return;
+        const down = e.kind === "down";
+        syncPanelIncident({ fingerprint: `service:down:${e.name}`, source: "service", service: e.name, host, title: `服务 ${e.name} 异常关闭`, severity: 2, status: down ? "firing" : "resolved", startedAt: Date.now(), labels: { unit: e.name, kind: "down", state: e.state } }).catch(() => {});
+      }
+      const st = await alertsManager.smtp();
+      if (!st.to) return;
+      for (const e of events) {
         if (e.kind === "down") await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务异常关闭：${e.name}`, `服务 ${e.name} 已停止（systemd 状态 ${e.state}），请检查。`);
         else await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务已恢复：${e.name}`, `服务 ${e.name} 已恢复正常。`);
       }
@@ -780,12 +870,24 @@ export async function startWeb(config = {}, deps = {}) {
         if (data.ssl?.results) {
           try {
             const { alerts, lastNotified } = checkSslAlerts(data.ssl.results, config.sslAlerts);
+            const sslKey = (r) => r.id || (r.type === "local" ? `l:${r.path}` : `r:${r.host}:${r.port}`);
+            for (const a of alerts) {
+              syncPanelIncident({ fingerprint: `ssl:${a.key}:${a.notAfter}`, source: "ssl", service: "ssl", host: hostname(), title: `证书即将到期：${a.label}`, severity: a.daysLeft <= 7 ? 2 : 3, status: "firing", startedAt: Date.now(), labels: { sslKey: a.key, daysLeft: a.daysLeft, notAfter: a.notAfter }, skipAnalysis: true }).catch(() => {});
+            }
             if (alerts.length) {
               config.sslAlerts.lastNotified = lastNotified;
               await persistConfig();
               for (const a of alerts) {
                 await sendWebhook(config.sslAlerts.webhook, a);
                 await sendEmail(config.sslAlerts.smtp, `[Fixflow] 证书即将到期：${a.label}`, `${a.label} 剩余 ${a.daysLeft} 天（${a.notAfter}）`);
+              }
+            }
+            const dueKeys = new Set((data.ssl.results || []).filter((r) => typeof r.daysLeft === "number" && r.daysLeft <= 30).map(sslKey));
+            const openSsl = (await listIncidents(incidentsPath)).filter((i) => i.source === "ssl" && i.status !== "resolved");
+            for (const inc of openSsl) {
+              if (!dueKeys.has(inc.labels?.sslKey)) {
+                await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => { x.status = "resolved"; x.resolvedAt = Date.now(); x.timeline.push({ ts: Date.now(), text: "证书不再告警（已续期或移除）" }); } });
+                broadcast({ type: "incidents" });
               }
             }
           } catch {}
@@ -867,9 +969,62 @@ export async function startWeb(config = {}, deps = {}) {
         const { id } = JSON.parse(body || "{}");
         const r = await alertsManager.runNow(id);
         sendJson(res, r, r.ok ? 200 : 400);
+      } else if (url.pathname === "/api/playbooks" && req.method === "GET") {
+        sendJson(res, { playbooks: config.playbooks || {} });
+      } else if (url.pathname === "/api/playbooks" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const r = normalizePlaybooks(body.playbooks);
+        if (r.error) { sendJson(res, { error: r.error }, 400); return; }
+        config.playbooks = r.playbooks;
+        await persistConfig();
+        sendJson(res, { ok: true, playbooks: config.playbooks });
+      } else if (url.pathname === "/api/incidents" && req.method === "GET") {
+        const items = (await listIncidents(incidentsPath)).map(({ evidence, rca, actions, ...rest }) => ({ ...rest, evidenceCount: (evidence || []).length, rcaSummary: rca?.summary || "" }));
+        sendJson(res, { incidents: items });
+      } else if (url.pathname.startsWith("/api/incidents/") && req.method === "GET") {
+        const id = decodeURIComponent(url.pathname.slice("/api/incidents/".length));
+        const inc = await getIncident(incidentsPath, id);
+        if (!inc) { sendJson(res, { error: "事件不存在" }, 404); return; }
+        sendJson(res, { ...inc, allowedActions: await allowedActionsFor(inc) });
+      } else if (url.pathname.startsWith("/api/incidents/") && url.pathname.endsWith("/action") && req.method === "POST") {
+        const id = decodeURIComponent(url.pathname.slice("/api/incidents/".length, -"/action".length));
+        const body = JSON.parse(await readBody(req) || "{}");
+        const auth = await readAuth();
+        if (!auth || !verifyPassword(body.password || "", auth)) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        const inc = await getIncident(incidentsPath, id);
+        if (!inc) { sendJson(res, { error: "事件不存在" }, 404); return; }
+        const action = (await allowedActionsFor(inc)).find((a) => a.key === body.action);
+        if (!action) { sendJson(res, { error: "动作不存在或未允许" }, 400); return; }
+        const r = await execCmd(action.command, { timeout: 60000 }).catch((e) => ({ stdout: "", stderr: String(e?.message || e), exitCode: 1 }));
+        const output = redactSecrets((r.stdout || "") + (r.stderr || "")).slice(0, 4000);
+        await updateIncident({ filePath: incidentsPath, id, patch: (x) => {
+          x.actions = Array.isArray(x.actions) ? x.actions : [];
+          x.actions.push({ key: action.key, label: action.label, command: action.command, risk: action.risk, ok: r.exitCode === 0, output, ts: Date.now() });
+          x.timeline.push({ ts: Date.now(), text: `执行 ${action.label}：${r.exitCode === 0 ? "成功" : "失败"}` });
+        } });
+        broadcast({ type: "incidents" });
+        sendJson(res, { ok: r.exitCode === 0, output });
+      } else if (url.pathname === "/api/deployments" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        try { const row = await addDeployment(deploymentsPath, body); sendJson(res, { ok: true, deployment: row }); }
+        catch (e) { sendJson(res, { error: String(e?.message || e) }, 400); }
+      } else if (url.pathname === "/api/retros" && req.method === "GET") {
+        const cards = (await readRetros(retrosPath)).map(({ markdown, ...card }) => card);
+        sendJson(res, { cards });
+      } else if (url.pathname.startsWith("/api/retros/") && req.method === "GET") {
+        const rest = decodeURIComponent(url.pathname.slice("/api/retros/".length));
+        const download = rest.endsWith("/download");
+        const id = download ? rest.slice(0, -"/download".length) : rest;
+        const card = (await readRetros(retrosPath)).find((c) => c.id === id);
+        if (!card) { sendJson(res, { error: "复盘不存在" }, 404); return; }
+        if (download) {
+          res.writeHead(200, { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(retroFilename(card))}` });
+          res.end(card.markdown || "");
+        } else sendJson(res, card);
       } else if (url.pathname === "/api/metric-alerts" && req.method === "GET") {
-        const [rules, settings] = await Promise.all([metricAlerts.list(), metricAlerts.settings()]);
-        sendJson(res, { rules, incidents: metricAlerts.incidents(), ...settings });
+        const [rules, settings, retros] = await Promise.all([metricAlerts.list(), metricAlerts.settings(), readRetros(retrosPath)]);
+        const retroMap = new Map(retros.map((r) => [r.incidentId, r.id]));
+        sendJson(res, { rules, incidents: metricAlerts.incidents().map((i) => ({ ...i, retroId: retroMap.get(i.id) || null })), ...settings });
       } else if (url.pathname === "/api/metric-alerts" && req.method === "POST") {
         const body = await readBody(req);
         const r = JSON.parse(body || "{}");
@@ -1713,6 +1868,14 @@ export async function startWeb(config = {}, deps = {}) {
         res.end(js);
       } else if (url.pathname === "/kb.js") {
         const js = await readFile(join(STATIC, "kb.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
+      } else if (url.pathname === "/retros.js") {
+        const js = await readFile(join(STATIC, "retros.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
+      } else if (url.pathname === "/incidents.js") {
+        const js = await readFile(join(STATIC, "incidents.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
       } else if (url.pathname === "/app.css") {

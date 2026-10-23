@@ -6,7 +6,7 @@ const I18N_ZH = {
   "menu.overview": "总览", "menu.system": "系统", "menu.network": "网络", "menu.nginx": "Nginx",
   "menu.firewall": "防火墙", "menu.databases": "数据库",
   "menu.acl": "黑白名单",
-  "menu.docker": "Docker", "menu.ssl": "SSL 证书", "menu.systemd": "服务", "menu.logs": "日志", "menu.store": "软件商店",
+  "menu.docker": "Docker", "menu.ssl": "SSL 证书", "menu.systemd": "服务", "menu.logs": "日志", "menu.retros": "复盘", "menu.incidents": "事件", "menu.store": "软件商店",
   "menu.chat": "Agent 对话",
   "docker.containers": "容器列表", "docker.name": "名称", "docker.image": "镜像", "docker.state": "状态", "docker.status": "状态详情", "docker.ports": "端口", "docker.created": "创建时间",
   "docker.stats": "资源占用", "docker.images": "镜像列表", "docker.repo": "仓库", "docker.tag": "标签", "docker.id": "镜像ID", "docker.size": "大小", "docker.since": "创建时间",
@@ -15,7 +15,11 @@ const I18N_ZH = {
   "docker.noContainers": "无容器", "docker.loading": "加载中…", "docker.opTitle": "Docker 操作", "docker.opText": "输入密码确认：{label} {name}", "docker.opDone": "操作完成", "docker.pruneDone": "悬空镜像清理完成", "docker.inspectFail": "获取容器详情失败",
   "brand.name": "Fixflow 运维管家",
   "brand.sub": "服务器运维 AI Agent",
-  "title.overview": "监控总览", "title.chat": "Agent 对话", "title.logs": "日志", "title.store": "软件商店",
+  "title.overview": "监控总览", "title.chat": "Agent 对话", "title.logs": "日志", "title.retros": "复盘", "title.incidents": "事件", "title.store": "软件商店",
+  "incident.search": "搜索事件…", "incident.refresh": "刷新", "incident.count": "共 {n} 条", "incident.empty": "暂无事件", "incident.open": "处理中", "incident.resolved": "已恢复", "incident.pending": "等待 RCA…", "incident.notFound": "事件不存在", "incident.rcaTitle": "RCA", "incident.summary": "结论", "incident.rootCause": "根因", "incident.confidence": "置信度", "incident.suggestion": "建议动作", "incident.rollback": "回滚建议", "incident.missing": "缺失信息", "incident.noRca": "RCA 尚未生成", "incident.evidence": "证据", "incident.noEvidence": "暂无证据", "incident.timeline": "时间线", "incident.viewRetro": "查看复盘", "incident.actions": "可执行动作", "incident.actionTitle": "执行动作", "incident.risk": "风险", "incident.actionDone": "动作执行成功", "incident.actionFail": "动作执行失败", "incident.actionLog": "执行记录", "incident.noActions": "没有允许执行的动作。可在 config.json 的 playbooks.<service>.actions 中配置。",
+  "pb.button": "Playbook", "pb.title": "Playbook 管理", "pb.addService": "+ 新增服务", "pb.save": "保存", "pb.cancel": "取消", "pb.serviceName": "服务", "pb.logs": "日志命令（一行一条）", "pb.upstreams": "上游地址（一行一个）", "pb.releaseService": "发布服务名", "pb.kb": "知识库查询", "pb.actions": "可执行动作", "pb.key": "Key", "pb.label": "显示名称", "pb.command": "命令", "pb.risk": "风险", "pb.riskLow": "低", "pb.riskMedium": "中", "pb.riskHigh": "高", "pb.addAction": "+ 新增动作", "pb.delete": "删除", "pb.deleteService": "删除服务", "pb.deleteConfirm": "删除服务「{name}」及其动作？", "pb.servicePrompt": "新服务名（如 nginx / order）", "pb.invalidService": "服务名只能包含字母、数字、_ . @ -", "pb.invalidKey": "动作 key 不合法或重复", "pb.serviceExists": "服务已存在", "pb.saved": "Playbook 已保存并生效", "pb.apiMissing": "接口不可用，请先重启面板服务（新版本 API 未加载）",
+  "alert.viewRetro": "查看复盘",
+  "retro.search": "搜索复盘…", "retro.empty": "暂无复盘", "retro.loading": "加载中…", "retro.count": "共 {n} 条", "retro.minutes": "分钟", "retro.pending": "待补充", "retro.ai": "AI 推测", "retro.download": "下载 MD", "retro.close": "关闭", "retro.notFound": "复盘不存在",
   "logs.selectHint": "选择一个服务查看日志", "logs.filterPh": "筛选服务…", "logs.searchPh": "搜索日志…", "logs.loading": "加载中…",
   "logs.follow": "跟随", "logs.paused": "已暂停", "logs.copy": "复制", "logs.export": "导出", "logs.copied": "已复制",
   "logs.copyFail": "复制失败", "logs.none": "无匹配服务", "logs.empty": "（无日志内容）", "logs.aiAnalyze": "AI 帮我分析", "logs.aiAnalyzePrompt": "请分析以下日志，指出异常、错误和潜在问题，并给出简要结论：\n\n",
@@ -244,7 +248,7 @@ const I18N_EN = {
   "menu.overview": "Overview", "menu.system": "System", "menu.network": "Network", "menu.nginx": "Nginx",
   "menu.firewall": "Firewall", "menu.databases": "Databases",
   "menu.acl": "Access Control",
-  "menu.docker": "Docker", "menu.ssl": "SSL Certificates", "menu.systemd": "Services", "menu.logs": "Logs", "menu.store": "Software Store",
+  "menu.docker": "Docker", "menu.ssl": "SSL Certificates", "menu.systemd": "Services", "menu.logs": "Logs", "menu.retros": "Postmortems", "menu.incidents": "Incidents", "menu.store": "Software Store",
   "menu.chat": "Agent Chat",
   "docker.containers": "Containers", "docker.name": "Name", "docker.image": "Image", "docker.state": "State", "docker.status": "Status", "docker.ports": "Ports", "docker.created": "Created",
   "docker.stats": "Resource usage", "docker.images": "Images", "docker.repo": "Repository", "docker.tag": "Tag", "docker.id": "Image ID", "docker.size": "Size", "docker.since": "Created",
@@ -253,7 +257,11 @@ const I18N_EN = {
   "docker.noContainers": "No containers", "docker.loading": "Loading…", "docker.opTitle": "Docker Operation", "docker.opText": "Enter password to confirm: {label} {name}", "docker.opDone": "Operation done", "docker.pruneDone": "Dangling images pruned", "docker.inspectFail": "Failed to fetch container details",
   "brand.name": "Fixflow Ops Assistant",
   "brand.sub": "Server Ops AI Agent",
-  "title.overview": "Monitoring Overview", "title.chat": "Agent Chat", "title.logs": "Logs", "title.store": "Software Store",
+  "title.overview": "Monitoring Overview", "title.chat": "Agent Chat", "title.logs": "Logs", "title.retros": "Postmortems", "title.incidents": "Incidents", "title.store": "Software Store",
+  "incident.search": "Search incidents…", "incident.refresh": "Refresh", "incident.count": "{n} items", "incident.empty": "No incidents", "incident.open": "Open", "incident.resolved": "Resolved", "incident.pending": "Waiting for RCA…", "incident.notFound": "Incident not found", "incident.rcaTitle": "RCA", "incident.summary": "Summary", "incident.rootCause": "Root cause", "incident.confidence": "Confidence", "incident.suggestion": "Suggested action", "incident.rollback": "Rollback", "incident.missing": "Missing information", "incident.noRca": "RCA not generated yet", "incident.evidence": "Evidence", "incident.noEvidence": "No evidence", "incident.timeline": "Timeline", "incident.viewRetro": "View postmortem", "incident.actions": "Allowed actions", "incident.actionTitle": "Run action", "incident.risk": "Risk", "incident.actionDone": "Action succeeded", "incident.actionFail": "Action failed", "incident.actionLog": "Action log", "incident.noActions": "No allowed actions. Configure playbooks.<service>.actions in config.json.",
+  "pb.button": "Playbook", "pb.title": "Playbook", "pb.addService": "+ Add service", "pb.save": "Save", "pb.cancel": "Cancel", "pb.serviceName": "Service", "pb.logs": "Log commands (one per line)", "pb.upstreams": "Upstreams (one per line)", "pb.releaseService": "Release service", "pb.kb": "Query knowledge base", "pb.actions": "Allowed actions", "pb.key": "Key", "pb.label": "Label", "pb.command": "Command", "pb.risk": "Risk", "pb.riskLow": "Low", "pb.riskMedium": "Medium", "pb.riskHigh": "High", "pb.addAction": "+ Add action", "pb.delete": "Delete", "pb.deleteService": "Delete service", "pb.deleteConfirm": "Delete service \"{name}\" and its actions?", "pb.servicePrompt": "New service name (e.g. nginx / order)", "pb.invalidService": "Service name may only contain letters, digits, _ . @ -", "pb.invalidKey": "Action key is invalid or duplicated", "pb.serviceExists": "Service already exists", "pb.saved": "Playbook saved and applied", "pb.apiMissing": "API unavailable. Restart the panel service to load the new API.",
+  "alert.viewRetro": "View postmortem",
+  "retro.search": "Search postmortems…", "retro.empty": "No postmortems", "retro.loading": "Loading…", "retro.count": "{n} items", "retro.minutes": "min", "retro.pending": "TBD", "retro.ai": "AI guess", "retro.download": "Download MD", "retro.close": "Close", "retro.notFound": "Postmortem not found",
   "logs.selectHint": "Select a service to view logs", "logs.filterPh": "Filter services…", "logs.searchPh": "Search logs…", "logs.loading": "Loading…",
   "logs.follow": "Follow", "logs.paused": "Paused", "logs.copy": "Copy", "logs.export": "Export", "logs.copied": "Copied",
   "logs.copyFail": "Copy failed", "logs.none": "No matching services", "logs.empty": "(no log content)", "logs.aiAnalyze": "AI analyze for me", "logs.aiAnalyzePrompt": "Analyze the following log, point out anomalies, errors and potential issues, then give a brief conclusion:\n\n",
@@ -770,6 +778,26 @@ ${FIG.knowledgeFooter}
 </ol>
 <p class="help-tip">页脚只用于展示，不会写回模型上下文；刷新页面后仍会保留。</p>
 
+<h3 id="incidents">事件</h3>
+<h4 id="inc-ingest">事件来源</h4>
+<ol>
+  <li>面板告警自动进入「事件」，不需要外部 webhook 或 Token。</li>
+  <li>当前来源：指标告警（CPU / 内存 / 磁盘 / 网络 / TCP）、服务 down / failed、SSL 证书到期。</li>
+  <li>指标事件按主机级 Playbook 取证（系统错误日志、发布记录、知识库等）；服务事件按对应服务 Playbook 取证。</li>
+  <li>事件打开后自动生成时间线、证据和结构化 RCA；面板告警原有的邮件 / Webhook 通知保留。</li>
+  <li>配置了告警监控规则但没有实际触发时，事件页不会出现记录。</li>
+</ol>
+<h4 id="inc-playbook">Playbook、发布记录与动作</h4>
+<ol>
+  <li>「事件」页 →「Playbook」可视化配置服务级 / 主机级日志、上游、发布服务、知识库和可执行动作；保存立即生效，无需重启。也可直接编辑 <code>~/.config/fixflow/config.json</code>。</li>
+  <li>主机级默认日志：<code>journalctl -p err -n 200 --no-pager</code>；服务级默认：<code>journalctl -u &lt;service&gt; -n 200 --no-pager</code>。</li>
+  <li>发布记录：<code>fixflow deploy-note --service order --version 1.2.3 --commit abc --rollback "..."</code>（以 root 执行，与服务同一 HOME）。</li>
+  <li>RCA 展示结论、根因、置信度、证据引用、建议动作、回滚建议、缺失信息；只展示，不自动执行。</li>
+  <li>「可执行动作」来自 Playbook 或最新发布记录；执行需输入登录密码，结果写回时间线。</li>
+  <li>指标和服务事件恢复后自动生成复盘卡片，可点「查看复盘」；SSL 事件只记录，不自动生成复盘。</li>
+</ol>
+<p class="help-tip">回滚命令只能来自发布记录；没有记录时只给建议，不会凭空生成可执行回滚。</p>
+
 <h3 id="security">工具与安全</h3>
 ${FIG.confirm}
 <table>
@@ -1044,6 +1072,26 @@ ${FIG.knowledgeFooter}
   <li>KB failures or timeouts never block the chat — it falls back to the model automatically.</li>
 </ol>
 <p class="help-tip">The footer is display-only and is never written back into the model context; it is kept after a page refresh.</p>
+
+<h3 id="incidents">Incidents</h3>
+<h4 id="inc-ingest">Incident sources</h4>
+<ol>
+  <li>Panel alerts automatically become incidents — no external webhook or token needed.</li>
+  <li>Sources: metric alerts (CPU / memory / disk / network / TCP), service down / failed, and SSL certificate expiry.</li>
+  <li>Metric incidents use the host-level Playbook (system error logs, releases, knowledge base); service incidents use the matching service Playbook.</li>
+  <li>Timeline, evidence and structured RCA are generated automatically; existing email / webhook notifications for panel alerts are kept.</li>
+  <li>If no alert actually fires, no incident appears.</li>
+</ol>
+<h4 id="inc-playbook">Playbook, releases &amp; actions</h4>
+<ol>
+  <li>Use "Incidents" → "Playbook" to configure per-service / host logs, upstreams, release service, knowledge base and allowed actions; saving applies immediately without a restart. You can also edit <code>~/.config/fixflow/config.json</code>.</li>
+  <li>Host-level default logs: <code>journalctl -p err -n 200 --no-pager</code>; service-level default: <code>journalctl -u &lt;service&gt; -n 200 --no-pager</code>.</li>
+  <li>Record a release with <code>fixflow deploy-note --service order --version 1.2.3 --commit abc --rollback "..."</code> (run as root, same HOME as the service).</li>
+  <li>RCA shows summary, root cause, confidence, evidence references, suggested action, rollback and missing information; it is display-only and never executed automatically.</li>
+  <li>"Allowed actions" comes from the Playbook or the latest release record; running one requires the login password and the result is written back to the timeline.</li>
+  <li>Resolved metric/service incidents generate postmortem cards with "View postmortem"; SSL incidents are recorded but do not generate a postmortem automatically.</li>
+</ol>
+<p class="help-tip">A rollback command can only come from a release record; without one, only a suggestion is shown.</p>
 
 <h3 id="security">Tools &amp; Security</h3>
 ${FIG.confirm}

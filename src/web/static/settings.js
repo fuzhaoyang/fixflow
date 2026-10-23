@@ -553,6 +553,7 @@ document.getElementById("proc-confirm").onclick = async () => {
   const isNginxSave = kind === "nginx-save";
   const isNginxOp = kind === "nginx-op";
   const isFs = kind === "fs";
+  const isIncidentAction = kind === "incident-action";
   const isSys = kind === "sys";
   const isDockerOp = kind === "docker-op";
   const isDockerPrune = kind === "docker-prune";
@@ -613,6 +614,15 @@ document.getElementById("proc-confirm").onclick = async () => {
       procMask.classList.remove("show");
       showSaveMsg(t("fw.batchDone").replace("{n}", procTarget.items.length), "ok");
       refreshMetrics();
+      return;
+    }
+    if (isIncidentAction) {
+      const r2 = await fetch(`api/incidents/${encodeURIComponent(procTarget.incidentId)}/action`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: procTarget.action, password }) });
+      const d2 = await r2.json().catch(() => ({}));
+      if (r2.status === 403 || r2.status === 400) { errEl.textContent = d2.error || t("op.fail"); return; }
+      procMask.classList.remove("show");
+      showSaveMsg(d2.ok ? t("incident.actionDone") : t("incident.actionFail"), d2.ok ? "ok" : "bad");
+      if (typeof refreshIncidentDetail === "function") refreshIncidentDetail(procTarget.incidentId);
       return;
     }
     if (isFs && fsOp === "upload") {
@@ -1287,7 +1297,7 @@ function renderMaIncidents() {
           <span class="alert-title">P${escapeHtml(i.level)} ${escapeHtml(ruleName(i.ruleId))} · ${escapeHtml(i.id)}</span>
           <span class="alert-sub">${t("alert.curFmt").replace("{v}", escapeHtml(i.lastValue)).replace("{p}", escapeHtml(i.peak)).replace("{t}", escapeHtml(new Date(i.startedAt).toLocaleString()))}</span>
         </div>
-        ${i.state === "firing" ? `<span class="proc-ops"><a href="javascript:void(0)" data-ma-ack="${escapeHtml(i.id)}">${t("alert.claim")}</a></span>` : ""}
+        ${i.state === "firing" ? `<span class="proc-ops"><a href="javascript:void(0)" data-ma-ack="${escapeHtml(i.id)}">${t("alert.claim")}</a></span>` : i.state === "resolved" && i.retroId ? `<span class="proc-ops"><a href="javascript:void(0)" data-ma-retro="${escapeHtml(i.retroId)}">${t("alert.viewRetro")}</a></span>` : ""}
       </div>`).join("");
   renderPager(document.getElementById("ma-incidents-pager"), incs.length, maIncPage, (p) => { maIncPage = p; renderMaIncidents(); });
 }
@@ -1398,6 +1408,8 @@ document.getElementById("ma-rules").addEventListener("click", async (e) => {
 });
 
 document.getElementById("ma-incidents").addEventListener("click", async (e) => {
+  const retro = e.target.closest("[data-ma-retro]");
+  if (retro) { openRetroById(retro.dataset.maRetro); return; }
   const a = e.target.closest("[data-ma-ack]");
   if (!a) return;
   await fetch("api/metric-alerts/ack", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: a.dataset.maAck }) });

@@ -53,6 +53,7 @@ export const HELP_TEXT = `=== Fixflow 帮助 ===
    fixflow web             启动网页面板
    fixflow default         查看面板访问地址（忘记端口 / 入口时用）
    fixflow doctor          自检（Node / 配置 / 模型连通 / 面板服务）
+   fixflow deploy-note     记录一次发布（--service / --version / --commit / --rollback）
    fixflow restart         重启面板服务
    fixflow reset-password  重置面板登录密码
    fixflow uninstall       卸载（停止服务 + 卸载全局包，配置保留）

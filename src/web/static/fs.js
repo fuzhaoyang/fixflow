@@ -530,6 +530,9 @@ function connectStream() {
     } else if (ev.type === "clear") {
       clearHistory();
       addSimpleMsg(t("chat.cleared"), "system");
+    } else if (ev.type === "incidents") {
+      if (document.getElementById("view-incidents")?.style.display !== "none" && typeof loadIncidents === "function") loadIncidents();
+      if (document.getElementById("view-retros")?.style.display !== "none" && typeof loadRetros === "function") loadRetros();
     } else if (ev.type === "done") {
       finishStreaming();
       attachTurnFooter({ source: ev.source || "model", usage: ev.usage });

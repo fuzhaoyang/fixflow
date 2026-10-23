@@ -232,6 +232,8 @@
       <button class="menu-item" data-view="monitor" data-filter="ssl" title="SSL 证书" data-i18n="menu.ssl" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.ssl">SSL 证书</span></button>
       <button class="menu-item" data-view="monitor" data-filter="systemd" title="服务" data-i18n="menu.systemd" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="10" width="18" height="5" rx="1.5"/><rect x="3" y="16" width="18" height="4" rx="1.5"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.systemd">服务</span></button>
       <button class="menu-item" data-view="logs" title="日志" data-i18n="menu.logs" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14v12H5z"/><path d="M8 10l2.5 2.5L8 15M13 15h3"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.logs">日志</span></button>
+      <button class="menu-item" data-view="retros" title="复盘" data-i18n="menu.retros" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.retros">复盘</span></button>
+      <button class="menu-item" data-view="incidents" title="事件" data-i18n="menu.incidents" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><path d="M12 9v5M12 17h.01"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.incidents">事件</span></button>
       <button class="menu-item" data-view="store" title="软件商店" data-i18n="menu.store" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6-9 6-9-6z"/><path d="M3 9v6l9 6 9-6V9"/><path d="M12 9v6"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.store">软件商店</span></button>
       <div class="group" data-group="actions"><svg class="group-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg><span data-i18n="group.actions">操作</span></div>
       <button class="menu-item" data-view="chat" title="Agent 对话" data-i18n="menu.chat" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/></svg></span><span class="menu-label" data-i18n="menu.chat">Agent 对话</span></button>
@@ -472,6 +474,15 @@
           <span id="audit-pager-nav"></span>
         </div>
       </div>
+    </div>
+    <div class="content retro-view" id="view-retros" style="display:none">
+      <div class="retro-toolbar"><input id="retro-search" type="text" placeholder="搜索复盘…" data-i18n="retro.search" data-i18n-attr="placeholder"><span class="retro-count" id="retro-count"></span></div>
+      <div class="retro-grid" id="retro-grid"></div>
+      <div class="retro-pager" id="retro-pager"></div>
+    </div>
+    <div class="content incident-view" id="view-incidents" style="display:none">
+      <div class="retro-toolbar"><input id="incident-search" type="text" placeholder="搜索事件…" data-i18n="incident.search" data-i18n-attr="placeholder"><button class="btn small" id="incident-refresh" data-i18n="incident.refresh">刷新</button><button class="btn small" id="incident-playbook-btn" data-i18n="pb.button">Playbook</button><span class="retro-count" id="incident-count"></span></div>
+      <div class="incident-list" id="incident-list"></div>
     </div>
     <div class="content store-view" id="view-store">
       <div class="store-toolbar">
@@ -993,6 +1004,47 @@ Nginx 配置有问题吗，帮我看看
   <span data-i18n="ai.title">提问AI？</span>
 </button>
 
+<div class="modal-mask" id="pb-mask">
+  <div class="modal pb-modal">
+    <button class="modal-close" id="pb-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2 data-i18n="pb.title">Playbook 管理</h2>
+    <div class="pb-layout">
+      <div class="pb-services">
+        <button class="btn small" id="pb-add-service" data-i18n="pb.addService">+ 新增服务</button>
+        <div id="pb-service-list"></div>
+      </div>
+      <div class="pb-form" id="pb-form"></div>
+    </div>
+    <div class="hint" id="pb-error" style="color:var(--bad)"></div>
+    <div class="modal-actions">
+      <button class="btn" id="pb-cancel" data-i18n="pb.cancel">取消</button>
+      <button class="btn" id="pb-save" data-i18n="pb.save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="incident-mask">
+  <div class="modal incident-modal">
+    <button class="modal-close" id="incident-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <div id="incident-body" class="incident-body"></div>
+    <div class="modal-actions">
+      <button class="btn" id="incident-retro" style="display:none" data-i18n="incident.viewRetro">查看复盘</button>
+      <button class="btn" id="incident-close2" data-i18n="retro.close">关闭</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="retro-mask">
+  <div class="modal retro-modal">
+    <button class="modal-close" id="retro-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <div id="retro-md" class="bubble bot retro-md"></div>
+    <div class="modal-actions">
+      <a class="btn retro-download" id="retro-download" href="#" download data-i18n="retro.download">下载 MD</a>
+      <button class="btn" id="retro-close2" data-i18n="retro.close">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-mask" id="kb-mask">
   <div class="modal">
     <button class="modal-close" id="kb-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
@@ -1050,5 +1102,7 @@ Nginx 配置有问题吗，帮我看看
 <script src="settings.js?v=6"></script>
 <script src="appman.js?v=6"></script>
 <script src="kb.js?v=7"></script>
+<script src="retros.js?v=7"></script>
+<script src="incidents.js?v=7"></script>
 </body>
 </html>

@@ -23,6 +23,26 @@ process.on("uncaughtException", (err) => {
 
 const [cmd] = process.argv.slice(2);
 
+if (cmd === "deploy-note") {
+  const args = process.argv.slice(3);
+  const opt = {};
+  for (let i = 0; i < args.length; i++) {
+    if (args[i].startsWith("--")) { opt[args[i].slice(2)] = args[i + 1] ?? ""; i++; }
+  }
+  const service = opt.service || args[0] || "";
+  const version = opt.version || args[1] || "";
+  if (!service) {
+    console.log('用法: fixflow deploy-note --service <name> [--version <v>] [--commit <sha>] [--rollback "<command>"]');
+    process.exit(1);
+  }
+  const { addDeployment } = await import("../src/deployments.js");
+  const { homedir } = await import("node:os");
+  const { join } = await import("node:path");
+  await addDeployment(join(homedir(), ".config", "fixflow", "deployments.jsonl"), { service, version, commit: opt.commit || "", rollback: opt.rollback || "" });
+  console.log(`✓ 已记录发布：${service} ${version || ""}`.trim());
+  process.exit(0);
+}
+
 if (cmd === "--version" || cmd === "-v") {
   const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
   console.log(version);
