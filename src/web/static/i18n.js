@@ -522,6 +522,8 @@ chat: `<img class="help-fig" src="fig/chat.png" alt="">`,
 fs: `<img class="help-fig" src="fig/fs.png" alt="">`,
 alerts: `<img class="help-fig" src="fig/alerts.png" alt="">`,
 settings: `<img class="help-fig" src="fig/settings.png" alt="">`,
+knowledge: `<img class="help-fig" src="fig/knowledge.png" alt="">`,
+knowledgeFooter: `<img class="help-fig" src="fig/knowledge-footer.png" alt="">`,
 account: `<img class="help-fig" src="fig/account.png" style="width:30%" alt="">`,
 confirm: `<svg class="help-fig" viewBox="0 0 620 180" role="img">
   <rect x="15" y="40" width="170" height="100" rx="12" class="fg-panel"/>
@@ -722,6 +724,7 @@ ${FIG.chat}
   <li>会改动系统的操作会弹「变更审批单」，展示命令与影响，确认后才执行。</li>
   <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输登录密码。</li>
   <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
+  <li>聊天窗右上角「知识库」可配置知识库；运维 / 产品知识问题会优先查询知识库。</li>
 </ol>
 <p class="help-tip">任务运行中可随时停止生成 / 中断任务；请勿在审批单未读清前点确认。</p>
 
@@ -746,6 +749,27 @@ ${FIG.settings}
   <li>可配置面板内存上限、重启服务、退出登录。</li>
 </ol>
 
+<h3 id="knowledge">知识库</h3>
+<h4 id="kb-config">接入配置</h4>
+${FIG.knowledge}
+<ol>
+  <li>聊天窗右上角点「知识库」打开配置弹窗。</li>
+  <li>填写<b>知识库完整地址</b>（域名 + 接口路径，例如 <code>http://localhost:8000/api/ask/stream</code>）和 <b>Token</b>（请求头 <code>X-API-Key</code>）。</li>
+  <li>保存后自动测试连通性；测试会等待知识库返回，超时默认 60 秒，可在弹窗里调整（最大 300 秒）。</li>
+  <li>Token 只保存在服务端 <code>config.json</code>，面板接口只返回掩码；留空保存时保留原 Token。</li>
+  <li>未命中关键词默认「未找到相关信息」；知识库返回文案变化时可在这里调整。</li>
+</ol>
+<h4 id="kb-flow">问答流程与页脚</h4>
+${FIG.knowledgeFooter}
+<ol>
+  <li>只有判断为运维 / 产品知识问题时才先查知识库（按关键词识别，你好 / 谢谢等寒暄不会触发）。</li>
+  <li><b>命中</b>：直接展示知识库回答，气泡内显示「来源：知识库」和免责声明；不显示 token 消耗。</li>
+  <li><b>未命中</b>：自动回到现有模型 / 工具流程（不会额外联网搜索）；模型回答气泡内显示本次 token、来源「模型生成」和免责声明。</li>
+  <li>知识库返回的来源标题列在「来源」下；只有返回了 URL 才会渲染成可点击链接。</li>
+  <li>知识库请求失败或超时不会阻塞聊天，会自动降级到模型。</li>
+</ol>
+<p class="help-tip">页脚只用于展示，不会写回模型上下文；刷新页面后仍会保留。</p>
+
 <h3 id="security">工具与安全</h3>
 ${FIG.confirm}
 <table>
@@ -759,7 +783,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">配置与进阶</h3>
 <ul>
-  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>。</li>
+  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
   <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
   <li>面板监听 <code>0.0.0.0</code>，用「随机端口 + 随机入口路径」保护（无入口前缀的请求返回 404）；启动时会尝试自动放行本机防火墙端口。可用 nginx 反代绑定域名，或启用内置 HTTPS（自签证书）。</li>
   <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
@@ -790,6 +814,8 @@ ${FIG.confirm}
   <tr><td>软件商店搜索无结果</td><td>确认软件源可用（<code>apt update</code> 或对应包管理器刷新源）后再试</td></tr>
   <tr><td>如何彻底重置</td><td><code>rm -rf ~/.config/fixflow</code> 后重新运行 <code>fixflow</code>（会清空全部配置与历史）</td></tr>
   <tr><td>如何卸载</td><td><code>fixflow uninstall</code>：停服务 + 卸载全局包，配置保留</td></tr>
+  <tr><td>知识库测试超时</td><td>确认知识库地址 / Token 和知识库服务可达；可在知识库弹窗调大超时（默认 60 秒）</td></tr>
+  <tr><td>知识库有内容但仍走模型</td><td>问题可能未命中运维关键词，或「未命中关键词」与知识库返回文案不一致</td></tr>
 </table>
 
 `;
@@ -973,6 +999,7 @@ ${FIG.chat}
   <li>System-changing operations pop a "change approval form" showing the commands and impact — confirm before it runs.</li>
   <li>Sensitive actions (close a port, change config, write files, renew certs…) also require re-entering the login password.</li>
   <li>"Clear history" above the input resets the session; "Terminal" opens the built-in terminal on the right.</li>
+  <li>The "Knowledge Base" button at the top-right of the chat window configures the KB; ops / product-knowledge questions query it first.</li>
 </ol>
 <p class="help-tip">You can stop generation / interrupt a task anytime; don't confirm an approval form before reading it.</p>
 
@@ -997,6 +1024,27 @@ ${FIG.settings}
   <li>Also configure the panel memory limit, restart the service, or log out.</li>
 </ol>
 
+<h3 id="knowledge">Knowledge Base</h3>
+<h4 id="kb-config">Configuration</h4>
+${FIG.knowledge}
+<ol>
+  <li>Click "Knowledge Base" at the top-right of the chat window.</li>
+  <li>Enter the <b>full URL</b> (domain + API path, e.g. <code>http://localhost:8000/api/ask/stream</code>) and the <b>Token</b> (sent as the <code>X-API-Key</code> header).</li>
+  <li>Saving tests connectivity automatically; the test waits for the KB to respond. The default timeout is 60 seconds and can be changed in the dialog (max 300).</li>
+  <li>The token is stored only on the server in <code>config.json</code>; the panel API returns a masked value. Leave it blank when saving to keep the current token.</li>
+  <li>The default miss keyword is "未找到相关信息"; adjust it here if the KB changes its miss message.</li>
+</ol>
+<h4 id="kb-flow">Query Flow &amp; Footer</h4>
+${FIG.knowledgeFooter}
+<ol>
+  <li>The KB is queried first only for ops / product-knowledge questions (keyword-based; greetings such as hello / thanks are skipped).</li>
+  <li><b>Hit</b>: the KB answer is shown directly, with "Source: Knowledge base" and the disclaimer inside the bubble. No token count is shown.</li>
+  <li><b>Miss</b>: the existing model / tool flow runs instead (no extra web search). The model answer's bubble shows the turn's tokens, "Source: Model generated" and the disclaimer.</li>
+  <li>Source titles returned by the KB are listed under "Source"; they become clickable links only when the KB returns a URL.</li>
+  <li>KB failures or timeouts never block the chat — it falls back to the model automatically.</li>
+</ol>
+<p class="help-tip">The footer is display-only and is never written back into the model context; it is kept after a page refresh.</p>
+
 <h3 id="security">Tools &amp; Security</h3>
 ${FIG.confirm}
 <table>
@@ -1010,7 +1058,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">Configuration &amp; Advanced</h3>
 <ul>
-  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code>.</li>
+  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
   <li>Environment variables override: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
   <li>The panel listens on <code>0.0.0.0</code> and is protected by a "random port + random entry path" (requests without the entry prefix get 404); it tries to open the port in the local firewall on startup. You can reverse-proxy with nginx to a domain, or enable built-in HTTPS (self-signed).</li>
   <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; logs at <code>~/.config/fixflow/cli.log</code>.</li>
@@ -1041,6 +1089,8 @@ ${FIG.confirm}
   <tr><td>Store search returns nothing</td><td>Make sure the package sources are fresh (e.g. <code>apt update</code>) and try again</td></tr>
   <tr><td>How to fully reset</td><td><code>rm -rf ~/.config/fixflow</code> then run <code>fixflow</code> again (wipes all config and history)</td></tr>
   <tr><td>How to uninstall</td><td><code>fixflow uninstall</code>: stop service + remove global package, keep config</td></tr>
+  <tr><td>KB test times out</td><td>Check the KB URL / token and that the service is reachable; increase the timeout in the KB dialog (default 60s)</td></tr>
+  <tr><td>KB has content but the model answers</td><td>The question may not match ops keywords, or the "miss keyword" doesn't match the KB's message</td></tr>
 </table>
 
 `;
