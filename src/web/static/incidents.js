@@ -3,6 +3,16 @@ const incidentSearch = document.getElementById("incident-search");
 const incidentRefresh = document.getElementById("incident-refresh");
 const incidentCount = document.getElementById("incident-count");
 const incidentList = document.getElementById("incident-list");
+const incidentPager = document.getElementById("incident-pager");
+const incidentSelectAll = document.getElementById("incident-select-all");
+const incidentDeleteBtn = document.getElementById("incident-delete-btn");
+const incidentDeleteMask = document.getElementById("incident-delete-mask");
+const incidentDeleteText = document.getElementById("incident-delete-text");
+const incidentDeletePw = document.getElementById("incident-delete-password");
+const incidentDeleteErr = document.getElementById("incident-delete-err");
+const incidentDeleteClose = document.getElementById("incident-delete-close");
+const incidentDeleteCancel = document.getElementById("incident-delete-cancel");
+const incidentDeleteConfirm = document.getElementById("incident-delete-confirm");
 const incidentMask = document.getElementById("incident-mask");
 const incidentBody = document.getElementById("incident-body");
 const incidentRetro = document.getElementById("incident-retro");
@@ -12,6 +22,10 @@ const incidentClose2 = document.getElementById("incident-close2");
 let incidentItems = [];
 let incidentQuery = "";
 let incidentDetail = null;
+let incidentPage = 1;
+const INCIDENT_PAGE_SIZE = 5;
+let incidentSelected = new Set();
+let incidentDeleteIds = [];
 
 const incTime = (ts) => {
   const d = new Date(ts);
@@ -25,17 +39,59 @@ const incTimeShort = (ts) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 };
 
-function renderIncidents() {
+function incidentFiltered() {
   const q = incidentQuery.trim().toLowerCase();
-  const list = q ? incidentItems.filter((i) => [i.title, i.service, i.host, i.alertname].join(" ").toLowerCase().includes(q)) : incidentItems;
-  if (incidentCount) incidentCount.textContent = t("incident.count").replace("{n}", list.length);
-  if (!list.length) { incidentList.innerHTML = `<div class="retro-empty">${escapeHtml(t("incident.empty"))}</div>`; return; }
-  incidentList.innerHTML = list.map((i) => `<div class="incident-card" data-incident="${escapeHtml(i.id)}">
-    <div class="retro-card-head"><span class="tag ${i.severity <= 2 ? "bad" : "warn"}">P${escapeHtml(i.severity)}</span><span class="tag ${i.status === "resolved" ? "ok" : "bad"}">${escapeHtml(incStatus(i.status))}</span></div>
+  return q ? incidentItems.filter((i) => [i.title, i.service, i.host, i.alertname].join(" ").toLowerCase().includes(q)) : incidentItems;
+}
+
+function incidentPageItems() {
+  return incidentFiltered().slice((incidentPage - 1) * INCIDENT_PAGE_SIZE, incidentPage * INCIDENT_PAGE_SIZE);
+}
+
+function updateIncidentSelection(items = incidentPageItems()) {
+  const ids = items.map((i) => i.id);
+  const selected = ids.filter((id) => incidentSelected.has(id)).length;
+  if (incidentSelectAll) {
+    incidentSelectAll.checked = ids.length > 0 && selected === ids.length;
+    incidentSelectAll.indeterminate = selected > 0 && selected < ids.length;
+  }
+  if (incidentDeleteBtn) {
+    incidentDeleteBtn.disabled = incidentSelected.size === 0;
+    incidentDeleteBtn.textContent = t("incident.deleteSelected") + (incidentSelected.size ? ` (${incidentSelected.size})` : "");
+  }
+}
+
+function renderIncidentPager(pages) {
+  if (!incidentPager) return;
+  if (pages <= 1) { incidentPager.innerHTML = ""; return; }
+  incidentPager.innerHTML = `<button class="btn small" data-inc-page="prev" ${incidentPage <= 1 ? "disabled" : ""}>‹</button><span>${incidentPage}/${pages}</span><button class="btn small" data-inc-page="next" ${incidentPage >= pages ? "disabled" : ""}>›</button>`;
+}
+
+function renderIncidents() {
+  const list = incidentFiltered();
+  const pages = Math.max(1, Math.ceil(list.length / INCIDENT_PAGE_SIZE));
+  if (incidentPage > pages) incidentPage = pages;
+  if (incidentPage < 1) incidentPage = 1;
+  if (incidentCount) incidentCount.textContent = `${t("incident.count").replace("{n}", list.length)} · ${t("incident.page").replace("{p}", incidentPage).replace("{n}", pages)}`;
+  if (!list.length) {
+    incidentList.innerHTML = `<div class="retro-empty">${escapeHtml(t("incident.empty"))}</div>`;
+    if (incidentPager) incidentPager.innerHTML = "";
+    updateIncidentSelection([]);
+    return;
+  }
+  const items = list.slice((incidentPage - 1) * INCIDENT_PAGE_SIZE, incidentPage * INCIDENT_PAGE_SIZE);
+  incidentList.innerHTML = items.map((i) => `<div class="incident-card" data-incident="${escapeHtml(i.id)}">
+    <div class="retro-card-head">
+      <label class="incident-check"><input type="checkbox" data-inc-select="${escapeHtml(i.id)}" ${incidentSelected.has(i.id) ? "checked" : ""}></label>
+      <span class="incident-tags"><span class="tag ${i.severity <= 2 ? "bad" : "warn"}">P${escapeHtml(i.severity)}</span><span class="tag ${i.status === "resolved" ? "ok" : "bad"}">${escapeHtml(incStatus(i.status))}</span></span>
+      <button class="btn small danger incident-del" data-inc-del="${escapeHtml(i.id)}">${escapeHtml(t("incident.delete"))}</button>
+    </div>
     <div class="retro-card-title">${escapeHtml(i.title)}</div>
     <div class="retro-card-meta">${escapeHtml(i.service)} · ${escapeHtml(i.host)} · ${escapeHtml(incTimeShort(i.startedAt))} · ${escapeHtml(t("incident.statusLabel").replace("{s}", incStatus(i.status)))}</div>
     <div class="retro-card-summary">${escapeHtml(i.rcaSummary || t("incident.pending"))}</div>
   </div>`).join("");
+  renderIncidentPager(pages);
+  updateIncidentSelection(items);
 }
 
 async function loadIncidents() {
@@ -44,6 +100,8 @@ async function loadIncidents() {
     const data = await res.json();
     incidentItems = data.incidents || [];
   } catch { incidentItems = []; }
+  const ids = new Set(incidentItems.map((i) => i.id));
+  incidentSelected = new Set([...incidentSelected].filter((id) => ids.has(id)));
   renderIncidents();
 }
 
@@ -99,11 +157,64 @@ function incidentAskPassword(action) {
 }
 
 
+function askIncidentDelete(ids) {
+  incidentDeleteIds = ids.filter(Boolean);
+  if (!incidentDeleteIds.length) return;
+  incidentDeleteText.textContent = t("incident.deleteText").replace("{n}", incidentDeleteIds.length);
+  incidentDeleteErr.textContent = "";
+  incidentDeletePw.value = "";
+  incidentDeleteMask.classList.add("show");
+  setTimeout(() => incidentDeletePw.focus(), 50);
+}
+
+async function confirmIncidentDelete() {
+  const password = incidentDeletePw.value.trim();
+  if (!password) { incidentDeleteErr.textContent = t("incident.rootPwdRequired"); return; }
+  incidentDeleteConfirm.disabled = true;
+  try {
+    const res = await fetch("api/incidents", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: incidentDeleteIds, password }) });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 403 || res.status === 400) { incidentDeleteErr.textContent = data.error || t("incident.deleteFail"); return; }
+    for (const id of incidentDeleteIds) incidentSelected.delete(id);
+    incidentDeleteMask.classList.remove("show");
+    if (typeof showSaveMsg === "function") showSaveMsg(t("incident.deleted").replace("{n}", data.deleted ?? incidentDeleteIds.length), "ok");
+    await loadIncidents();
+  } finally {
+    incidentDeleteConfirm.disabled = false;
+  }
+}
+
+if (incidentDeleteClose) incidentDeleteClose.onclick = () => incidentDeleteMask.classList.remove("show");
+if (incidentDeleteCancel) incidentDeleteCancel.onclick = () => incidentDeleteMask.classList.remove("show");
+if (incidentDeleteConfirm) incidentDeleteConfirm.onclick = confirmIncidentDelete;
+if (incidentDeletePw) incidentDeletePw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); confirmIncidentDelete(); } });
+if (incidentDeleteMask) incidentDeleteMask.addEventListener("click", (e) => { if (e.target === incidentDeleteMask) incidentDeleteMask.classList.remove("show"); });
 if (incidentRefresh) incidentRefresh.onclick = loadIncidents;
-if (incidentSearch) incidentSearch.addEventListener("input", () => { incidentQuery = incidentSearch.value; renderIncidents(); });
+if (incidentSearch) incidentSearch.addEventListener("input", () => { incidentQuery = incidentSearch.value; incidentPage = 1; renderIncidents(); });
 if (incidentList) incidentList.addEventListener("click", (e) => {
+  const del = e.target.closest("[data-inc-del]");
+  if (del) { e.stopPropagation(); askIncidentDelete([del.dataset.incDel]); return; }
+  const cb = e.target.closest("[data-inc-select]");
+  if (cb) {
+    e.stopPropagation();
+    if (cb.checked) incidentSelected.add(cb.dataset.incSelect); else incidentSelected.delete(cb.dataset.incSelect);
+    updateIncidentSelection();
+    return;
+  }
   const card = e.target.closest("[data-incident]");
   if (card) openIncident(card.dataset.incident);
+});
+if (incidentSelectAll) incidentSelectAll.addEventListener("change", () => {
+  const ids = incidentPageItems().map((i) => i.id);
+  for (const id of ids) { if (incidentSelectAll.checked) incidentSelected.add(id); else incidentSelected.delete(id); }
+  renderIncidents();
+});
+if (incidentDeleteBtn) incidentDeleteBtn.onclick = () => askIncidentDelete([...incidentSelected]);
+if (incidentPager) incidentPager.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-inc-page]");
+  if (!b) return;
+  incidentPage += b.dataset.incPage === "next" ? 1 : -1;
+  renderIncidents();
 });
 if (incidentBody) incidentBody.addEventListener("click", (e) => {
   if (e.target.closest("[data-open-playbooks]")) { openPlaybooks(); return; }
@@ -116,7 +227,7 @@ if (incidentClose) incidentClose.onclick = () => incidentMask.classList.remove("
 if (incidentClose2) incidentClose2.onclick = () => incidentMask.classList.remove("show");
 if (incidentMask) incidentMask.addEventListener("click", (e) => { if (e.target === incidentMask) incidentMask.classList.remove("show"); });
 if (incidentRetro) incidentRetro.onclick = () => { if (incidentDetail?.retroId) { incidentMask.classList.remove("show"); openRetroById(incidentDetail.retroId); } };
-document.addEventListener("keydown", (e) => { if (e.key === "Escape") incidentMask?.classList.remove("show"); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") { incidentMask?.classList.remove("show"); incidentDeleteMask?.classList.remove("show"); } });
 if (location.hash === "#/incidents") loadIncidents();
 
 // ---------- Playbook 可视化配置 ----------

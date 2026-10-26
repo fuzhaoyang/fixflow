@@ -22,11 +22,11 @@ import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPasswor
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
-import { verifySudo, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
+import { verifySudo, verifyAdminPassword, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
 import { detectPkgManager, resolvePkgName, listInstalledCmd, parseInstalledNames, searchCmd, parseSearch, versionsCmd, parseVersions, installCmd, uninstallCmd, withPmLock, pmErrorHint } from "../pkgs.js";
 import { normalizeKnowledge, isOpsQuestion, queryKnowledge, testKnowledge, maskToken, formatKbAnswer } from "../kb.js";
-import { createRetroFromIncident, readRetros, retroFilename } from "../retros.js";
-import { createOrMergeIncidents, listIncidents, getIncident, addEvidence, setIncidentRca, setRetroId, updateIncident } from "../incidents.js";
+import { createRetroFromIncident, readRetros, retroFilename, deleteRetros } from "../retros.js";
+import { createOrMergeIncidents, listIncidents, getIncident, addEvidence, setIncidentRca, setRetroId, updateIncident, deleteIncidents } from "../incidents.js";
 import { collectEvidence, normalizePlaybooks } from "../incidents-playbook.js";
 import { analyzeIncident } from "../incidents-rca.js";
 import { addDeployment, readDeployments } from "../deployments.js";
@@ -330,6 +330,23 @@ export async function startWeb(config = {}, deps = {}) {
     turnUsage.completionTokens += u.completionTokens || 0;
   };
   const configPath = config.configPath || defaultConfigPath();
+  const userNameForUid = async (uid) => {
+    const r = await runCommand(`id -nu ${Number(uid)} 2>/dev/null`).catch(() => null);
+    const name = String(r?.stdout || "").trim();
+    return name && name !== "root" ? name : "";
+  };
+  const resolveAdminUser = async () => {
+    if (config.adminUser) return String(config.adminUser);
+    if (process.env.SUDO_USER) return process.env.SUDO_USER;
+    const st = await lstat(configPath).catch(() => null);
+    if (st) { const name = await userNameForUid(st.uid); if (name) return name; }
+    const home = process.env.HOME || "";
+    if (home) {
+      const hs = await lstat(home).catch(() => null);
+      if (hs) { const name = await userNameForUid(hs.uid); if (name) return name; }
+    }
+    return "";
+  };
   const historyPath = config.historyPath || defaultHistoryPath();
   const termHistoryPath = config.termHistoryPath || defaultTermHistoryPath();
   const panelAuditPath = config.panelAuditPath || defaultPanelAuditPath();
@@ -1078,6 +1095,17 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/incidents" && req.method === "GET") {
         const items = (await listIncidents(incidentsPath)).map(({ evidence, rca, actions, ...rest }) => ({ ...rest, evidenceCount: (evidence || []).length, rcaSummary: rca?.summary || "" }));
         sendJson(res, { incidents: items });
+      } else if (url.pathname === "/api/incidents" && req.method === "DELETE") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(String).filter(Boolean).slice(0, 500);
+        if (!ids.length) { sendJson(res, { error: "请选择要删除的事件" }, 400); return; }
+        const adminUser = await resolveAdminUser();
+        if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
+        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误，删除未执行" }, 403); return; }
+        const r = await deleteIncidents({ filePath: incidentsPath, ids });
+        for (const id of ids) incidentAnalyses.delete(id);
+        broadcast({ type: "incidents" });
+        sendJson(res, { ok: true, deleted: r.deleted });
       } else if (url.pathname.startsWith("/api/incidents/") && req.method === "GET") {
         const id = decodeURIComponent(url.pathname.slice("/api/incidents/".length));
         const inc = await getIncident(incidentsPath, id);
@@ -1108,6 +1136,22 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/retros" && req.method === "GET") {
         const cards = (await readRetros(retrosPath)).map(({ markdown, ...card }) => card);
         sendJson(res, { cards });
+      } else if (url.pathname === "/api/retros" && req.method === "DELETE") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(String).filter(Boolean).slice(0, 500);
+        if (!ids.length) { sendJson(res, { error: "请选择要删除的复盘" }, 400); return; }
+        const adminUser = await resolveAdminUser();
+        if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
+        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误，删除未执行" }, 403); return; }
+        const r = await deleteRetros({ filePath: retrosPath, ids });
+        const deleted = new Set(ids);
+        for (const inc of await listIncidents(incidentsPath)) {
+          if (inc.retroId && deleted.has(inc.retroId)) {
+            await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => { x.retroId = null; x.timeline.push({ ts: Date.now(), text: "复盘已删除" }); } });
+          }
+        }
+        broadcast({ type: "incidents" });
+        sendJson(res, { ok: true, deleted: r.deleted });
       } else if (url.pathname.startsWith("/api/retros/") && req.method === "GET") {
         const rest = decodeURIComponent(url.pathname.slice("/api/retros/".length));
         const download = rest.endsWith("/download");

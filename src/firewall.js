@@ -16,6 +16,21 @@ export async function verifySudo(password, { run = runCommand, getuid } = {}) {
   return r.exitCode === 0;
 }
 
+const shellQuote = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
+
+// 校验管理员密码：panel 以 root 运行时，降权到管理员账号再走 sudo，避免 root→root 免密
+export async function verifyAdminPassword(password, { run = runCommand, getuid, user } = {}) {
+  if (!password) return false;
+  if (isRoot(getuid)) {
+    const u = String(user || process.env.SUDO_USER || "").trim();
+    if (!u) return false;
+    const r = await run(`echo ${shellQuote(password)} | runuser -u ${shellQuote(u)} -- sudo -S -p '' true 2>/dev/null`);
+    return r.exitCode === 0;
+  }
+  const r = await run(`echo ${shellQuote(password)} | sudo -S -p '' true 2>/dev/null`);
+  return r.exitCode === 0;
+}
+
 // 以 root 权限执行命令：root 进程直跑，非 root 走 sudo -S（密码经 stdin）
 export function sudoCmd(cmd, password, getuid) {
   if (isRoot(getuid)) return cmd;

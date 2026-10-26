@@ -1256,3 +1256,18 @@
     html[data-theme="light"] .auto-code-head::before { background: #16a34a; }
     html[data-theme="light"] .auto-script, html[data-theme="light"] .auto-chat-script { color: #0f1a2b; }
     .auto-chat-card-actions { display: flex; justify-content: flex-end; }
+
+    /* ---------- 事件列表：分页与删除 ---------- */
+    #view-incidents .retro-toolbar { flex-wrap: wrap; }
+    .inc-select-all { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+    .incident-check { display: flex; align-items: center; }
+    .incident-tags { display: flex; align-items: center; gap: 6px; margin-right: auto; margin-left: 8px; }
+    .incident-del { margin-left: 8px; }
+    .incident-pager { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0; font-size: 12px; color: var(--muted); }
+    .incident-pager .btn { min-width: 28px; }
+
+    /* ---------- 复盘列表：批量删除 ---------- */
+    #view-retros .retro-toolbar { flex-wrap: wrap; }
+    .retro-check { display: flex; align-items: center; }
+    .retro-card-date { margin-left: auto; }
+    .retro-del { margin-left: 8px; }

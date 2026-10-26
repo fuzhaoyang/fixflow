@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title data-i18n="app.title">Fixflow 服务器运维面板</title>
-  <link rel="stylesheet" href="app.css?v=12">
+  <link rel="stylesheet" href="app.css?v=14">
 </head>
 <body>
 <script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
@@ -488,13 +488,14 @@
       </div>
     </div>
     <div class="content retro-view" id="view-retros" style="display:none">
-      <div class="retro-toolbar"><input id="retro-search" type="text" placeholder="搜索复盘…" data-i18n="retro.search" data-i18n-attr="placeholder"><span class="retro-count" id="retro-count"></span></div>
+      <div class="retro-toolbar"><input id="retro-search" type="text" placeholder="搜索复盘…" data-i18n="retro.search" data-i18n-attr="placeholder"><label class="inc-select-all"><input type="checkbox" id="retro-select-all"><span data-i18n="retro.selectAll">全选本页</span></label><button class="btn small danger" id="retro-delete-btn" disabled data-i18n="retro.deleteSelected">删除所选</button><span class="retro-count" id="retro-count"></span></div>
       <div class="retro-grid" id="retro-grid"></div>
       <div class="retro-pager" id="retro-pager"></div>
     </div>
     <div class="content incident-view" id="view-incidents" style="display:none">
-      <div class="retro-toolbar"><input id="incident-search" type="text" placeholder="搜索事件…" data-i18n="incident.search" data-i18n-attr="placeholder"><button class="btn small" id="incident-refresh" data-i18n="incident.refresh">刷新</button><button class="btn small" id="incident-playbook-btn" data-i18n="pb.button">Playbook</button><span class="retro-count" id="incident-count"></span></div>
+      <div class="retro-toolbar"><input id="incident-search" type="text" placeholder="搜索事件…" data-i18n="incident.search" data-i18n-attr="placeholder"><button class="btn small" id="incident-refresh" data-i18n="incident.refresh">刷新</button><button class="btn small" id="incident-playbook-btn" data-i18n="pb.button">Playbook</button><label class="inc-select-all"><input type="checkbox" id="incident-select-all"><span data-i18n="incident.selectAll">全选本页</span></label><button class="btn small danger" id="incident-delete-btn" disabled data-i18n="incident.deleteSelected">删除所选</button><span class="retro-count" id="incident-count"></span></div>
       <div class="incident-list" id="incident-list"></div>
+      <div class="incident-pager" id="incident-pager"></div>
     </div>
     <div class="content auto-view" id="view-automations" style="display:none">
       <div class="retro-toolbar">
@@ -1059,6 +1060,25 @@ Nginx 配置有问题吗，帮我看看
   </div>
 </div>
 
+<div class="modal-mask" id="incident-delete-mask">
+  <div class="modal">
+    <button class="modal-close" id="incident-delete-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2 data-i18n="incident.deleteTitle">删除事件</h2>
+    <p class="modal-text" id="incident-delete-text"></p>
+    <div class="field">
+      <label data-i18n="incident.rootPwdLabel">root 密码</label>
+      <div class="pwd-wrap">
+        <input id="incident-delete-password" type="password" autocomplete="new-password" placeholder="请输入 root 密码以验证身份" data-i18n="incident.rootPwdPh" data-i18n-attr="placeholder">
+        <button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button>
+      </div>
+      <div class="hint" id="incident-delete-err" style="color:var(--bad)"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="incident-delete-cancel" data-i18n="proc.cancel">取消</button>
+      <button class="btn danger" id="incident-delete-confirm" data-i18n="incident.deleteConfirm">确认删除</button>
+    </div>
+  </div>
+</div>
 <div class="modal-mask" id="incident-mask">
   <div class="modal incident-modal">
     <button class="modal-close" id="incident-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
@@ -1070,6 +1090,25 @@ Nginx 配置有问题吗，帮我看看
   </div>
 </div>
 
+<div class="modal-mask" id="retro-delete-mask">
+  <div class="modal">
+    <button class="modal-close" id="retro-delete-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    <h2 data-i18n="retro.deleteTitle">删除复盘</h2>
+    <p class="modal-text" id="retro-delete-text"></p>
+    <div class="field">
+      <label data-i18n="retro.rootPwdLabel">root / sudo 密码</label>
+      <div class="pwd-wrap">
+        <input id="retro-delete-password" type="password" autocomplete="new-password" placeholder="请输入 root 或 sudo 密码以验证身份" data-i18n="retro.rootPwdPh" data-i18n-attr="placeholder">
+        <button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button>
+      </div>
+      <div class="hint" id="retro-delete-err" style="color:var(--bad)"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="retro-delete-cancel" data-i18n="proc.cancel">取消</button>
+      <button class="btn danger" id="retro-delete-confirm" data-i18n="retro.deleteConfirm">确认删除</button>
+    </div>
+  </div>
+</div>
 <div class="modal-mask" id="retro-mask">
   <div class="modal retro-modal">
     <button class="modal-close" id="retro-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
@@ -1242,8 +1281,8 @@ Nginx 配置有问题吗，帮我看看
 <script src="settings.js?v=6"></script>
 <script src="appman.js?v=6"></script>
 <script src="kb.js?v=7"></script>
-<script src="retros.js?v=7"></script>
-<script src="incidents.js?v=7"></script>
+<script src="retros.js?v=9"></script>
+<script src="incidents.js?v=8"></script>
 <script src="automations.js?v=7"></script>
 </body>
 </html>

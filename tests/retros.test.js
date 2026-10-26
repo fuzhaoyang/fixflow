@@ -1,10 +1,11 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createRetroFromRecovery, readRetros, retroFilename, buildRetroMarkdown } from "../src/retros.js";
+import { createRetroFromRecovery, readRetros, retroFilename, buildRetroMarkdown, deleteRetros } from "../src/retros.js";
 import { startWeb } from "../src/web/server.js";
+import { readIncidents } from "../src/incidents.js";
 
 const now = Date.now();
 const incident = {
@@ -64,6 +65,8 @@ const testCaptchas = {
   create: () => ({ id: "t", code: "0000" }),
   verify: (id, code) => String(code) === "0000",
 };
+const live = [];
+after(async () => { await Promise.allSettled(live.map((s) => s.close())); });
 
 test("/api/retros 列表、详情、下载，以及告警事件 retroId", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-retro-api-"));
@@ -122,4 +125,51 @@ test("/api/retros 列表、详情、下载，以及告警事件 retroId", async 
   assert.equal(alerts.incidents[0].retroId, card.id);
 
   await w.close();
+});
+
+test("deleteRetros 支持单个和批量删除", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-retro-del-"));
+  const file = join(dir, "retros.json");
+  writeFileSync(file, JSON.stringify([{ id: "R-1" }, { id: "R-2" }, { id: "R-3" }]));
+  const one = await deleteRetros({ filePath: file, ids: ["R-1"] });
+  assert.equal(one.deleted, 1);
+  assert.deepEqual((await readRetros(file)).map((c) => c.id), ["R-2", "R-3"]);
+  const rest = await deleteRetros({ filePath: file, ids: ["R-2", "R-3", "R-missing"] });
+  assert.equal(rest.deleted, 2);
+  assert.equal((await readRetros(file)).length, 0);
+});
+
+test("/api/retros DELETE 需要 root 密码，支持单个和批量，并清理事件 retroId", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-retro-del-api-"));
+  const cfg = join(dir, "config.json");
+  const retrosPath = join(dir, "retros.json");
+  const incidentsPath = join(dir, "incidents.json");
+  writeFileSync(cfg, "{}");
+  const card = (id) => ({ id, incidentId: id, title: id, host: "h", metric: "mem", metricLabel: "内存", ruleName: "r", level: 2, startedAt: 1, recoveredAt: 2, durationMin: 1, summary: "s", rootCause: "r", ai: false, createdAt: new Date(0).toISOString(), markdown: "# " + id });
+  writeFileSync(retrosPath, JSON.stringify([card("R-1"), card("R-2"), card("R-3")]));
+  writeFileSync(incidentsPath, JSON.stringify({ incidents: [{ id: "INC-1", retroId: "R-1", fingerprint: "f", source: "generic", service: "s", host: "h", alertname: "a", title: "t", severity: 2, status: "resolved", startedAt: 1, lastSeen: 1, resolvedAt: 1, labels: {}, annotations: {}, timeline: [], evidence: [], rca: null }] }));
+  const exec = async (cmd) => ({ exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" });
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, retrosPath, incidentsPath }, { captchas: testCaptchas, noAlertsTimer: true, noAutomationTimer: true, runCommand: exec });
+  live.push(w);
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const H = { "Content-Type": "application/json" };
+  await fetch(`${base}/api/register`, { method: "POST", headers: H, body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }) });
+  const login = await fetch(`${base}/api/login`, { method: "POST", headers: H, body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }) });
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+  const auth = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const bad = await fetch(`${base}/api/retros`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["R-1"], password: "badpass" }) });
+  assert.equal(bad.status, 403);
+  assert.equal((await readRetros(retrosPath)).length, 3);
+
+  const one = await fetch(`${base}/api/retros`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["R-1"], password: "rootpw" }) });
+  assert.equal(one.status, 200);
+  assert.equal((await one.json()).deleted, 1);
+  assert.equal((await readRetros(retrosPath)).length, 2);
+  assert.equal((await readIncidents(incidentsPath)).incidents[0].retroId, null);
+
+  const batch = await fetch(`${base}/api/retros`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["R-2", "R-3"], password: "rootpw" }) });
+  assert.equal(batch.status, 200);
+  assert.equal((await batch.json()).deleted, 2);
+  assert.equal((await readRetros(retrosPath)).length, 0);
 });

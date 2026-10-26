@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { openFirewallPort, isRoot, verifySudo, sudoCmd, runPrivileged, aclTargetRules, syncAclRules } from "../src/firewall.js";
+import { openFirewallPort, isRoot, verifySudo, verifyAdminPassword, sudoCmd, runPrivileged, aclTargetRules, syncAclRules } from "../src/firewall.js";
 
 test("非 root 跳过", async () => {
   let called = false;
@@ -126,4 +126,15 @@ test("syncAclRules 清掉旧规则后按目标顺序插入", async () => {
     "ufw insert 1 allow from 1.2.3.4 to any port 8080 proto tcp",
     "ufw insert 1 deny from 9.9.9.9 to any port 8080 proto tcp",
   ]);
+});
+
+test("verifyAdminPassword root 进程降权校验管理员 sudo 密码", async () => {
+  const calls = [];
+  const run = async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "" }; };
+  assert.equal(await verifyAdminPassword("pw", { run, getuid: () => 0, user: "admin" }), true);
+  assert.ok(calls.some((c) => c.includes("runuser -u 'admin' -- sudo -S -p '' true")));
+  assert.equal(await verifyAdminPassword("", { run, getuid: () => 0, user: "admin" }), false);
+  calls.length = 0;
+  assert.equal(await verifyAdminPassword("pw", { run, getuid: () => 1000 }), true);
+  assert.ok(calls.some((c) => c.includes("sudo -S -p '' true")));
 });

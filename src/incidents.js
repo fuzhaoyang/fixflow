@@ -151,6 +151,17 @@ export function setRetroId({ filePath, id, retroId }) {
   return updateIncident({ filePath, id, patch: (inc) => { inc.retroId = retroId; } });
 }
 
+export function deleteIncidents({ filePath, ids = [] }) {
+  const set = new Set((Array.isArray(ids) ? ids : [ids]).map(String).filter(Boolean));
+  return serialize(async () => {
+    const state = await readIncidents(filePath);
+    const before = state.incidents.length;
+    state.incidents = state.incidents.filter((i) => !set.has(i.id));
+    await writeIncidents(filePath, state);
+    return { deleted: before - state.incidents.length, incidents: state.incidents };
+  });
+}
+
 export async function listIncidents(filePath) {
   const { incidents } = await readIncidents(filePath);
   return incidents;

@@ -25,6 +25,14 @@ export async function writeRetros(filePath, cards) {
   await writeFile(filePath, JSON.stringify(cards.slice(0, MAX_CARDS), null, 2));
 }
 
+export async function deleteRetros({ filePath, ids = [] }) {
+  const set = new Set((Array.isArray(ids) ? ids : [ids]).map(String).filter(Boolean));
+  const cards = await readRetros(filePath);
+  const remaining = cards.filter((c) => !set.has(c.id));
+  await writeRetros(filePath, remaining);
+  return { deleted: cards.length - remaining.length, cards: remaining };
+}
+
 export function retroTitle({ host, metric, level }) {
   return `[P${level}] ${host} ${metricLabel(metric)}异常复盘`;
 }

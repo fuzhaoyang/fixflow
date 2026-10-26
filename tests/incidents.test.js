@@ -1,9 +1,9 @@
-import test from "node:test";
+import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { normalizeAlertPayload, createOrMergeIncidents, readIncidents } from "../src/incidents.js";
+import { normalizeAlertPayload, createOrMergeIncidents, readIncidents, deleteIncidents } from "../src/incidents.js";
 import { addDeployment, readDeployments } from "../src/deployments.js";
 import { collectEvidence, normalizePlaybooks } from "../src/incidents-playbook.js";
 import { analyzeIncident } from "../src/incidents-rca.js";
@@ -97,6 +97,8 @@ test("analyzeIncident 解析结构化 RCA", async () => {
 });
 
 const testCaptchas = { create: () => ({ id: "t", code: "0000" }), verify: (i, c) => String(c) === "0000" };
+const live = [];
+after(async () => { await Promise.allSettled(live.map((s) => s.close())); });
 
 test("/api/incidents 列表、详情、动作与复盘联动", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-inc-api-"));
@@ -231,3 +233,65 @@ test("启动时对账：服务已恢复的 open 事件自动 resolved 并生成�
   await w.close();
 });
 
+test("deleteIncidents 支持单个和批量删除", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-inc-del-"));
+  const file = join(dir, "incidents.json");
+  const mk = (id, ts) => ({ id, fingerprint: "fp-" + id, source: "generic", service: "s", host: "h", alertname: "a", title: id, severity: 2, status: "resolved", startedAt: ts, lastSeen: ts, resolvedAt: ts, labels: {}, annotations: {}, timeline: [], evidence: [], rca: null, retroId: null });
+  writeFileSync(file, JSON.stringify({ incidents: [mk("INC-1", 3), mk("INC-2", 2), mk("INC-3", 1)] }));
+  const one = await deleteIncidents({ filePath: file, ids: ["INC-1"] });
+  assert.equal(one.deleted, 1);
+  assert.deepEqual((await readIncidents(file)).incidents.map((i) => i.id), ["INC-2", "INC-3"]);
+  const rest = await deleteIncidents({ filePath: file, ids: ["INC-2", "INC-3", "INC-missing"] });
+  assert.equal(rest.deleted, 2);
+  assert.equal((await readIncidents(file)).incidents.length, 0);
+});
+
+test("/api/incidents DELETE 需要 root 密码，支持单个和批量", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-inc-del-api-"));
+  const cfg = join(dir, "config.json");
+  const incidentsPath = join(dir, "incidents.json");
+  writeFileSync(cfg, "{}");
+  const mk = (id, ts) => ({ id, fingerprint: "fp-" + id, source: "generic", service: "s", host: "h", alertname: "a", title: id, severity: 2, status: "resolved", startedAt: ts, lastSeen: ts, resolvedAt: ts, labels: {}, annotations: {}, timeline: [], evidence: [], rca: null, retroId: null });
+  writeFileSync(incidentsPath, JSON.stringify({ incidents: [mk("INC-1", 3), mk("INC-2", 2), mk("INC-3", 1)] }));
+  const exec = async (cmd) => {
+    if (cmd.includes("sudo -S")) return { exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  };
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, incidentsPath }, { captchas: testCaptchas, noAlertsTimer: true, noAutomationTimer: true, runCommand: exec });
+  live.push(w);
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const H = { "Content-Type": "application/json" };
+  await fetch(`${base}/api/register`, { method: "POST", headers: H, body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }) });
+  const login = await fetch(`${base}/api/login`, { method: "POST", headers: H, body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }) });
+  const cookie = login.headers.get("set-cookie").split(";")[0];
+  const auth = { Cookie: cookie, "Content-Type": "application/json" };
+
+  const noPw = await fetch(`${base}/api/incidents`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["INC-1"] }) });
+  assert.equal(noPw.status, 403);
+
+  const bad = await fetch(`${base}/api/incidents`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["INC-1"], password: "badpass" }) });
+  assert.equal(bad.status, 403);
+  assert.equal((await readIncidents(incidentsPath)).incidents.length, 3);
+
+  const one = await fetch(`${base}/api/incidents`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["INC-1"], password: "rootpw" }) });
+  assert.equal(one.status, 200);
+  assert.equal((await one.json()).deleted, 1);
+  assert.equal((await readIncidents(incidentsPath)).incidents.length, 2);
+
+  const batch = await fetch(`${base}/api/incidents`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["INC-2", "INC-3"], password: "rootpw" }) });
+  assert.equal(batch.status, 200);
+  assert.equal((await batch.json()).deleted, 2);
+  assert.equal((await readIncidents(incidentsPath)).incidents.length, 0);
+  await w.close();
+});
+
+test("事件页支持每页 5 条和单个/批量删除入口", () => {
+  const stat = join(import.meta.dirname, "..", "src", "web", "static");
+  const html = readFileSync(join(stat, "index.html"), "utf8");
+  const js = readFileSync(join(stat, "incidents.js"), "utf8");
+  assert.match(js, /INCIDENT_PAGE_SIZE = 5/);
+  assert.match(js, /incidentSelected/);
+  assert.match(html, /id="incident-delete-btn"/);
+  assert.match(html, /id="incident-delete-mask"/);
+  assert.match(html, /id="incident-pager"/);
+});
