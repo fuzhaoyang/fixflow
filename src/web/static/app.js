@@ -57,6 +57,7 @@ const viewLogs = document.getElementById("view-logs");
 const viewStore = document.getElementById("view-store");
 const viewRetros = document.getElementById("view-retros");
 const viewIncidents = document.getElementById("view-incidents");
+const viewAutomations = document.getElementById("view-automations");
 const overviewEl = document.getElementById("overview");
 
 let pendingImages = [];
@@ -136,11 +137,13 @@ function applyRoute() {
   if (authMask.style.display === "flex") return;
   const route = helpOpen ? lastRoute : raw;
   document.querySelectorAll(".menu-item").forEach((i) => {
-    const hit = route === "chat" ? i.dataset.view === "chat" : route === "logs" ? i.dataset.view === "logs" : route === "store" ? i.dataset.view === "store" : route === "retros" ? i.dataset.view === "retros" : route === "incidents" ? i.dataset.view === "incidents" : i.dataset.view === "monitor" && i.dataset.filter === route;
+    const hit = route === "chat" ? i.dataset.view === "chat" : route === "logs" ? i.dataset.view === "logs" : route === "store" ? i.dataset.view === "store" : route === "retros" ? i.dataset.view === "retros" : route === "incidents" ? i.dataset.view === "incidents" : route === "automations" ? i.dataset.view === "automations" : i.dataset.view === "monitor" && i.dataset.filter === route;
     i.classList.toggle("active", hit);
   });
   chatView = route === "chat";
   logsView = route === "logs";
+  if (route !== "chat" && typeof exitAutoMode === "function") exitAutoMode();
+  if (viewAutomations) viewAutomations.style.display = "none";
   aiFab.style.display = chatView ? "none" : "flex";
   if (route !== "chat" && aiPopup.style.display === "flex") closeAiPopup();
   if (route === "chat") {
@@ -203,6 +206,19 @@ function applyRoute() {
     searchBox.style.display = "none";
     netTools.style.display = "none";
     if (typeof loadIncidents === "function") loadIncidents();
+  } else if (route === "automations") {
+    viewMonitor.style.display = "none";
+    viewChat.style.display = "none";
+    viewLogs.style.display = "none";
+    viewStore.style.display = "none";
+    viewRetros.style.display = "none";
+    viewIncidents.style.display = "none";
+    viewAutomations.style.display = "flex";
+    viewTitle.dataset.i18nTitle = "title.automations";
+    viewTitle.textContent = t("title.automations");
+    searchBox.style.display = "none";
+    netTools.style.display = "none";
+    if (typeof loadAutomations === "function") loadAutomations();
   } else {
     currentFilter = MODULES.some(([k]) => k === route) ? route : "all";
     viewMonitor.classList.toggle("single", currentFilter !== "all");
@@ -229,7 +245,7 @@ function applyRoute() {
 document.querySelectorAll(".menu-item").forEach((item) => {
   item.addEventListener("click", () => {
     const v = item.dataset.view;
-    location.hash = v === "chat" ? "/chat" : v === "logs" ? "/logs" : v === "store" ? "/store" : v === "retros" ? "/retros" : v === "incidents" ? "/incidents" : "/" + item.dataset.filter;
+    location.hash = v === "chat" ? "/chat" : v === "logs" ? "/logs" : v === "store" ? "/store" : v === "retros" ? "/retros" : v === "incidents" ? "/incidents" : v === "automations" ? "/automations" : "/" + item.dataset.filter;
   });
 });
 

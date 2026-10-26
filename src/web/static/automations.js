@@ -1,0 +1,588 @@
+// ---------- 自动化 ----------
+const autoSearch = document.getElementById("auto-search");
+const autoRefresh = document.getElementById("auto-refresh");
+const autoCount = document.getElementById("auto-count");
+const autoRulesEl = document.getElementById("auto-rules");
+const autoRunsEl = document.getElementById("auto-runs");
+const autoCommandsWrap = document.getElementById("auto-commands-wrap");
+const autoCommands = document.getElementById("auto-commands");
+const autoCommandsSave = document.getElementById("auto-commands-save");
+const autoMask = document.getElementById("auto-mask");
+const autoFormTitle = document.getElementById("auto-form-title");
+const autoClose = document.getElementById("auto-close");
+const autoCancel = document.getElementById("auto-cancel");
+const autoSave = document.getElementById("auto-save");
+const autoModeBanner = document.getElementById("auto-mode-banner");
+const autoModeExit = document.getElementById("auto-mode-exit");
+const autoModeNew = document.getElementById("auto-mode-new");
+const autoModeBtn = document.getElementById("auto-mode-btn");
+const termAutoOpen = document.getElementById("term-auto-open");
+const autoModalStatus = document.getElementById("auto-modal-status");
+const autoScriptEl = document.getElementById("auto-script");
+const autoScriptCopy = document.getElementById("auto-script-copy");
+const autoActionScriptEl = document.getElementById("auto-action-script");
+const autoActionCopy = document.getElementById("auto-action-copy");
+const autoRunTest = document.getElementById("auto-run-test");
+const autoRunStatus = document.getElementById("auto-run-status");
+const autoRunResult = document.getElementById("auto-run-result");
+
+let autoRules = [];
+let autoRuns = [];
+let autoCommandsList = [];
+let autoQuery = "";
+let autoTab = "rules";
+let autoEditing = null;
+let autoDraft = null;
+let autoEditingVerify = [];
+let autoScript = "";
+let autoBusy = false;
+let autoMode = false;
+
+const autoTime = (ts) => {
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(curLang === "en" ? "en-US" : "zh-CN", { hour12: false });
+};
+
+function autoTriggerTextSafe(rule) {
+  const tr = rule.trigger || {};
+  if (tr.type === "service_down") return `${t("auto.tService")} ${tr.service}`;
+  if (tr.type === "metric") return `${tr.metric} ${tr.op} ${tr.threshold}${tr.metric === "disk" ? " @ " + (tr.mount || "/") : ""}`;
+  if (tr.type === "http") return `${tr.method} ${tr.url} → ${tr.expectStatus}`;
+  return tr.everySec ? `${t("auto.every")} ${tr.everySec}s` : `${t("auto.daily")} ${tr.dailyAt}`;
+}
+
+function autoActionText(rule) {
+  const a = rule.action || {};
+  if (a.type === "restart_service") return `${t("auto.aRestart")} ${a.service}`;
+  if (a.type === "reload_service") return `${t("auto.aReload")} ${a.service}`;
+  if (a.type === "run_command") return `${t("auto.aCommand")}: ${a.command}`;
+  if (a.type === "webhook") return `${t("auto.aWebhook")}: ${a.url}`;
+  return "—";
+}
+
+function autoStatusBadge(ok, label) {
+  return `<span class="tag ${ok ? "ok" : "bad"}">${escapeHtml(label)}</span>`;
+}
+
+function latestRun(ruleId) {
+  return autoRuns.find((r) => r.automationId === ruleId);
+}
+
+function renderAutoRules() {
+  const q = autoQuery.trim().toLowerCase();
+  const list = q ? autoRules.filter((r) => [r.name, r.description, autoActionText(r), autoTriggerTextSafe(r)].join(" ").toLowerCase().includes(q)) : autoRules;
+  if (autoCount) autoCount.textContent = t("auto.count").replace("{n}", list.length);
+  if (!list.length) {
+    autoRulesEl.innerHTML = `<div class="retro-empty">${escapeHtml(autoRules.length ? t("auto.emptyMatch") : t("auto.empty"))}</div>`;
+    return;
+  }
+  autoRulesEl.innerHTML = list.map((r) => {
+    const last = latestRun(r.id);
+    return `<div class="auto-card ${r.enabled ? "" : "off"}" data-auto-id="${escapeHtml(r.id)}">
+      <div class="auto-card-head">
+        <span class="tag ${r.enabled ? "ok" : ""}">${escapeHtml(r.enabled ? t("auto.enabled") : t("auto.disabled"))}</span>
+        <span class="tag ${r.risk === "high" ? "bad" : r.risk === "low" ? "ok" : "warn"}">${escapeHtml(t("auto.risk"))} ${escapeHtml(r.risk || "medium")}</span>
+        <label class="auto-switch" title="${escapeHtml(t("auto.toggle"))}"><input type="checkbox" data-auto-toggle ${r.enabled ? "checked" : ""}><span></span></label>
+      </div>
+      <div class="auto-card-title">${escapeHtml(r.name)}</div>
+      ${r.description ? `<div class="auto-card-desc">${escapeHtml(r.description)}</div>` : ""}
+      <div class="auto-card-line"><span>${escapeHtml(t("auto.trigger"))}</span>${escapeHtml(autoTriggerTextSafe(r))}</div>
+      <div class="auto-card-line"><span>${escapeHtml(t("auto.action"))}</span>${escapeHtml(autoActionText(r))}</div>
+      <div class="auto-card-meta">
+        <span>${escapeHtml(t("auto.cooldown"))}: ${r.cooldownSec || 0}s</span>
+        <span>${escapeHtml(t("auto.maxRuns"))}: ${r.maxRunsPerHour || 3}/h</span>
+        <span>${last ? escapeHtml(t("auto.lastRun")) + ": " + escapeHtml(autoTime(last.at)) : escapeHtml(t("auto.neverRun"))}</span>
+        ${last ? autoStatusBadge(last.ok, last.ok ? t("auto.runOk") : t("auto.runFail")) : ""}
+        ${last?.test ? `<span class="tag">${escapeHtml(t("auto.testBadge"))}</span>` : ""}
+        ${last?.manual ? `<span class="tag">${escapeHtml(t("auto.manualBadge"))}</span>` : ""}
+      </div>
+      <div class="auto-card-actions">
+        <button class="btn small" data-auto-run="${escapeHtml(r.id)}">${escapeHtml(t("auto.runNow"))}</button>
+        <button class="btn small" data-auto-edit="${escapeHtml(r.id)}">${escapeHtml(t("auto.edit"))}</button>
+        <button class="btn small danger" data-auto-del="${escapeHtml(r.id)}">${escapeHtml(t("auto.delete"))}</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderAutoRuns() {
+  const q = autoQuery.trim().toLowerCase();
+  const nameOf = (id) => autoRules.find((r) => r.id === id)?.name || id;
+  const list = q ? autoRuns.filter((r) => [nameOf(r.automationId), r.output, r.stdout, r.stderr, r.script, JSON.stringify(r.checks || [])].join(" ").toLowerCase().includes(q)) : autoRuns;
+  if (autoCount) autoCount.textContent = t("auto.count").replace("{n}", list.length);
+  if (!list.length) { autoRunsEl.innerHTML = `<div class="retro-empty">${escapeHtml(t("auto.noRuns"))}</div>`; return; }
+  autoRunsEl.innerHTML = list.map((r) => {
+    const scriptTest = r.kind === "script-test";
+    const title = scriptTest ? t("auto.scriptTest") : nameOf(r.automationId);
+    const meta = `${autoTime(r.at)} · ${r.durationMs || 0}ms${scriptTest ? " · " + t("auto.exitCode") + " " + (r.exitCode ?? "—") : ""}${r.test ? " · " + t("auto.testBadge") : ""}${r.manual ? " · " + t("auto.manualBadge") : ""}`;
+    const body = scriptTest ? `
+      <div class="auto-run-line"><span>${escapeHtml(t("auto.scriptTitle"))}</span></div>
+      <pre>${escapeHtml(r.script || "")}</pre>
+      ${r.stdout ? `<div class="auto-run-line"><span>stdout</span></div><pre>${escapeHtml(r.stdout)}</pre>` : ""}
+      ${r.stderr ? `<div class="auto-run-line"><span>stderr</span></div><pre>${escapeHtml(r.stderr)}</pre>` : ""}`
+      : `
+      <div class="auto-run-line"><span>${escapeHtml(t("auto.action"))}</span><code>${escapeHtml(autoActionText(r))}</code></div>
+      ${(r.checks || []).map((c) => `<div class="auto-run-check">${autoStatusBadge(c.ok, c.type)} ${escapeHtml(c.detail || "")}</div>`).join("")}
+      ${(r.steps || []).map((s) => `<div class="auto-run-check">${autoStatusBadge(s.ok, s.label)} <code>${escapeHtml(s.command)}</code><pre>${escapeHtml(s.output || "")}</pre></div>`).join("")}
+      <pre class="auto-run-out">${escapeHtml(r.output || "")}</pre>`;
+    return `<details class="auto-run">
+      <summary>
+        ${autoStatusBadge(r.ok, r.ok ? t("auto.runOk") : t("auto.runFail"))}
+        <b>${escapeHtml(title)}</b>
+        <span class="auto-run-meta">${escapeHtml(meta)}</span>
+      </summary>
+      <div class="auto-run-body">${body}</div>
+    </details>`;
+  }).join("");
+}
+
+function renderAutoAll() {
+  if (autoTab === "runs") { autoRulesEl.style.display = "none"; autoRunsEl.style.display = "flex"; autoCommandsWrap.style.display = "none"; renderAutoRuns(); return; }
+  if (autoTab === "commands") { autoRulesEl.style.display = "none"; autoRunsEl.style.display = "none"; autoCommandsWrap.style.display = "block"; autoCommands.value = autoCommandsList.join("\n"); return; }
+  autoRulesEl.style.display = "grid"; autoRunsEl.style.display = "none"; autoCommandsWrap.style.display = "none";
+  renderAutoRules();
+}
+
+async function loadAutomations() {
+  try {
+    const res = await fetch("api/automations");
+    const data = await res.json();
+    autoRules = Array.isArray(data.rules) ? data.rules : [];
+    autoRuns = Array.isArray(data.runs) ? data.runs : [];
+    autoCommandsList = Array.isArray(data.commands) ? data.commands : [];
+  } catch {
+    autoRules = [];
+    autoRuns = [];
+  }
+  renderAutoAll();
+}
+
+function setAutoTab(tab) {
+  autoTab = tab;
+  document.querySelectorAll("[data-auto-tab]").forEach((b) => b.classList.toggle("active", b.dataset.autoTab === tab));
+  renderAutoAll();
+}
+
+const autoField = (id) => document.getElementById(id);
+const autoTr = (id) => { const e = autoField(id); return e ? e.value.trim() : ""; };
+
+function setTriggerType(type) {
+  autoField("auto-trigger-type").value = type;
+  document.querySelectorAll("[data-trigger]").forEach((p) => { p.style.display = p.dataset.trigger === type ? "block" : "none"; });
+  autoField("auto-mount").closest(".field").style.display = type === "metric" && autoField("auto-metric").value === "disk" ? "" : "none";
+}
+
+function setActionType(type) {
+  autoField("auto-action-type").value = type;
+  document.querySelectorAll("[data-action]").forEach((p) => {
+    const show = p.dataset.action === "service" ? (type === "restart_service" || type === "reload_service") : p.dataset.action === type;
+    p.style.display = show ? "block" : "none";
+  });
+}
+
+function applyRuleToForm(rule) {
+  const tr = rule.trigger || { type: "service_down" };
+  autoField("auto-name").value = rule.name || "";
+  autoField("auto-desc").value = rule.description || "";
+  autoField("auto-risk").value = rule.risk || "medium";
+  autoField("auto-cooldown").value = rule.cooldownSec ?? 300;
+  autoField("auto-max").value = rule.maxRunsPerHour ?? 3;
+  setTriggerType(tr.type || "service_down");
+  autoField("auto-trig-service").value = tr.service || "";
+  autoField("auto-metric").value = tr.metric || "cpu";
+  autoField("auto-op").value = tr.op || ">=";
+  autoField("auto-threshold").value = tr.threshold ?? "";
+  autoField("auto-mount").value = tr.mount || "/";
+  autoField("auto-duration").value = tr.durationSec ?? 0;
+  autoField("auto-url").value = tr.url || "";
+  autoField("auto-method").value = tr.method || "GET";
+  autoField("auto-expect").value = tr.expectStatus ?? 200;
+  autoField("auto-consecutive").value = tr.consecutiveFailures ?? 2;
+  autoField("auto-to").value = tr.timeoutSec ?? 10;
+  autoField("auto-every").value = tr.everySec ?? "";
+  autoField("auto-daily").value = tr.dailyAt || "";
+  const a = rule.action || { type: "restart_service" };
+  setActionType(a.type || "restart_service");
+  autoField("auto-act-service").value = a.service || "";
+  autoField("auto-act-command").value = a.command || "";
+  autoField("auto-act-url").value = a.url || "";
+  renderAutoActionScript();
+}
+
+const autoShq = (v) => "'" + String(v ?? "").replace(/'/g, "'\\''") + "'";
+
+function buildAutomationScript(rule) {
+  const lines = ["#!/usr/bin/env bash", `# 自动化：${rule.name || "未命名"}`];
+  const tr = rule.trigger || {};
+  if (tr.type === "service_down") lines.push(`# 触发：服务 ${tr.service || "?"} 不是 active`);
+  else if (tr.type === "metric") lines.push(`# 触发：${tr.metric || "?"} ${tr.op || ">="} ${tr.threshold ?? "?"}${tr.durationSec ? `，持续 ${tr.durationSec}s` : ""}`);
+  else if (tr.type === "http") lines.push(`# 触发：${tr.method || "GET"} ${tr.url || "?"} 状态码不等于 ${tr.expectStatus ?? 200}（连续 ${tr.consecutiveFailures ?? 2} 次）`);
+  else if (tr.type === "cron") lines.push(`# 触发：${tr.everySec ? `每 ${tr.everySec}s` : `每天 ${tr.dailyAt || "?"}`}`);
+  lines.push("", "# 动作");
+  const a = rule.action || {};
+  if (a.type === "restart_service") lines.push(`systemctl restart ${a.service || "?"}`);
+  else if (a.type === "reload_service") lines.push(`systemctl reload ${a.service || "?"}`);
+  else if (a.type === "run_command") lines.push(a.command || "# 未配置命令");
+  else if (a.type === "webhook") lines.push(`curl -fsS -X POST --max-time ${a.timeoutSec || 10} ${autoShq(a.url || "")}`);
+  if (Array.isArray(rule.verify) && rule.verify.length) {
+    lines.push("", "# 断言");
+    for (const v of rule.verify) {
+      if (v.type === "service_active") lines.push(`systemctl is-active --quiet ${v.service || "?"}`);
+      else if (v.type === "http_status") lines.push(`test "$(curl -s -o /dev/null -w '%{http_code}' ${autoShq(v.url || "")})" = "${v.expectStatus ?? 200}"`);
+      else if (v.type === "command_exit") lines.push(v.command || "# 未配置断言命令");
+    }
+  }
+  return lines.join("\n") + "\n";
+}
+
+function buildDefaultTestScript(rule) {
+  const tr = rule.trigger || {};
+  const a = rule.action || {};
+  const svc = tr.type === "service_down" ? (tr.service || "") : "";
+  const verify = Array.isArray(rule.verify) ? rule.verify.slice() : [];
+  if (!verify.length && a.service) verify.push({ type: "service_active", service: a.service });
+  const lines = ["#!/usr/bin/env bash", "set -euo pipefail", `# 默认测试脚本：${rule.name || "自动化"}`];
+  if (svc) {
+    lines.push(`restore() { systemctl start ${svc} || true; }`, "trap restore EXIT");
+    lines.push(`echo "[1/4] 停止 ${svc}"`, `systemctl stop ${svc}`);
+  } else {
+    lines.push(`echo "[1/4] 准备测试（该触发类型无需注入故障）"`);
+  }
+  lines.push(`echo "[2/4] 执行动作"`);
+  if (a.type === "restart_service") lines.push(`systemctl restart ${a.service || "?"}`);
+  else if (a.type === "reload_service") lines.push(`systemctl reload ${a.service || "?"}`);
+  else if (a.type === "run_command") lines.push(a.command || "# 未配置命令");
+  else if (a.type === "webhook") lines.push(`curl -fsS -X POST --max-time ${a.timeoutSec || 10} ${autoShq(a.url || "")}`);
+  lines.push(`echo "[3/4] 断言"`);
+  if (verify.length) {
+    for (const v of verify) {
+      if (v.type === "service_active") lines.push(`systemctl is-active --quiet ${v.service || "?"}`);
+      else if (v.type === "http_status") lines.push(`test "$(curl -s -o /dev/null -w '%{http_code}' ${autoShq(v.url || "")})" = "${v.expectStatus ?? 200}"`);
+      else if (v.type === "command_exit") lines.push(v.command || "# 未配置断言命令");
+    }
+  } else lines.push("true");
+  lines.push(`echo "[4/4] 清理"`);
+  if (svc) lines.push(`systemctl start ${svc}`);
+  lines.push(`echo "测试通过"`);
+  return lines.join("\n") + "\n";
+}
+
+function renderAutoActionScript() {
+  autoActionScriptEl.textContent = buildAutomationScript({ ...collectAutoRule(), verify: autoEditingVerify });
+}
+
+function renderAutoScript() {
+  autoScriptEl.textContent = autoScript || t("auto.scriptEmpty");
+}
+
+function isAutoMode() { return autoMode; }
+
+function resetAutoModeDraft() { autoDraft = null; }
+
+function enterAutoMode() {
+  autoMode = true;
+  document.getElementById("view-chat")?.classList.add("auto-mode");
+  if (autoModeBanner) autoModeBanner.style.display = "flex";
+  autoModeBtn?.classList.add("active");
+  termAutoOpen?.classList.add("active");
+  if (ctx?.input) ctx.input.placeholder = t("auto.modePlaceholder");
+  const last = [...chatHistory].reverse().find((m) => m.role === "assistant" && m.kind === "automation");
+  if (last?.rule) autoDraft = { rule: last.rule, script: last.script || last.rule.testScript || "" };
+  loadAutomations();
+  if (location.hash !== "#/chat") location.hash = "/chat";
+  ctx?.input?.focus();
+}
+
+function exitAutoMode() {
+  autoMode = false;
+  document.getElementById("view-chat")?.classList.remove("auto-mode");
+  if (autoModeBanner) autoModeBanner.style.display = "none";
+  autoModeBtn?.classList.remove("active");
+  termAutoOpen?.classList.remove("active");
+  if (ctx?.input) ctx.input.placeholder = t("chat.inputPh");
+}
+
+function notifyAutoSaved(rule) {
+  if (!autoMode) return;
+  addMsg(t("auto.savedNotice").replace("{name}", rule.name), "assistant");
+}
+
+function renderAutomationCard(rule, script, persist = true) {
+  if (persist) {
+    chatHistory.push({ role: "assistant", text: t("auto.cardText").replace("{name}", rule.name), kind: "automation", rule, script });
+    saveHistory();
+  }
+  const item = document.createElement("div");
+  item.className = "message-item bot auto-card-msg";
+  item.innerHTML = `
+    <div class="msg-header"><span class="avatar bot">${icon("robot")}</span><span class="msg-role">Fixflow</span></div>
+    <div class="bubble">
+      <div class="auto-chat-card">
+        <div class="auto-chat-card-head"><b>${escapeHtml(rule.name)}</b><span class="tag">${escapeHtml(autoTriggerTextSafe(rule))}</span></div>
+        <div class="auto-chat-card-meta">${escapeHtml(autoActionText(rule))}</div>
+        <div class="auto-code">
+          <div class="auto-code-head"><span class="auto-code-lang">bash</span></div>
+          <pre class="auto-chat-script">${escapeHtml(script)}</pre>
+        </div>
+        <div class="auto-chat-card-actions"><button class="btn small" data-auto-apply>${escapeHtml(t("auto.apply"))}</button></div>
+      </div>
+    </div>`;
+  item.querySelector("[data-auto-apply]")?.addEventListener("click", () => openAutoDetail({ ...rule, testScript: script }));
+  ctx.log.appendChild(item);
+  scrollLog();
+}
+
+function renderAutomationHistory(msg) {
+  renderAutomationCard(msg.rule, msg.script, false);
+}
+
+async function sendAutoModeMessage() {
+  const text = ctx.input.value.trim();
+  if (!text) return;
+  const history = chatHistory
+    .filter((m) => m.role && typeof m.text === "string" && !m.kind)
+    .slice(-20)
+    .map((m) => ({ role: m.role, content: m.text }));
+  ctx.input.value = "";
+  if (ctx.preview) ctx.preview.innerHTML = "";
+  if (ctx.charCount) ctx.charCount.textContent = "";
+  addMsg(text, "user");
+  stickToBottom = true;
+  setBusy(true);
+  showTyping();
+  try {
+    const res = await fetch("api/automations/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, rule: autoDraft?.rule, script: autoDraft?.script, history }),
+    });
+    const data = await res.json().catch(() => ({}));
+    hideTyping();
+    if (!res.ok || data.error) { addMsg(data.error || t("auto.chatFail"), "assistant"); return; }
+    autoDraft = { rule: data.rule, script: data.script || data.rule.testScript || "" };
+    autoDraft.rule.testScript = autoDraft.script;
+    renderAutomationCard(autoDraft.rule, autoDraft.script);
+  } catch (e) {
+    hideTyping();
+    addMsg(String(e?.message || e), "assistant");
+  } finally {
+    setBusy(false);
+    hideTyping();
+  }
+}
+
+function openAutoDetail(rule) {
+  const persisted = Boolean(rule?.id && autoRules.some((r) => r.id === rule.id));
+  autoEditing = persisted ? rule : null;
+  autoDraft = rule ? { ...rule } : null;
+  autoEditingVerify = Array.isArray(rule?.verify) ? rule.verify : [];
+  autoScript = rule?.testScript || "";
+  if (!autoScript && rule?.id) {
+    const card = [...chatHistory].reverse().find((m) => m.kind === "automation" && m.rule?.id === rule.id && typeof m.script === "string");
+    if (card) autoScript = card.script;
+  }
+  let generatedScript = false;
+  if (!autoScript && rule) { autoScript = buildDefaultTestScript(rule); generatedScript = true; }
+  autoFormTitle.textContent = persisted ? t("auto.edit") : t("auto.applyTitle");
+  applyRuleToForm(rule || {});
+  renderAutoScript();
+  autoRunResult.innerHTML = "";
+  autoRunStatus.textContent = "";
+  autoModalStatus.textContent = generatedScript ? t("auto.scriptGenerated") : "";
+  autoMask.classList.add("show");
+  const body = autoMask.querySelector(".auto-modal-body");
+  if (body) body.scrollTop = 0;
+}
+
+function collectAutoRule() {
+  const type = autoField("auto-trigger-type").value;
+  let trigger;
+  if (type === "service_down") trigger = { type, service: autoTr("auto-trig-service") };
+  else if (type === "metric") trigger = { type, metric: autoField("auto-metric").value, op: autoField("auto-op").value, threshold: Number(autoTr("auto-threshold")), mount: autoTr("auto-mount") || "/", durationSec: Number(autoTr("auto-duration")) || 0 };
+  else if (type === "http") trigger = { type, url: autoTr("auto-url"), method: autoField("auto-method").value, expectStatus: Number(autoTr("auto-expect")), consecutiveFailures: Number(autoTr("auto-consecutive")), timeoutSec: Number(autoTr("auto-to")) };
+  else {
+    const everySec = Number(autoTr("auto-every"));
+    trigger = everySec ? { type, everySec } : { type, dailyAt: autoTr("auto-daily") };
+  }
+  const at = autoField("auto-action-type").value;
+  const action = at === "run_command" ? { type: at, command: autoTr("auto-act-command") }
+    : at === "webhook" ? { type: at, url: autoTr("auto-act-url") }
+    : { type: at, service: autoTr("auto-act-service") };
+  return {
+    name: autoTr("auto-name"),
+    description: autoTr("auto-desc"),
+    risk: autoField("auto-risk").value,
+    trigger,
+    action,
+    cooldownSec: Number(autoTr("auto-cooldown")) || 0,
+    maxRunsPerHour: Number(autoTr("auto-max")) || 3,
+  };
+}
+
+async function saveAutoRule(keepOpen = false) {
+  const body = collectAutoRule();
+  if (!body.name) { autoModalStatus.textContent = t("auto.nameRequired"); return null; }
+  const oldService = autoDraft?.action?.service || autoEditing?.action?.service;
+  const verify = autoEditingVerify.filter((v) => !(v.type === "service_active" && oldService && v.service === oldService));
+  body.testScript = autoScript;
+  body.verify = verify;
+  if (autoEditing?.id) body.id = autoEditing.id;
+  else if (autoDraft?.id) body.id = autoDraft.id;
+  autoSave.disabled = true;
+  try {
+    const send = (method) => fetch("api/automations", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    let res = await send(autoEditing ? "PATCH" : "POST");
+    let data = await res.json().catch(() => ({}));
+    if (!res.ok && !autoEditing && res.status === 409 && body.id) {
+      res = await send("PATCH");
+      data = await res.json().catch(() => ({}));
+    }
+    if (!res.ok || data.error) { autoModalStatus.textContent = data.error || t("auto.saveFail"); return null; }
+    autoEditing = data.rule;
+    autoDraft = data.rule;
+    autoEditingVerify = Array.isArray(data.rule.verify) ? data.rule.verify : [];
+    autoScript = data.rule.testScript || autoScript;
+    renderAutoScript();
+    autoModalStatus.textContent = t("auto.saved");
+    await loadAutomations();
+    if (!keepOpen) {
+      autoMask.classList.remove("show");
+      notifyAutoSaved(data.rule);
+    }
+    return data.rule;
+  } finally {
+    autoSave.disabled = false;
+  }
+}
+
+function renderRunResult(run) {
+  if (run.kind === "script-test") {
+    const out = (label, text) => text ? `<div class="auto-run-line"><span>${escapeHtml(label)}</span></div><pre>${escapeHtml(text)}</pre>` : "";
+    autoRunResult.innerHTML = `<div class="auto-card-line"><span>${escapeHtml(t("auto.runResult"))}</span>${autoStatusBadge(run.ok, run.ok ? t("auto.runOk") : t("auto.runFail"))}</div>
+      <div class="auto-run-meta">${escapeHtml(t("auto.exitCode"))}: ${escapeHtml(run.exitCode ?? "—")} · ${escapeHtml(t("auto.duration"))}: ${run.durationMs || 0}ms</div>
+      ${out("stdout", run.stdout)}${out("stderr", run.stderr)}`;
+    return;
+  }
+  const checks = (run.checks || []).map((c) => `<div class="auto-run-check">${autoStatusBadge(c.ok, c.type)} ${escapeHtml(c.detail || "")}</div>`).join("");
+  autoRunResult.innerHTML = `<div class="auto-card-line"><span>${escapeHtml(t("auto.runResult"))}</span>${autoStatusBadge(run.ok, run.ok ? t("auto.runOk") : t("auto.runFail"))}</div>
+    <div class="auto-run-line"><span>${escapeHtml(t("auto.action"))}</span><code>${escapeHtml(autoActionText(run))}</code></div>
+    ${checks}<pre class="auto-run-out">${escapeHtml(run.output || "")}</pre>`;
+}
+
+function handleAutoConfirm(ev) {
+  const riskLabel = { low: t("risk.low"), medium: t("risk.mid"), high: t("risk.high") }[ev.riskLevel] || t("risk.mid");
+  autoRunStatus.textContent = "";
+  autoRunResult.innerHTML = `<div class="auto-confirm">
+    <div class="auto-card-line"><span>${escapeHtml(t("risk.approval"))}</span><span class="tag warn">${escapeHtml(riskLabel)}</span></div>
+    ${ev.reason ? `<div class="auto-run-line"><span>${escapeHtml(t("risk.reason"))}</span>${escapeHtml(ev.reason)}</div>` : ""}
+    ${ev.impact ? `<div class="auto-run-line"><span>${escapeHtml(t("risk.impact"))}</span>${escapeHtml(ev.impact)}</div>` : ""}
+    <pre>${escapeHtml(ev.command || "")}</pre>
+    <div class="auto-confirm-actions">
+      <button class="btn small" id="auto-confirm-yes">${escapeHtml(t("proc.confirm"))}</button>
+      <button class="btn small" id="auto-confirm-no">${escapeHtml(t("risk.reject"))}</button>
+    </div>
+  </div>`;
+  const answer = (ok) => fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok }) });
+  document.getElementById("auto-confirm-yes").onclick = () => { autoRunStatus.textContent = t("auto.running"); autoRunResult.innerHTML = ""; answer(true); };
+  document.getElementById("auto-confirm-no").onclick = () => { autoRunStatus.textContent = t("auto.rejected"); autoRunResult.innerHTML = ""; answer(false); };
+}
+
+async function runAutoScript() {
+  if (!autoScript.trim()) { autoRunStatus.textContent = t("auto.needScript"); return; }
+  autoBusy = true;
+  autoRunTest.disabled = true;
+  autoRunStatus.textContent = t("auto.runSaving");
+  try {
+    const saved = await saveAutoRule(true);
+    if (!saved) { autoRunStatus.textContent = ""; return; }
+    autoRunStatus.textContent = t("auto.runWaiting");
+    const res = await fetch("api/automations/test-run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: saved.id, script: autoScript }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) { autoRunStatus.textContent = data.error; return; }
+    if (data.rejected) { autoRunStatus.textContent = t("auto.rejected"); return; }
+    autoRunStatus.textContent = "";
+    renderRunResult(data.run || {});
+    await loadAutomations();
+  } finally {
+    autoBusy = false;
+    autoRunTest.disabled = false;
+  }
+}
+
+async function runAutoNow(rule) {
+  openAutoDetail(rule);
+  autoBusy = true;
+  autoRunStatus.textContent = t("auto.running");
+  try {
+    const res = await fetch("api/automations/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rule.id }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.error) { autoRunStatus.textContent = data.error; return; }
+    autoRunStatus.textContent = "";
+    renderRunResult(data.run || {});
+    await loadAutomations();
+  } finally {
+    autoBusy = false;
+  }
+}
+
+autoSearch.addEventListener("input", () => { autoQuery = autoSearch.value; renderAutoAll(); });
+autoRefresh.addEventListener("click", loadAutomations);
+const closeAutoDetail = () => { if (!autoBusy) autoMask.classList.remove("show"); };
+autoClose.addEventListener("click", closeAutoDetail);
+autoCancel.addEventListener("click", closeAutoDetail);
+autoSave.addEventListener("click", () => saveAutoRule(false));
+autoRunTest.addEventListener("click", runAutoScript);
+autoScriptCopy.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(autoScript); autoRunStatus.textContent = t("auto.copied"); }
+  catch { autoRunStatus.textContent = t("auto.copyFail"); }
+});
+autoActionCopy.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(autoActionScriptEl.textContent); autoModalStatus.textContent = t("auto.copied"); }
+  catch { autoModalStatus.textContent = t("auto.copyFail"); }
+});
+autoMask.addEventListener("input", renderAutoActionScript);
+autoMask.addEventListener("change", renderAutoActionScript);
+autoModeBtn?.addEventListener("click", () => (autoMode ? exitAutoMode() : enterAutoMode()));
+autoModeExit?.addEventListener("click", exitAutoMode);
+autoModeNew?.addEventListener("click", () => { autoDraft = null; addMsg(t("auto.modeNewHint"), "assistant"); });
+termAutoOpen?.addEventListener("click", () => (autoMode ? exitAutoMode() : enterAutoMode()));
+autoField("auto-trigger-type").addEventListener("change", (e) => setTriggerType(e.target.value));
+autoField("auto-action-type").addEventListener("change", (e) => setActionType(e.target.value));
+autoField("auto-metric").addEventListener("change", () => setTriggerType(autoField("auto-trigger-type").value));
+document.querySelectorAll("[data-auto-tab]").forEach((b) => b.addEventListener("click", () => setAutoTab(b.dataset.autoTab)));
+
+autoCommandsSave.addEventListener("click", async () => {
+  const commands = autoCommands.value.split("\n").map((s) => s.trim()).filter(Boolean);
+  const res = await fetch("api/automations/commands", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ commands }) });
+  const data = await res.json().catch(() => ({}));
+  if (data.error) alert(data.error);
+  else { autoCommandsList = data.commands || commands; autoCommands.value = autoCommandsList.join("\n"); }
+});
+
+autoRulesEl.addEventListener("click", (e) => {
+  const btn = e.target.closest("button");
+  if (!btn) return;
+  const card = btn.closest("[data-auto-id]");
+  const rule = card && autoRules.find((r) => r.id === card.dataset.autoId);
+  if (!rule) return;
+  if (btn.dataset.autoRun) runAutoNow(rule);
+  else if (btn.dataset.autoEdit) openAutoDetail(rule);
+  else if (btn.dataset.autoDel) {
+    if (!confirm(t("auto.delConfirm").replace("{name}", rule.name))) return;
+    fetch("api/automations", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: rule.id }) }).then(loadAutomations);
+  }
+});
+autoRulesEl.addEventListener("change", (e) => {
+  const input = e.target.closest("[data-auto-toggle]");
+  if (!input) return;
+  const card = input.closest("[data-auto-id]");
+  fetch("api/automations", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: card.dataset.autoId, enabled: input.checked }) }).then(loadAutomations);
+});

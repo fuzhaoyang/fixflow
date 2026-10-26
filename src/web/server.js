@@ -6,7 +6,7 @@ import { createReadStream, readFileSync } from "node:fs";
 import { timingSafeEqual, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { join, dirname, resolve, basename } from "node:path";
-import { homedir, hostname } from "node:os";
+import { homedir, hostname, tmpdir } from "node:os";
 import { createSession } from "../core.js";
 import { collectAll, collectPorts, collectConnectivity, collectRemoteProbe, formatDateTime, formatUptime, listNginxConfs, readNginxConf, writeNginxConf, createTtlCache, collectLogSources, collectLogs, collectDockerStats, testDbConnection, parseFailedServices, diffFailedServices, parseDownState, diffDownServices, collectSystemd, collectConnectionSummary, collectDocker, parseWho } from "../metrics.js";
 import { loadConfig, normalizeSslSites, readJsonFile, normalizeDbConnections } from "../config.js";
@@ -30,6 +30,8 @@ import { createOrMergeIncidents, listIncidents, getIncident, addEvidence, setInc
 import { collectEvidence, normalizePlaybooks } from "../incidents-playbook.js";
 import { analyzeIncident } from "../incidents-rca.js";
 import { addDeployment, readDeployments } from "../deployments.js";
+import { normalizeAutomation, readAutomations, writeAutomations, readRuns, createAutomationEngine, runAutomationNow, runLocalTest, buildVmTestScript, appendRun } from "../automations.js";
+import { chat } from "../agent.js";
 import { redactSecrets } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
@@ -307,6 +309,7 @@ export async function startWeb(config = {}, deps = {}) {
   config.dbConnections = normalizeDbConnections(config.dbConnections);
   config.knowledge = normalizeKnowledge(config.knowledge);
   config.playbooks = config.playbooks && typeof config.playbooks === "object" && !Array.isArray(config.playbooks) ? config.playbooks : {};
+  config.automationCommands = Array.isArray(config.automationCommands) ? config.automationCommands.map(String).map((s) => s.trim()).filter(Boolean) : [];
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -333,6 +336,8 @@ export async function startWeb(config = {}, deps = {}) {
   const retrosPath = config.retrosPath || join(dirname(configPath), "retros.json");
   const incidentsPath = config.incidentsPath || join(dirname(configPath), "incidents.json");
   const deploymentsPath = config.deploymentsPath || join(dirname(configPath), "deployments.jsonl");
+  const automationsPath = config.automationsPath || join(dirname(configPath), "automations.json");
+  const automationRunsPath = config.automationRunsPath || join(dirname(configPath), "automation-runs.jsonl");
   const sessions = typeof deps.sessions === "function" ? deps.sessions() : (deps.sessions || createSessionStore());
   const captchas = typeof deps.captchas === "function" ? deps.captchas() : (deps.captchas || createCaptchaStore());
   const readConfigFile = () => readJsonFile(configPath);
@@ -359,6 +364,8 @@ export async function startWeb(config = {}, deps = {}) {
   };
   const maskedKnowledge = () => ({ ...config.knowledge, token: maskToken(config.knowledge.token) });
   const execCmd = deps.runCommand || runCommand;
+  const chatImpl = deps.chat || chat;
+  const sendMail = deps.sendEmail || sendEmail;
   const fwVerify = (password) => verifySudo(password, { run: execCmd });
   const fwRun = (cmd, password, timeout) => runPrivileged(cmd, password, { run: execCmd, timeout });
   const firewalldBackend = async () => (await detectBackend({ run: execCmd })) === "firewalld";
@@ -583,6 +590,12 @@ export async function startWeb(config = {}, deps = {}) {
   const sseGuard = setInterval(() => {
     for (const res of clients) if (res.writableNeedDrain) res.destroy();
   }, 15000);
+  const requestConfirm = (info, timeoutMs = 120000) => new Promise((resolve) => {
+    const id = String(++seq);
+    const timer = setTimeout(() => { waiters.delete(id); resolve(false); }, timeoutMs);
+    waiters.set(id, (ok) => { clearTimeout(timer); resolve(ok); });
+    broadcast({ type: "confirm", id, ...info });
+  });
   const readBody = async (req, max = 10 * 1024 * 1024) => {
     let b = "";
     for await (const c of req) {
@@ -619,6 +632,60 @@ export async function startWeb(config = {}, deps = {}) {
   const monitor = createMonitor();
   const monitorTimer = setInterval(() => monitor.tick(), 1000);
   const monitorHistory = await createMonitorHistory({ filePath: config.monitorHistoryPath || join(dirname(configPath), "monitor-history.jsonl") });
+  const autoDownNotified = new Set();
+  const autoHandled = new Set();
+  const serviceHasEnabledAutomation = async (service) => {
+    const rules = await readAutomations(automationsPath).catch(() => []);
+    return rules.some((r) => r.enabled && r.trigger?.type === "service_down" && r.trigger.service === service);
+  };
+  const automationMail = async (subject, body) => {
+    const st = await alertsManager.smtp();
+    if (!st.to) return;
+    try { await sendMail({ ...st, to: st.to }, subject, body, execCmd); }
+    catch (e) { console.error("[fixflow] 自动化邮件发送失败:", e?.message || e); }
+  };
+  const automationActionText = (a = {}) => a.type === "restart_service" ? `重启 ${a.service}`
+    : a.type === "reload_service" ? `重载 ${a.service}`
+    : a.type === "run_command" ? a.command
+    : `POST ${a.url}`;
+  const automationChecksText = (run) => (run.checks || []).map((c) => `- ${c.type}: ${c.ok ? "通过" : "失败"} ${c.detail || ""}`).join("\n") || "- 无";
+  const automationEngine = createAutomationEngine({
+    filePath: automationsPath,
+    runsPath: automationRunsPath,
+    exec: execCmd,
+    monitor,
+    allowCommands: config.automationCommands,
+    onTrigger: async (rule, result) => {
+      if (rule.trigger?.type !== "service_down") return;
+      const service = rule.trigger.service;
+      if (autoDownNotified.has(service)) return;
+      autoDownNotified.add(service);
+      autoHandled.add(service);
+      await automationMail(
+        `[Fixflow] 服务下线：${service}`,
+        `服务 ${service} 已下线（状态：${result.value || "unknown"}）。\n自动化规则「${rule.name}」已开始修复。\n主机：${hostname()}\n时间：${formatDateTime(new Date())}`
+      );
+    },
+    onRun: async (run, rule) => {
+      broadcast({ type: "automations" });
+      if (rule.trigger?.type !== "service_down") return;
+      const service = rule.trigger.service;
+      if (run.ok) {
+        autoDownNotified.delete(service);
+        await automationMail(
+          `[Fixflow] 自动化修复成功：${service}`,
+          `服务 ${service} 已自动修复，verify 断言全部通过。\n规则：${rule.name}\n动作：${automationActionText(rule.action)}\n断言：\n${automationChecksText(run)}\n耗时：${run.durationMs}ms\n主机：${hostname()}\n时间：${formatDateTime(new Date())}`
+        );
+      } else {
+        await automationMail(
+          `[Fixflow] 自动化修复失败：${service}`,
+          `服务 ${service} 自动修复未达预期。\n规则：${rule.name}\n动作：${automationActionText(rule.action)}\n动作结果：${run.actionOk ? "成功" : "失败"}\n断言：\n${automationChecksText(run)}\n输出：${(run.output || "").slice(0, 1000)}\n将继续按冷却/退避重试。\n主机：${hostname()}\n时间：${formatDateTime(new Date())}`
+        );
+      }
+    },
+  });
+  if (!deps.noAutomationTimer) automationEngine.start();
+  const runningTests = new Set();
   let lastCaptureT = Math.floor(Date.now() / 1000) - 60;
   const historyTimer = setInterval(async () => {
     const now = Math.floor(Date.now() / 1000);
@@ -727,8 +794,14 @@ export async function startWeb(config = {}, deps = {}) {
       const st = await alertsManager.smtp();
       if (!st.to) return;
       for (const e of events) {
-        if (e.kind === "down") await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务异常关闭：${e.name}`, `服务 ${e.name} 已停止（systemd 状态 ${e.state}），请检查。`);
-        else await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务已恢复：${e.name}`, `服务 ${e.name} 已恢复正常。`);
+        if (e.kind === "down") {
+          if (!(await serviceHasEnabledAutomation(e.name))) await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务异常关闭：${e.name}`, `服务 ${e.name} 已停止（systemd 状态 ${e.state}），请检查。`);
+        } else {
+          const handled = autoHandled.has(e.name);
+          autoHandled.delete(e.name);
+          autoDownNotified.delete(e.name);
+          if (!handled) await sendEmail({ ...st, to: st.to }, `[Fixflow] 服务已恢复：${e.name}`, `服务 ${e.name} 已恢复正常。`);
+        }
       }
     } catch {}
   };
@@ -1104,6 +1177,163 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         await metricAlerts.saveSettings(JSON.parse(body || "{}"));
         sendJson(res, { ok: true });
+      } else if (url.pathname === "/api/automations" && req.method === "GET") {
+        const [rules, runs, history] = await Promise.all([readAutomations(automationsPath), readRuns(automationRunsPath), readHistoryFile(historyPath)]);
+        const historyScripts = new Map();
+        for (const m of history) {
+          if (m?.kind === "automation" && m.rule?.id && typeof m.script === "string" && m.script.trim()) historyScripts.set(m.rule.id, m.script);
+        }
+        for (const r of rules) {
+          if (!r.testScript && historyScripts.has(r.id)) r.testScript = historyScripts.get(r.id);
+        }
+        sendJson(res, { rules, runs: runs.slice(-100).reverse(), commands: config.automationCommands });
+      } else if (url.pathname === "/api/automations" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const r = normalizeAutomation(body, { allowCommands: config.automationCommands });
+        if (r.error) { sendJson(res, { error: r.error }, 400); return; }
+        const rules = await readAutomations(automationsPath);
+        if (rules.length >= 200) { sendJson(res, { error: "自动化规则数量已达上限" }, 400); return; }
+        if (rules.some((x) => x.id === r.rule.id)) { sendJson(res, { error: "规则 ID 已存在" }, 409); return; }
+        rules.push(r.rule);
+        await writeAutomations(automationsPath, rules);
+        sendJson(res, { ok: true, rule: r.rule });
+      } else if (url.pathname === "/api/automations" && req.method === "PATCH") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const rules = await readAutomations(automationsPath);
+        const existing = rules.find((x) => x.id === body.id);
+        if (!existing) { sendJson(res, { error: "自动化不存在" }, 404); return; }
+        const r = normalizeAutomation({ ...existing, ...body, id: existing.id, createdAt: existing.createdAt, state: existing.state }, { allowCommands: config.automationCommands });
+        if (r.error) { sendJson(res, { error: r.error }, 400); return; }
+        rules[rules.findIndex((x) => x.id === existing.id)] = r.rule;
+        await writeAutomations(automationsPath, rules);
+        sendJson(res, { ok: true, rule: r.rule });
+      } else if (url.pathname === "/api/automations" && req.method === "DELETE") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        await writeAutomations(automationsPath, (await readAutomations(automationsPath)).filter((x) => x.id !== body.id));
+        sendJson(res, { ok: true });
+      } else if (url.pathname === "/api/automations/run" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const r = await runAutomationNow({ filePath: automationsPath, runsPath: automationRunsPath, id: body.id, exec: execCmd, allowCommands: config.automationCommands });
+        if (r.error) { sendJson(res, r, 404); return; }
+        broadcast({ type: "automations" });
+        sendJson(res, r);
+      } else if (url.pathname === "/api/automations/test" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const rule = (await readAutomations(automationsPath)).find((x) => x.id === body.id);
+        if (!rule) { sendJson(res, { error: "自动化不存在" }, 404); return; }
+        if (body.mode === "vm") { sendJson(res, { ok: true, script: buildVmTestScript(rule) }); return; }
+        const run = await runLocalTest(rule, {
+          exec: execCmd,
+          allowCommands: config.automationCommands,
+          confirm: (info) => requestConfirm(info),
+        });
+        if (!run.error) { await appendRun(automationRunsPath, run); broadcast({ type: "automations" }); }
+        sendJson(res, run, run.error ? 400 : 200);
+      } else if (url.pathname === "/api/automations/commands" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const commands = (Array.isArray(body.commands) ? body.commands : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 50);
+        if (commands.some((c) => c.length > 200)) { sendJson(res, { error: "白名单命令过长" }, 400); return; }
+        config.automationCommands.splice(0, config.automationCommands.length, ...commands);
+        const existing = await readConfigFile();
+        await writeFile(configPath, JSON.stringify({ ...existing, automationCommands: commands }, null, 2));
+        await chmod(configPath, 0o600).catch(() => {});
+        sendJson(res, { ok: true, commands });
+      } else if (url.pathname === "/api/automations/parse" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const text = String(body.text || "").trim();
+        if (!text) { sendJson(res, { error: "请输入自然语言描述" }, 400); return; }
+        if (!config.apiKey) { sendJson(res, { error: "请先在设置中配置模型" }, 400); return; }
+        const schema = '{"name":"","description":"","trigger":{"type":"service_down|metric|http|cron",...},"action":{"type":"restart_service|reload_service|run_command|webhook",...},"verify":[],"cooldownSec":300,"maxRunsPerHour":3,"risk":"medium"}';
+        const prompt = `把下面的运维自动化需求转换成 JSON 规则，只输出 JSON，不要解释、不要 markdown。\nJSON 结构示例：${schema}\n触发类型字段：service_down 用 service；metric 用 metric(cpu|mem|disk|net|sessions)、op(>=|<=)、threshold、mount(仅 disk)、durationSec；http 用 url、method、expectStatus、consecutiveFailures；cron 用 everySec 或 dailyAt(HH:MM)。\n动作类型字段：restart_service/reload_service 用 service；run_command 用 command（必须以上述白名单前缀开头：${JSON.stringify(config.automationCommands)}）；webhook 用 url。\n需求：${text}`;
+        try {
+          const out = await chat({ apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model, messages: [{ role: "user", content: prompt }], timeout: 60000 });
+          const raw = String(out.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+          const parsed = JSON.parse(raw);
+          const r = normalizeAutomation({ ...parsed, id: undefined, createdAt: undefined, state: undefined }, { allowCommands: config.automationCommands });
+          if (r.error) sendJson(res, { error: r.error, raw }, 400);
+          else sendJson(res, { ok: true, rule: r.rule });
+        } catch (e) {
+          sendJson(res, { error: `解析失败：${e?.message || e}` }, 400);
+        }
+      } else if (url.pathname === "/api/automations/chat" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const text = String(body.text || "").trim();
+        if (!text) { sendJson(res, { error: "请输入自然语言描述" }, 400); return; }
+        if (!config.apiKey) { sendJson(res, { error: "请先在设置中配置模型" }, 400); return; }
+        const draft = body.rule && typeof body.rule === "object" ? body.rule : {};
+        const script = String(body.script || "").slice(0, 20000);
+        const history = (Array.isArray(body.history) ? body.history : [])
+          .filter((m) => m && ["user", "assistant"].includes(m.role) && typeof m.content === "string" && m.content.trim())
+          .slice(-20)
+          .map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+        const historyText = history.map((m) => `${m.role === "user" ? "用户" : "助手"}：${m.content}`).join("\n").slice(0, 20000);
+        const schema = '{"rule":{"name":"","description":"","trigger":{"type":"service_down|metric|http|cron",...},"action":{"type":"restart_service|reload_service|run_command|webhook",...},"verify":[],"cooldownSec":300,"maxRunsPerHour":3,"risk":"medium"},"script":"#!/usr/bin/env bash\\n..."}';
+        const prompt = `你是 Fixflow 自动化助手。根据用户需求，同时返回更新后的结构化规则和本机测试脚本。只输出 JSON，不要解释、不要 markdown。\nJSON 结构：${schema}\n触发字段：service_down 用 service；metric 用 metric(cpu|mem|disk|net|sessions)、op(>=|<=)、threshold、mount(仅 disk)、durationSec；http 用 url、method、expectStatus、consecutiveFailures；cron 用 everySec 或 dailyAt(HH:MM)。\n动作字段：restart_service/reload_service 用 service；run_command 用 command（必须以上述白名单前缀开头：${JSON.stringify(config.automationCommands)}）；webhook 用 url。\n测试脚本要求：必须是可直接执行的 bash；先用 systemctl stop 停掉目标服务，再执行规则动作，做断言，最后无论成功失败都恢复服务；只操作规则涉及的服务；不要交互、不要 sudo、不要删除系统文件；输出关键步骤。\n同一对话历史（仅文本，供理解上下文）：\n${historyText || "（无）"}\n当前规则：${JSON.stringify(draft)}\n当前脚本：${JSON.stringify(script)}\n用户需求：${text}`;
+        try {
+          const out = await chatImpl({ apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model, messages: [{ role: "user", content: prompt }], timeout: 90000 });
+          const rawText = String(out.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+          const start = rawText.indexOf("{");
+          const end = rawText.lastIndexOf("}");
+          if (start < 0 || end <= start) throw new Error("模型未返回 JSON");
+          const parsed = JSON.parse(rawText.slice(start, end + 1));
+          const ruleIn = {
+            ...(parsed.rule && typeof parsed.rule === "object" ? parsed.rule : {}),
+            id: draft.id || undefined,
+            createdAt: draft.createdAt,
+            state: draft.state,
+            testScript: parsed.script,
+          };
+          if (!ruleIn.name) ruleIn.name = text.slice(0, 40);
+          let scriptOut = String(parsed.script || "").trim();
+          if (!scriptOut) throw new Error("模型未返回测试脚本");
+          if (scriptOut.length > 20000) throw new Error("测试脚本过长（上限 20000 字符）");
+          if (!scriptOut.startsWith("#!")) scriptOut = "#!/usr/bin/env bash\n" + scriptOut;
+          ruleIn.testScript = scriptOut;
+          const r = normalizeAutomation(ruleIn, { allowCommands: config.automationCommands });
+          if (r.error) { sendJson(res, { error: `规则不合法：${r.error}`, raw: rawText }, 400); return; }
+          sendJson(res, { ok: true, rule: r.rule, script: r.rule.testScript });
+        } catch (e) {
+          sendJson(res, { error: `生成失败：${e?.message || e}` }, 400);
+        }
+      } else if (url.pathname === "/api/automations/test-run" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const rule = (await readAutomations(automationsPath)).find((x) => x.id === body.id);
+        if (!rule) { sendJson(res, { error: "自动化不存在，请先保存" }, 404); return; }
+        const script = String(body.script || rule.testScript || "").trim();
+        if (!script) { sendJson(res, { error: "暂无测试脚本" }, 400); return; }
+        if (script.length > 20000) { sendJson(res, { error: "测试脚本过长" }, 400); return; }
+        if (runningTests.has(rule.id)) { sendJson(res, { error: "该规则的测试正在运行" }, 409); return; }
+        runningTests.add(rule.id);
+        let file = "";
+        try {
+          const ok = await requestConfirm({ source: "automation", riskLevel: "high", reason: "运行 AI 生成的测试脚本", impact: "脚本会在本机真实停止/恢复服务并执行命令", command: script.slice(0, 4000) });
+          if (!ok) { sendJson(res, { ok: false, rejected: true }); return; }
+          file = join(tmpdir(), `fixflow-auto-${randomUUID()}.sh`);
+          await writeFile(file, script, { mode: 0o700 });
+          const started = Date.now();
+          const r = await execCmd(`bash ${JSON.stringify(file)}`, { timeout: 300000, maxOutput: 20 * 1024 }).catch((e) => ({ exitCode: 1, stdout: "", stderr: String(e?.message || e) }));
+          const run = {
+            id: "AR-" + randomUUID().slice(0, 8),
+            automationId: rule.id,
+            at: started,
+            kind: "script-test",
+            test: true,
+            mode: "local",
+            script,
+            ok: r.exitCode === 0,
+            exitCode: r.exitCode,
+            stdout: r.stdout || "",
+            stderr: r.stderr || "",
+            durationMs: Date.now() - started,
+            checks: [],
+          };
+          await appendRun(automationRunsPath, run);
+          broadcast({ type: "automations" });
+          sendJson(res, { ok: true, run });
+        } finally {
+          runningTests.delete(rule.id);
+          if (file) await rm(file, { force: true }).catch(() => {});
+        }
       } else if (url.pathname === "/api/report") {
         const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
         const s = data.system;
@@ -1907,6 +2137,10 @@ export async function startWeb(config = {}, deps = {}) {
         const js = await readFile(join(STATIC, "incidents.js"));
         res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
         res.end(js);
+      } else if (url.pathname === "/automations.js") {
+        const js = await readFile(join(STATIC, "automations.js"));
+        res.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8", "Cache-Control": "no-cache" });
+        res.end(js);
       } else if (url.pathname === "/app.css") {
         const css = await readFile(join(STATIC, "app.css"));
         res.writeHead(200, { "Content-Type": "text/css; charset=utf-8", "Cache-Control": "no-cache" });
@@ -1988,6 +2222,8 @@ export async function startWeb(config = {}, deps = {}) {
   return {
     server,
     httpsServer,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(historyTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    automationEngine,
+    checkDownServices,
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } automationEngine.stop(); clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(historyTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }

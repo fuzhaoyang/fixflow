@@ -803,7 +803,7 @@
     }
     .toolbar-btn:hover { background: color-mix(in srgb, var(--accent) 18%, transparent); }
     .toolbar-btn svg { width: 18px; height: 18px; }
-    .input-actions { display: flex; align-items: center; gap: 8px; }
+    .input-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     .char-count { font-size: 11px; color: var(--muted); white-space: nowrap; }
     .send-btn, .stop-btn {
       width: 34px; height: 34px; border-radius: 9px; border: none; cursor: pointer;
@@ -1163,3 +1163,96 @@
     .pb-action-row input, .pb-action-row select { padding: 5px 7px; }
     .pb-action-del { border: none; background: transparent; color: var(--bad); cursor: pointer; font-size: 15px; line-height: 1; }
     .pb-service-del { margin-top: 10px; }
+
+    /* ---------- 自动化 ---------- */
+    #view-automations { display: none; flex-direction: column; gap: 12px; }
+    .auto-tabs { margin-top: 2px; }
+    .auto-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+    .auto-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 14px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; gap: 8px; }
+    .auto-card:hover { border-color: var(--accent); }
+    .auto-card.off { opacity: .62; }
+    .auto-card-head { display: flex; align-items: center; gap: 6px; }
+    .auto-card-title { font-size: 14px; font-weight: 600; color: var(--text); line-height: 1.4; }
+    .auto-card-desc { font-size: 12px; color: var(--muted); line-height: 1.5; }
+    .auto-card-line { display: flex; gap: 8px; font-size: 12px; color: var(--text); word-break: break-all; }
+    .auto-card-line > span:first-child { flex: 0 0 auto; color: var(--muted); }
+    .auto-card-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 11px; color: var(--muted); }
+    .auto-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+    .auto-switch { margin-left: auto; position: relative; display: inline-flex; cursor: pointer; }
+    .auto-switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .auto-switch span { width: 34px; height: 18px; border-radius: 9px; background: var(--panel2); border: 1px solid var(--border); position: relative; transition: background .18s, border-color .18s; }
+    .auto-switch span::after { content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); transition: transform .18s, background .18s; }
+    .auto-switch input:checked + span { background: color-mix(in srgb, var(--accent) 28%, transparent); border-color: var(--accent); }
+    .auto-switch input:checked + span::after { transform: translateX(16px); background: var(--accent); }
+    .auto-runs { display: flex; flex-direction: column; gap: 8px; }
+    .auto-run { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-md); padding: 10px 12px; }
+    .auto-run summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--text); list-style: none; }
+    .auto-run summary::-webkit-details-marker { display: none; }
+    .auto-run-meta { color: var(--muted); font-size: 11px; margin-left: auto; }
+    .auto-run-body { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+    .auto-run-line { display: flex; gap: 8px; font-size: 12px; color: var(--muted); align-items: center; }
+    .auto-run-line code { color: var(--text); word-break: break-all; }
+    .auto-run-check { font-size: 12px; color: var(--text); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    .auto-run-check pre, .auto-run-out { margin: 6px 0 0; padding: 8px 10px; max-height: 220px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+    .auto-run-out { margin: 0; }
+    .auto-modal { width: 760px !important; display: flex; flex-direction: column; max-height: 86vh; overflow: hidden; padding: 0; }
+    .auto-modal-head { position: relative; flex: 0 0 auto; padding: 18px 52px 14px 22px; background: var(--panel); border-bottom: 1px solid var(--border); z-index: 2; }
+    .auto-modal-head h2 { margin: 0; font-size: 16px; }
+    .auto-modal-head .modal-close { top: 14px; right: 14px; }
+    .auto-modal-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 22px 22px; }
+    .auto-nl { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
+    .auto-nl > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .auto-nl-row { display: flex; gap: 8px; align-items: flex-start; }
+    .auto-nl-row textarea { flex: 1; min-height: 58px; resize: vertical; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit; outline: none; }
+    .auto-nl-row textarea:focus { border-color: var(--accent); }
+    .auto-form .field { margin-bottom: 10px; }
+    .auto-form select, .auto-form input { width: 100%; padding: 7px 9px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; outline: none; font-family: inherit; box-sizing: border-box; }
+    .auto-form select:focus, .auto-form input:focus { border-color: var(--accent); }
+    .auto-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+    .auto-row .auto-wide { grid-column: 1 / -1; }
+    .auto-test-modal { width: 800px !important; }
+    .auto-test-actions { display: flex; align-items: center; gap: 10px; margin: 12px 0; flex-wrap: wrap; }
+    .auto-test-result { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
+    .auto-test-out { padding: 10px; max-height: 46vh; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+    .auto-test-result pre { margin: 6px 0 0; padding: 8px 10px; max-height: 200px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+
+    /* ---------- 自动化：对话与测试脚本 ---------- */
+    .auto-chat { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
+    .auto-chat > label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+    .auto-chat-log { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin: 6px 0 8px; padding: 8px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-sm); }
+    .auto-chat-msg { display: flex; }
+    .auto-chat-msg.user { justify-content: flex-end; }
+    .auto-chat-bubble { max-width: 86%; padding: 7px 10px; border-radius: 8px; font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; background: var(--panel2); color: var(--text); }
+    .auto-chat-msg.user .auto-chat-bubble { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+    .auto-chat-row { display: flex; gap: 8px; align-items: flex-start; }
+    .auto-chat-row textarea { flex: 1; min-height: 54px; resize: vertical; padding: 8px 10px; border-radius: var(--r-sm); border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 12px; font-family: inherit; outline: none; box-sizing: border-box; }
+    .auto-chat-row textarea:focus { border-color: var(--accent); }
+    .auto-script-panel { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
+    .auto-script-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .auto-script-head > label { font-size: 12px; color: var(--muted); margin-right: auto; }
+    .auto-code { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--code-bg); overflow: hidden; }
+    .auto-code-head { display: flex; align-items: center; gap: 7px; padding: 6px 10px; background: color-mix(in srgb, var(--panel2) 72%, var(--code-bg)); border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+    .auto-code-head::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 18%, transparent); }
+    .auto-script { margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; background: transparent; border: none; border-radius: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre; tab-size: 2; }
+    .auto-script:empty::before { content: attr(data-empty); color: var(--muted); }
+    .auto-script-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .auto-confirm { margin-top: 10px; padding: 10px; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--border)); border-radius: var(--r-sm); display: flex; flex-direction: column; gap: 8px; }
+    .auto-confirm pre { margin: 0; padding: 8px 10px; max-height: 200px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-all; }
+    .auto-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* ---------- 对话内自动化模式 ---------- */
+    .auto-mode-banner { display: none; align-items: center; gap: 8px; padding: 6px 12px; background: color-mix(in srgb, var(--warn) 10%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); font-size: 12px; color: var(--text); flex-shrink: 0; }
+    .auto-mode-banner .hint { flex: 1; font-size: 11px; color: var(--muted); }
+    .auto-mode-banner .clear-btn { padding: 2px 8px; font-size: 12px; }
+    #auto-mode-btn.active, #term-auto-open.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    #view-chat.auto-mode #attach { display: none; }
+    .auto-chat-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .auto-chat-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .auto-chat-card-head b { font-size: 13px; color: var(--text); }
+    .auto-chat-card-meta { font-size: 12px; color: var(--muted); }
+    .auto-chat-script { margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; background: transparent; border: none; border-radius: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre; tab-size: 2; }
+    html[data-theme="light"] .auto-code { background: #f8fafc; border-color: #d5deec; box-shadow: inset 0 0 0 1px rgba(15, 26, 43, .02); }
+    html[data-theme="light"] .auto-code-head { background: #eef3fa; border-bottom-color: #d5deec; color: #576780; }
+    html[data-theme="light"] .auto-code-head::before { background: #16a34a; }
+    html[data-theme="light"] .auto-script, html[data-theme="light"] .auto-chat-script { color: #0f1a2b; }
+    .auto-chat-card-actions { display: flex; justify-content: flex-end; }

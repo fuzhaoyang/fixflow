@@ -85,7 +85,10 @@ function saveHistory() {
 function restoreHistory() {
   for (const msg of chatHistory) {
     if (msg.role === "user") renderMsg(msg.text, "user", msg.images);
-    else if (msg.role === "assistant") renderMsg(msg.text, "assistant", undefined, { source: msg.source, usage: msg.usage });
+    else if (msg.role === "assistant") {
+      if (msg.kind === "automation" && typeof renderAutomationHistory === "function") renderAutomationHistory(msg);
+      else renderMsg(msg.text, "assistant", undefined, { source: msg.source, usage: msg.usage });
+    }
   }
 }
 
@@ -511,6 +514,7 @@ applyTheme(localStorage.getItem("fixflow_theme") === "light" ? "light" : "dark")
    refreshMetrics();
    startPolling();
    (async () => { await loadHistory(); restoreHistory(); })();
+   if (typeof loadAutomations === "function") loadAutomations();
 connectStream();
    loadModelStatus();
    if (typeof kbLoad === "function") kbLoad();
@@ -585,6 +589,7 @@ function addSimpleMsg(text, cls) {
 }
 
 function clearHistory() {
+  if (typeof resetAutoModeDraft === "function") resetAutoModeDraft();
   chatHistory = [];
   ctx.log.innerHTML = "";
   ctx.welcome.style.display = "";
@@ -597,6 +602,7 @@ async function send() {
     await fetch("api/abort", { method: "POST" });
     return;
   }
+  if (typeof isAutoMode === "function" && isAutoMode()) { await sendAutoModeMessage(); return; }
   const text = ctx.input.value.trim();
   const imgs = pendingImages;
   if (!text && !imgs.length) return;

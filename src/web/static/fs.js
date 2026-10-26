@@ -496,6 +496,7 @@ function connectStream() {
     }
     else if (ev.type === "tool") { finishStreaming(); addSimpleMsg(toolSummary(ev), "tool"); }
     else if (ev.type === "confirm") {
+      if (ev.source === "automation" && typeof handleAutoConfirm === "function" && document.getElementById("auto-mask")?.classList.contains("show")) { handleAutoConfirm(ev); return; }
       const riskLabel = { low: t("risk.low"), medium: t("risk.mid"), high: t("risk.high") }[ev.riskLevel] || t("risk.mid");
       const riskCls = ev.riskLevel === "high" ? "risk-high" : ev.riskLevel === "low" ? "risk-low" : "risk-mid";
       const card = document.createElement("div");
@@ -533,6 +534,8 @@ function connectStream() {
     } else if (ev.type === "incidents") {
       if (document.getElementById("view-incidents")?.style.display !== "none" && typeof loadIncidents === "function") loadIncidents();
       if (document.getElementById("view-retros")?.style.display !== "none" && typeof loadRetros === "function") loadRetros();
+    } else if (ev.type === "automations") {
+      if (document.getElementById("view-automations")?.style.display !== "none" && typeof loadAutomations === "function") loadAutomations();
     } else if (ev.type === "done") {
       finishStreaming();
       attachTurnFooter({ source: ev.source || "model", usage: ev.usage });

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title data-i18n="app.title">Fixflow 服务器运维面板</title>
-  <link rel="stylesheet" href="app.css?v=6">
+  <link rel="stylesheet" href="app.css?v=12">
 </head>
 <body>
 <script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
@@ -234,6 +234,7 @@
       <button class="menu-item" data-view="logs" title="日志" data-i18n="menu.logs" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6h14v12H5z"/><path d="M8 10l2.5 2.5L8 15M13 15h3"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.logs">日志</span></button>
       <button class="menu-item" data-view="retros" title="复盘" data-i18n="menu.retros" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 12h7M9 16h5"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.retros">复盘</span></button>
       <button class="menu-item" data-view="incidents" title="事件" data-i18n="menu.incidents" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 16H3z"/><path d="M12 9v5M12 17h.01"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.incidents">事件</span></button>
+      <button class="menu-item" data-view="automations" title="自动化" data-i18n="menu.automations" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.automations">自动化</span></button>
       <button class="menu-item" data-view="store" title="软件商店" data-i18n="menu.store" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-6 9 6-9 6-9-6z"/><path d="M3 9v6l9 6 9-6V9"/><path d="M12 9v6"/></svg></span><span class="dot"></span><span class="menu-label" data-i18n="menu.store">软件商店</span></button>
       <div class="group" data-group="actions"><svg class="group-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg><span data-i18n="group.actions">操作</span></div>
       <button class="menu-item" data-view="chat" title="Agent 对话" data-i18n="menu.chat" data-i18n-attr="title"><span class="menu-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L4 20l1-5.2A8 8 0 1121 12z"/></svg></span><span class="menu-label" data-i18n="menu.chat">Agent 对话</span></button>
@@ -334,6 +335,12 @@
           <span data-i18n="kb.title">知识库</span><span class="kb-dot" id="kb-dot"></span>
         </button>
       </div>
+      <div class="auto-mode-banner" id="auto-mode-banner" style="display:none">
+        <span class="tag warn" data-i18n="auto.modeOn">自动化模式</span>
+        <span class="hint" data-i18n="auto.modeHint">描述你想要的自动化；生成后点脚本卡片上的「应用」打开规则弹窗。</span>
+        <button class="clear-btn" id="auto-mode-new" data-i18n="auto.modeNew">新建规则</button>
+        <button class="clear-btn" id="auto-mode-exit" data-i18n="auto.modeExit">退出</button>
+      </div>
       <div id="log">
         <div class="welcome" id="welcome"></div>
       </div>
@@ -345,6 +352,10 @@
         <button id="term-toggle" class="clear-btn" title="终端" data-i18n="term.title" data-i18n-attr="title">
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 5h16v14H4z" stroke="currentColor" stroke-width="1.6"/><path d="M7 9l3 3-3 3M13 15h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span data-i18n="term.title">终端</span>
+        </button>
+        <button id="auto-mode-btn" class="clear-btn" title="自动化模式" data-i18n="auto.modeTitle" data-i18n-attr="title">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M13 2L4 14h7l-1 8 9-12h-7z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span data-i18n="menu.automations">自动化</span>
         </button>
       </div>
       <div class="input-resize" id="input-resize" title="拖动调整输入框高度"></div>
@@ -380,6 +391,7 @@
           <button id="term-clear" class="clear-btn" title="清空终端输出" data-i18n="term.clear" data-i18n-attr="title"><span data-i18n="term.clear">清空</span></button>
           <button id="term-log" class="clear-btn" title="查看操作记录" data-i18n="term.log" data-i18n-attr="title"><span data-i18n="term.log">记录</span></button>
           <button id="fs-toggle" class="clear-btn" title="文件" data-i18n="term.files" data-i18n-attr="title"><span data-i18n="term.files">文件</span></button>
+          <button id="term-auto-open" class="clear-btn" title="自动化模式" data-i18n="auto.modeTitle" data-i18n-attr="title"><span data-i18n="auto.modeTitle">自动化模式</span></button>
           <button id="term-close" class="clear-btn" title="关闭终端" data-i18n="term.close" data-i18n-attr="title">✕</button>
         </div>
         <div id="term-terminal">
@@ -483,6 +495,25 @@
     <div class="content incident-view" id="view-incidents" style="display:none">
       <div class="retro-toolbar"><input id="incident-search" type="text" placeholder="搜索事件…" data-i18n="incident.search" data-i18n-attr="placeholder"><button class="btn small" id="incident-refresh" data-i18n="incident.refresh">刷新</button><button class="btn small" id="incident-playbook-btn" data-i18n="pb.button">Playbook</button><span class="retro-count" id="incident-count"></span></div>
       <div class="incident-list" id="incident-list"></div>
+    </div>
+    <div class="content auto-view" id="view-automations" style="display:none">
+      <div class="retro-toolbar">
+        <input id="auto-search" type="text" placeholder="搜索自动化…" data-i18n="auto.search" data-i18n-attr="placeholder">
+        <button class="btn small" id="auto-refresh" data-i18n="auto.refresh">刷新</button>
+        <span class="retro-count" id="auto-count"></span>
+      </div>
+      <div class="seg-tabs auto-tabs">
+        <button class="seg-tab active" data-auto-tab="rules" data-i18n="auto.tabRules">规则</button>
+        <button class="seg-tab" data-auto-tab="runs" data-i18n="auto.tabRuns">运行历史</button>
+        <button class="seg-tab" data-auto-tab="commands" data-i18n="auto.tabCommands">命令白名单</button>
+      </div>
+      <div id="auto-rules" class="auto-grid"></div>
+      <div id="auto-runs" class="auto-runs" style="display:none"></div>
+      <div id="auto-commands-wrap" style="display:none;max-width:760px">
+        <p class="hint" data-i18n="auto.commandsHint">run_command 动作只允许以这些前缀开头的命令，每行一个；留空表示禁用 run_command。</p>
+        <textarea id="auto-commands" class="field-textarea" spellcheck="false" style="min-height:160px;font-family:var(--font-mono)"></textarea>
+        <div class="modal-actions"><button class="btn" id="auto-commands-save" data-i18n="auto.saveCommands">保存白名单</button></div>
+      </div>
     </div>
     <div class="content store-view" id="view-store">
       <div class="store-toolbar">
@@ -1098,16 +1129,121 @@ Nginx 配置有问题吗，帮我看看
     </div>
   </div>
 </div>
-<script src="i18n.js?v=6"></script>
+<div class="modal-mask" id="auto-mask">
+  <div class="modal modal-wide auto-modal">
+    <div class="auto-modal-head">
+      <h2 id="auto-form-title" data-i18n="auto.new">新建自动化</h2>
+      <button class="modal-close" id="auto-close" title="关闭" data-i18n="modal.close" data-i18n-attr="title">✕</button>
+    </div>
+    <div class="auto-modal-body">
+    <div class="hint" id="auto-modal-status"></div>
+    <div class="auto-script-panel">
+      <div class="auto-script-head">
+        <label data-i18n="auto.scriptTitle">本机测试脚本</label>
+        <button class="btn small" id="auto-script-copy" data-i18n="auto.copyScript">复制脚本</button>
+      </div>
+      <div class="auto-code">
+        <div class="auto-code-head"><span class="auto-code-lang">bash</span></div>
+        <pre id="auto-script" class="auto-script"></pre>
+      </div>
+      <div class="auto-script-actions">
+        <button class="btn small" id="auto-run-test" data-i18n="auto.runTest">运行测试</button>
+        <span class="hint" id="auto-run-status"></span>
+      </div>
+      <div id="auto-run-result" class="auto-test-result"></div>
+    </div>
+    <div class="auto-script-panel">
+      <div class="auto-script-head">
+        <label data-i18n="auto.actionScriptTitle">自动化脚本</label>
+        <button class="btn small" id="auto-action-copy" data-i18n="auto.copyScript">复制脚本</button>
+      </div>
+      <div class="hint" data-i18n="auto.actionScriptHint">由结构化规则生成，展示触发条件、动作和断言；实际执行由自动化引擎完成。</div>
+      <div class="auto-code">
+        <div class="auto-code-head"><span class="auto-code-lang">bash</span></div>
+        <pre id="auto-action-script" class="auto-script"></pre>
+      </div>
+    </div>
+    <div class="auto-form">
+      <div class="field"><label data-i18n="auto.name">名称</label><input id="auto-name" type="text"></div>
+      <div class="field"><label data-i18n="auto.desc">描述</label><input id="auto-desc" type="text"></div>
+      <div class="auto-row">
+        <div class="field"><label data-i18n="auto.trigger">触发方式</label><select id="auto-trigger-type">
+          <option value="service_down" data-i18n="auto.tService">服务异常</option>
+          <option value="metric" data-i18n="auto.tMetric">指标阈值</option>
+          <option value="http" data-i18n="auto.tHttp">HTTP 探测</option>
+          <option value="cron" data-i18n="auto.tCron">定时</option>
+        </select></div>
+        <div class="field"><label data-i18n="auto.riskLevel">风险等级</label><select id="auto-risk">
+          <option value="low" data-i18n="risk.low">低</option>
+          <option value="medium" selected data-i18n="risk.mid">中</option>
+          <option value="high" data-i18n="risk.high">高</option>
+        </select></div>
+      </div>
+      <div class="auto-panel" data-trigger="service_down">
+        <div class="field"><label data-i18n="auto.service">服务名</label><input id="auto-trig-service" type="text" placeholder="nginx"></div>
+      </div>
+      <div class="auto-panel" data-trigger="metric" style="display:none">
+        <div class="auto-row">
+          <div class="field"><label data-i18n="auto.metric">指标</label><select id="auto-metric"><option value="cpu">CPU</option><option value="mem">内存</option><option value="disk">磁盘</option><option value="net">网络</option><option value="sessions">TCP 会话</option></select></div>
+          <div class="field"><label data-i18n="auto.op">运算符</label><select id="auto-op"><option value=">=">&gt;=</option><option value="<=">&lt;=</option></select></div>
+          <div class="field"><label data-i18n="auto.threshold">阈值</label><input id="auto-threshold" type="number" step="any"></div>
+          <div class="field"><label data-i18n="auto.mount">挂载点</label><input id="auto-mount" type="text" placeholder="/"></div>
+          <div class="field"><label data-i18n="auto.duration">持续秒数</label><input id="auto-duration" type="number" min="0" value="0"></div>
+        </div>
+      </div>
+      <div class="auto-panel" data-trigger="http" style="display:none">
+        <div class="auto-row">
+          <div class="field auto-wide"><label data-i18n="auto.url">URL</label><input id="auto-url" type="text" placeholder="https://example.com/health"></div>
+          <div class="field"><label data-i18n="auto.method">方法</label><select id="auto-method"><option>GET</option><option>HEAD</option></select></div>
+          <div class="field"><label data-i18n="auto.expectStatus">期望状态码</label><input id="auto-expect" type="number" value="200"></div>
+          <div class="field"><label data-i18n="auto.consecutive">连续失败次数</label><input id="auto-consecutive" type="number" min="1" value="2"></div>
+          <div class="field"><label data-i18n="auto.timeout">超时秒数</label><input id="auto-to" type="number" min="1" value="10"></div>
+        </div>
+      </div>
+      <div class="auto-panel" data-trigger="cron" style="display:none">
+        <div class="auto-row">
+          <div class="field"><label data-i18n="auto.everySec">间隔秒数</label><input id="auto-every" type="number" min="10"></div>
+          <div class="field"><label data-i18n="auto.dailyAt">每天时间</label><input id="auto-daily" type="text" placeholder="03:30"></div>
+        </div>
+      </div>
+      <div class="field"><label data-i18n="auto.action">动作</label><select id="auto-action-type">
+        <option value="restart_service" data-i18n="auto.aRestart">重启服务</option>
+        <option value="reload_service" data-i18n="auto.aReload">重载服务</option>
+        <option value="run_command" data-i18n="auto.aCommand">执行命令</option>
+        <option value="webhook" data-i18n="auto.aWebhook">调用 Webhook</option>
+      </select></div>
+      <div class="auto-panel" data-action="service">
+        <div class="field"><label data-i18n="auto.service">服务名</label><input id="auto-act-service" type="text" placeholder="nginx"></div>
+      </div>
+      <div class="auto-panel" data-action="run_command" style="display:none">
+        <div class="field"><label data-i18n="auto.command">命令（须匹配白名单前缀）</label><input id="auto-act-command" type="text" placeholder="systemctl restart nginx"></div>
+      </div>
+      <div class="auto-panel" data-action="webhook" style="display:none">
+        <div class="field"><label data-i18n="auto.url">URL</label><input id="auto-act-url" type="text" placeholder="https://hooks.example.com/..."></div>
+      </div>
+      <div class="auto-row">
+        <div class="field"><label data-i18n="auto.cooldown">冷却秒数</label><input id="auto-cooldown" type="number" min="0" value="300"></div>
+        <div class="field"><label data-i18n="auto.maxRuns">每小时最多执行</label><input id="auto-max" type="number" min="1" value="3"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" id="auto-cancel" data-i18n="settings.cancel">取消</button>
+      <button class="btn" id="auto-save" data-i18n="settings.save">保存</button>
+    </div>
+    </div>
+  </div>
+</div>
+<script src="i18n.js?v=9"></script>
 <script src="markdown.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="app.js?v=9"></script>
 <script src="monitor.js?v=6"></script>
-<script src="chat.js?v=6"></script>
+<script src="chat.js?v=9"></script>
 <script src="fs.js?v=6"></script>
 <script src="settings.js?v=6"></script>
 <script src="appman.js?v=6"></script>
 <script src="kb.js?v=7"></script>
 <script src="retros.js?v=7"></script>
 <script src="incidents.js?v=7"></script>
+<script src="automations.js?v=7"></script>
 </body>
 </html>

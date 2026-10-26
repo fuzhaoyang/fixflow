@@ -78,5 +78,6 @@ export function loadConfig({ filePath = join(process.env.HOME || ".", ".config",
     trustProxy: file.trustProxy === true,
     knowledge: normalizeKnowledge(file.knowledge),
     playbooks: file.playbooks && typeof file.playbooks === "object" && !Array.isArray(file.playbooks) ? file.playbooks : {},
+    automationCommands: Array.isArray(file.automationCommands) ? file.automationCommands.map(String) : [],
   };
 }
