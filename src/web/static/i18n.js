@@ -616,7 +616,7 @@ ${FIG.setup}
   <li>安装：<code>npm i -g fixflow</code>，然后运行 <code>fixflow</code> 进入配置向导。</li>
   <li>向导：选服务商 → 粘贴 API Key → 选模型 → 选择是否启动面板。</li>
   <li>选择启动面板时，配置完成后会自动自检，看到「全部正常」即成功。</li>
-  <li>访问面板：向导结束会打印访问地址（形如 <code>http://服务器IP:端口/随机入口/</code>）；忘记入口 / 端口时运行 <code>fixflow default</code> 重新查看。</li>
+  <li>访问面板：向导结束会直接打印访问链接（内网 / 公网 / HTTPS，端口和入口随机）；忘记时运行 <code>fixflow default</code> 重新查看。</li>
   <li>随时自检：<code>fixflow doctor</code>。</li>
 </ol>
 <p class="help-tip">安装后若服务器开有防火墙，安装流程会自动放行面板端口；如手动部署遇到访问不通，先运行 <code>fixflow doctor</code> 查看面板是否在监听。</p>
@@ -783,6 +783,7 @@ ${FIG.chat}
   <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输登录密码。</li>
   <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
   <li>聊天窗右上角「知识库」可配置知识库；运维 / 产品知识问题会优先查询知识库。</li>
+  <li>输入栏「自动化」进入自动化模式，与普通对话共用当前聊天窗和历史；生成规则 / 脚本后点「应用」打开规则弹窗。</li>
 </ol>
 <p class="help-tip">任务运行中可随时停止生成 / 中断任务；请勿在审批单未读清前点确认。</p>
 
@@ -798,7 +799,8 @@ ${FIG.alerts}
 <ol>
   <li><b>日报告警</b>：配置 SMTP 邮箱，设定每日时间与指令，模型自动生成报表并发送。</li>
   <li><b>指标告警</b>：设置面板外网地址 / Webhook；按 CPU / 内存 / 磁盘 / 网络流量 / TCP 会话数设阈值、持续时间与级别（P1–P5）；事件可认领、恢复。</li>
-  <li><b>面板内存</b>：在「设置」里配置面板进程内存上限，超出时页面顶部弹横幅提示（仅提示，不中断服务）。</li>
+    <li><b>服务下线 / 自动化通知</b>：服务非 active 时发告警；若配置了 service_down 自动化规则，修复后 verify 通过再发「自动化修复成功」邮件，失败发「自动化修复失败」邮件。</li>
+<li><b>面板内存</b>：在「设置」里配置面板进程内存上限，超出时页面顶部弹横幅提示（仅提示，不中断服务）。</li>
 </ol>
 <h4 id="settings">设置</h4>
 ${FIG.settings}
@@ -828,6 +830,26 @@ ${FIG.knowledgeFooter}
 </ol>
 <p class="help-tip">页脚只用于展示，不会写回模型上下文；刷新页面后仍会保留。</p>
 
+<h3 id="automations">自动化</h3>
+<h4 id="auto-create">创建规则</h4>
+<ol>
+  <li>进入「Agent 对话」，点击输入栏「终端」旁的「自动化」，或终端标题栏的「自动化模式」。</li>
+  <li>用一句话描述需求，例如：<code>nginx 挂了就重启，测试脚本先停 nginx 再断言恢复</code>。</li>
+  <li>模型同时生成结构化规则和本机测试脚本；脚本卡片上点「应用」打开规则弹窗。</li>
+  <li>核对规则和「自动化脚本」（触发条件 / 动作 / verify 断言），点「保存」生效。</li>
+  <li>点「运行测试」会在本机真实停服 / 恢复并校验断言，需二次确认；失败会自动尝试恢复服务。</li>
+  <li>继续在同一个聊天窗描述修改，模型会基于当前规则和脚本迭代；点「新建规则」清空草稿。</li>
+</ol>
+<h4 id="auto-rules">规则与执行</h4>
+<ul>
+  <li>触发：服务下线 / 指标阈值 / HTTP 探测 / 定时。</li>
+  <li>动作：重启服务 / 重载服务 / 执行命令（受「命令白名单」前缀约束）/ Webhook。</li>
+  <li>执行限制：冷却时间、每小时最多执行次数、失败指数退避；运行历史记录动作输出和 verify 断言结果。</li>
+  <li>服务下线流程：先发「服务下线」邮件 → 自动修复 → verify 全部通过后发「自动化修复成功」邮件；失败发「自动化修复失败」邮件并按冷却 / 退避重试。</li>
+  <li>邮件使用「告警 → 邮箱配置」的 SMTP 和收件人；已有启用 service_down 规则的服务，不再重复发通用下线 / 恢复邮件。</li>
+  <li>「命令白名单」只约束 run_command 和 command_exit 断言，按前缀匹配，不是安全沙箱，建议只填精确前缀。</li>
+</ul>
+
 <h3 id="incidents">事件</h3>
 <h4 id="inc-ingest">事件来源</h4>
 <ol>
@@ -846,7 +868,21 @@ ${FIG.knowledgeFooter}
   <li>「可执行动作」来自 Playbook 或最新发布记录；执行需输入登录密码，结果写回时间线。</li>
   <li>指标和服务事件恢复后自动生成复盘卡片，可点「查看复盘」；SSL 事件只记录，不自动生成复盘。</li>
 </ol>
+<h4 id="inc-manage">列表与删除</h4>
+<ul>
+  <li>事件列表支持搜索，每页 5 条，底部翻页。</li>
+  <li>支持单条删除和勾选批量删除；删除需输入 root / sudo 密码二次验证。</li>
+  <li>删除只移除事件记录，已生成的复盘不会被自动删除（可在复盘页单独删除）。</li>
+</ul>
 <p class="help-tip">回滚命令只能来自发布记录；没有记录时只给建议，不会凭空生成可执行回滚。</p>
+
+<h3 id="retros">复盘</h3>
+<ol>
+  <li>指标 / 服务事件恢复后自动生成复盘卡片；SSL 事件只记录，不自动生成复盘。</li>
+  <li>支持按标题、主机、指标、规则、根因、概要搜索；每页 15 条。</li>
+  <li>卡片可勾选批量删除，也可单条删除；删除前需输入 root / sudo 密码，服务端校验通过才执行。</li>
+  <li>删除复盘会同时清空关联事件的「查看复盘」入口，事件记录本身保留。</li>
+</ol>
 
 <h3 id="security">工具与安全</h3>
 ${FIG.confirm}
@@ -861,7 +897,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">配置与进阶</h3>
 <ul>
-  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
+  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
   <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
   <li>面板监听 <code>0.0.0.0</code>，用「随机端口 + 随机入口路径」保护（无入口前缀的请求返回 404）；启动时会尝试自动放行本机防火墙端口。可用 nginx 反代绑定域名，或启用内置 HTTPS（自签证书）。</li>
   <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
@@ -911,7 +947,7 @@ ${FIG.setup}
   <li>Install: <code>npm i -g fixflow</code>, then run <code>fixflow</code> to enter the setup wizard.</li>
   <li>Wizard: choose provider → paste API Key → pick model → choose whether to start the panel.</li>
   <li>When you choose to start the panel, a self-check runs after setup; seeing "All OK" means success.</li>
-  <li>Open the panel: the wizard prints the access URL (like <code>http://SERVER_IP:PORT/RANDOM_PATH/</code>); run <code>fixflow default</code> on the server to print it again if you forget the port / entry path.</li>
+  <li>Open the panel: the wizard prints the access URL directly (LAN / public / HTTPS; the port and entry path are random); run <code>fixflow default</code> to print it again.</li>
   <li>Run a self-check anytime: <code>fixflow doctor</code>.</li>
 </ol>
 <p class="help-tip">The installer auto-opens the panel port in your firewall. If the panel is unreachable after a manual setup, run <code>fixflow doctor</code> to check whether it is listening.</p>
@@ -1078,6 +1114,7 @@ ${FIG.chat}
   <li>Sensitive actions (close a port, change config, write files, renew certs…) also require re-entering the login password.</li>
   <li>"Clear history" above the input resets the session; "Terminal" opens the built-in terminal on the right.</li>
   <li>The "Knowledge Base" button at the top-right of the chat window configures the KB; ops / product-knowledge questions query it first.</li>
+  <li>"Automation" in the input bar enters automation mode, sharing the current chat window and history; after rule / script generation, click "Apply" to open the rule dialog.</li>
 </ol>
 <p class="help-tip">You can stop generation / interrupt a task anytime; don't confirm an approval form before reading it.</p>
 
@@ -1093,7 +1130,8 @@ ${FIG.alerts}
 <ol>
   <li><b>Daily report</b>: configure an SMTP mailbox, set a daily time and instruction — the model generates and sends the report automatically.</li>
   <li><b>Metric alerts</b>: set the panel public URL / webhook; configure thresholds, duration and level (P1–P5) for CPU / memory / disk / network traffic / TCP sessions; events can be acknowledged and recovered.</li>
-  <li><b>Panel memory</b>: set a process memory limit in "Settings"; when exceeded, a banner appears at the top (advisory only — service keeps running).</li>
+    <li><b>Service down / automation notifications</b>: an alert is sent when a service is not active; if a service_down automation rule exists, a "repair succeeded" email is sent after all verify checks pass, or a "repair failed" email on failure.</li>
+<li><b>Panel memory</b>: set a process memory limit in "Settings"; when exceeded, a banner appears at the top (advisory only — service keeps running).</li>
 </ol>
 <h4 id="settings">Settings</h4>
 ${FIG.settings}
@@ -1123,6 +1161,26 @@ ${FIG.knowledgeFooter}
 </ol>
 <p class="help-tip">The footer is display-only and is never written back into the model context; it is kept after a page refresh.</p>
 
+<h3 id="automations">Automations</h3>
+<h4 id="auto-create">Create a rule</h4>
+<ol>
+  <li>Open "Agent Chat" and click "Automation" next to "Terminal" in the input bar (or "Automation mode" in the terminal header).</li>
+  <li>Describe the need, e.g. <code>restart nginx when it is down; the test script stops nginx and verifies recovery</code>.</li>
+  <li>The model generates both the structured rule and a local test script; click "Apply" on the script card to open the rule dialog.</li>
+  <li>Review the rule and "Automation script" (trigger / action / verify checks), then click "Save".</li>
+  <li>"Run test" really stops / restores the service locally and checks the assertions; it asks for confirmation. A failed run attempts to restore the service.</li>
+  <li>Keep chatting in the same window to refine both rule and script; "New rule" clears the draft.</li>
+</ol>
+<h4 id="auto-rules">Rules &amp; execution</h4>
+<ul>
+  <li>Triggers: service down / metric threshold / HTTP probe / schedule.</li>
+  <li>Actions: restart service / reload service / run command (prefix-restricted by the command allowlist) / webhook.</li>
+  <li>Execution limits: cooldown, max runs per hour and exponential backoff; run history stores action output and verify results.</li>
+  <li>Service-down flow: send the "service down" email first, repair automatically, then send "automation repair succeeded" when all verify checks pass; on failure send "automation repair failed" and retry with cooldown / backoff.</li>
+  <li>Emails use the SMTP / recipients in "Alerts → Mail settings"; services with an enabled service_down rule no longer receive duplicate generic down / recovery emails.</li>
+  <li>The command allowlist only restricts run_command and command_exit checks and matches by prefix. It is not a sandbox, so keep prefixes narrow.</li>
+</ul>
+
 <h3 id="incidents">Incidents</h3>
 <h4 id="inc-ingest">Incident sources</h4>
 <ol>
@@ -1141,7 +1199,21 @@ ${FIG.knowledgeFooter}
   <li>"Allowed actions" comes from the Playbook or the latest release record; running one requires the login password and the result is written back to the timeline.</li>
   <li>Resolved metric/service incidents generate postmortem cards with "View postmortem"; SSL incidents are recorded but do not generate a postmortem automatically.</li>
 </ol>
+<h4 id="inc-manage">List &amp; deletion</h4>
+<ul>
+  <li>The incident list supports search, 5 items per page and pagination at the bottom.</li>
+  <li>Single delete and checkbox batch delete are supported; deletion requires the root / sudo password.</li>
+  <li>Deleting an incident removes only the incident record; generated postmortems are not deleted automatically (delete them on the Postmortems page).</li>
+</ul>
 <p class="help-tip">A rollback command can only come from a release record; without one, only a suggestion is shown.</p>
+
+<h3 id="retros">Postmortems</h3>
+<ol>
+  <li>Resolved metric / service incidents generate postmortem cards automatically; SSL incidents are recorded but do not generate a postmortem.</li>
+  <li>Search by title, host, metric, rule, root cause or summary; 15 cards per page.</li>
+  <li>Cards can be selected for batch deletion or deleted one by one; deletion requires the root / sudo password and is verified on the server.</li>
+  <li>Deleting a postmortem clears the related incident's "View postmortem" link; the incident record itself is kept.</li>
+</ol>
 
 <h3 id="security">Tools &amp; Security</h3>
 ${FIG.confirm}
@@ -1156,7 +1228,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">Configuration &amp; Advanced</h3>
 <ul>
-  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
+  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
   <li>Environment variables override: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
   <li>The panel listens on <code>0.0.0.0</code> and is protected by a "random port + random entry path" (requests without the entry prefix get 404); it tries to open the port in the local firewall on startup. You can reverse-proxy with nginx to a domain, or enable built-in HTTPS (self-signed).</li>
   <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; logs at <code>~/.config/fixflow/cli.log</code>.</li>
