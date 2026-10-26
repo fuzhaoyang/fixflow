@@ -1268,7 +1268,7 @@ function renderMaRules() {
         <span class="tag ${r.enabled ? "ok" : ""}">${r.enabled ? t("ssl.enable") : t("ssl.disable")}</span>
         <div class="alert-main">
           <span class="alert-title">${escapeHtml(r.name)}</span>
-          <span class="alert-sub">${escapeHtml(t(MA_METRIC_NAME[r.metric] || "fs.file"))} ${escapeHtml(r.op)} ${escapeHtml(r.threshold)} · ${t("alert.durationFmt").replace("{t}", escapeHtml(r.duration)).replace("{l}", escapeHtml(r.level))} · ${escapeHtml((r.recipients || []).join(", "))}</span>
+          <span class="alert-sub">${escapeHtml(t(MA_METRIC_NAME[r.metric] || "fs.file") + (r.metric === "disk" && r.mount ? ` (${r.mount})` : ""))} ${escapeHtml(r.op)} ${escapeHtml(r.threshold)} · ${t("alert.durationFmt").replace("{t}", escapeHtml(r.duration)).replace("{l}", escapeHtml(r.level))} · ${escapeHtml((r.recipients || []).join(", "))}</span>
         </div>
         <span class="proc-ops">
           <a href="javascript:void(0)" data-ma-toggle="${escapeHtml(r.id)}" data-enabled="${r.enabled}">${r.enabled ? t("ssl.disable") : t("ssl.enable")}</a>
@@ -1321,15 +1321,36 @@ document.getElementById("ma-tabs").addEventListener("click", (e) => {
   document.getElementById("ma-incidents-wrap").style.display = r ? "none" : "";
 });
 
-const MA_FIELDS = ["ma-name", "ma-threshold", "ma-duration", "ma-recipients", "ma-env", "ma-service", "ma-team", "ma-owner", "ma-runbook", "ma-dashboard", "ma-log", "ma-escalate-to", "ma-escalate-after"];
+const MA_FIELDS = ["ma-name", "ma-mount", "ma-threshold", "ma-duration", "ma-recipients", "ma-env", "ma-service", "ma-team", "ma-owner", "ma-runbook", "ma-dashboard", "ma-log", "ma-escalate-to", "ma-escalate-after"];
+
+async function maMountOptions() {
+  const list = document.getElementById("ma-mount-list");
+  if (!list) return;
+  let disks = (typeof metrics !== "undefined" && metrics?.system?.disks) || [];
+  if (!disks.length) {
+    try { disks = (await fetch("api/metrics").then((r) => r.json()))?.system?.disks || []; } catch {}
+  }
+  const mounts = [...new Set(disks.map((d) => d.mount).filter(Boolean))];
+  if (!mounts.includes("/")) mounts.unshift("/");
+  list.innerHTML = mounts.map((m) => `<option value="${escapeHtml(m)}"></option>`).join("");
+}
+function syncMountField() {
+  const disk = document.getElementById("ma-metric").value === "disk";
+  document.getElementById("ma-mount-wrap").style.display = disk ? "" : "none";
+  const mount = document.getElementById("ma-mount");
+  if (disk && !mount.value) mount.value = "/";
+}
 document.getElementById("ma-add").onclick = () => {
   maEditId = null;
   document.getElementById("ma-form-title").textContent = t("alert.ruleTitle");
   MA_FIELDS.forEach((id) => { document.getElementById(id).value = ""; });
+  maMountOptions();
+  syncMountField();
   document.getElementById("ma-form-err").textContent = "";
   document.getElementById("ma-form").style.display = "";
 };
 document.getElementById("ma-form-cancel").onclick = () => { document.getElementById("ma-form").style.display = "none"; };
+document.getElementById("ma-metric").addEventListener("change", () => { maMountOptions(); syncMountField(); });
 
 document.getElementById("ma-form-save").onclick = async () => {
   const val = (id) => document.getElementById(id).value.trim();
@@ -1340,6 +1361,7 @@ document.getElementById("ma-form-save").onclick = async () => {
     threshold: Number(val("ma-threshold")),
     duration: Number(val("ma-duration")) || 5,
     level: Number(document.getElementById("ma-level").value),
+    mount: val("ma-mount") || "/",
     recipients: val("ma-recipients").split(/[,，\s]+/).filter(Boolean),
     env: val("ma-env"), service: val("ma-service"), team: val("ma-team"), owner: val("ma-owner"),
     runbookUrl: val("ma-runbook"), dashboardUrl: val("ma-dashboard"), logUrl: val("ma-log"),
@@ -1392,6 +1414,9 @@ document.getElementById("ma-rules").addEventListener("click", async (e) => {
     document.getElementById("ma-threshold").value = r.threshold;
     document.getElementById("ma-duration").value = r.duration;
     document.getElementById("ma-level").value = r.level;
+    document.getElementById("ma-mount").value = r.mount || "/";
+    maMountOptions();
+    syncMountField();
     document.getElementById("ma-recipients").value = (r.recipients || []).join(", ");
     document.getElementById("ma-env").value = r.env || "";
     document.getElementById("ma-service").value = r.service || "";

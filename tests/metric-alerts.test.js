@@ -19,7 +19,7 @@ async function mk(cfgPath, values, nowRef, extra = {}) {
     monitor: fakeMonitor(values),
     exec: async (cmd) => {
       if (cmd.includes("free")) return { exitCode: 0, stdout: "Mem: 16000 9000 7000 0 1000 6000", stderr: "" };
-      if (cmd.includes("df")) return { exitCode: 0, stdout: "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 100G 90G 10G 90% /", stderr: "" };
+      if (cmd.includes("df")) return { exitCode: 0, stdout: "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 100G 90G 10G 90% /\n/dev/sdb1 100G 60G 40G 60% /data", stderr: "" };
       if (cmd.includes("ss -s")) return { exitCode: 0, stdout: "Total: 500\nTCP:   1234 (estab 10, closed 5)", stderr: "" };
       return { exitCode: 0, stdout: "", stderr: "" };
     },
@@ -39,12 +39,13 @@ test("metricLabel 名称", () => {
 test("sampleMetrics 解析", async () => {
   const s = await sampleMetrics({ monitor: fakeMonitor({ cpu: 42, netBps: 1250000 }), run: async (cmd) => {
     if (cmd.includes("free")) return { stdout: "Mem: 16000 8000 8000 0 2000 6000" };
-    if (cmd.includes("df")) return { stdout: "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 100G 90G 10G 90% /" };
+    if (cmd.includes("df")) return { stdout: "Filesystem Size Used Avail Use% Mounted on\n/dev/sda1 100G 90G 10G 90% /\n/dev/sdb1 100G 60G 40G 60% /data" };
     if (cmd.includes("ss -s")) return { stdout: "TCP:   1234 (estab 10)" };
     return { stdout: "" };
   } });
   assert.equal(s.cpu, 42);
   assert.equal(s.disk, 90);
+  assert.equal(s.diskByMount["/data"].usedPct, 60);
   assert.equal(s.sessions, 1234);
   assert.ok(s.net > 0);
 });
@@ -110,3 +111,18 @@ test("同主机 5 分钟 ≥2 条聚合成一封", async () => {
   assert.equal(m._notified.filter((e) => e.kind === "aggregate").length, 1);
   assert.equal(m._notified.filter((e) => e.kind === "aggregate")[0].events.length, 2);
 });
+
+test("磁盘规则按挂载点取值", async () => {
+  const cfgPath = join(dir(), "config.json");
+  writeFileSync(cfgPath, JSON.stringify({ metricAlerts: [{ id: "m1", name: "DATA", metric: "disk", mount: "/data", op: ">=", threshold: 70, duration: 0, level: 1, recipients: ["a@x.com"], enabled: true }] }));
+  const nowRef = { t: new Date("2026-09-24T10:00:00").getTime() };
+  const m = await mk(cfgPath, { cpu: 0, netBps: 0 }, nowRef);
+  await m.tick();
+  assert.equal(m._notified.filter((e) => e.kind === "firing").length, 0);
+  const rule = { id: "m2", name: "DATA2", metric: "disk", mount: "/data", op: ">=", threshold: 50, duration: 0, level: 1, recipients: ["a@x.com"], enabled: true };
+  writeFileSync(cfgPath, JSON.stringify({ metricAlerts: [rule] }));
+  const m2 = await mk(cfgPath, { cpu: 0, netBps: 0 }, nowRef);
+  await m2.tick();
+  assert.equal(m2._notified.filter((e) => e.kind === "firing").length, 1);
+});
+

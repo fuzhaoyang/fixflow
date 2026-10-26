@@ -20,9 +20,13 @@ export const LEVEL_NAME = { 1: "紧急", 2: "严重", 3: "重要", 4: "一般", 
 export async function sampleMetrics({ monitor, run = runCommand } = {}) {
   const out = { cpu: null, mem: null, disk: null, net: null, sessions: null };
   try { out.cpu = monitor?.cpu?.() ?? null; } catch {}
-  const [free, df, ss] = await Promise.all([run("free -m"), run("df -h /"), run("ss -s 2>/dev/null")]);
+  const [free, df, ss] = await Promise.all([run("free -m"), run("df -h"), run("ss -s 2>/dev/null")]);
   try { out.mem = parseFree(free.stdout || "").usedPct; } catch {}
-  try { out.disk = parseDf(df.stdout || "").find((d) => d.mount === "/")?.usedPct ?? null; } catch {}
+  try {
+    const disks = parseDf(df.stdout || "");
+    out.diskByMount = Object.fromEntries(disks.map((d) => [d.mount, d]));
+    out.disk = out.diskByMount["/"]?.usedPct ?? null;
+  } catch {}
   try {
     const s = monitor?.net?.().samples || [];
     const last = s[s.length - 1];
@@ -68,7 +72,7 @@ export async function createMetricAlerts({ config, configPath, monitor, exec = r
     const host = hostname();
     for (const r of rules) {
       if (!r.enabled) continue;
-      const v = values[r.metric];
+      const v = r.metric === "disk" ? (values.diskByMount?.[r.mount || "/"]?.usedPct ?? null) : values[r.metric];
       const inc = activeOf(r.id);
       if (hit(r, v)) {
         if (!inc) {

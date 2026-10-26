@@ -619,6 +619,11 @@
           <input id="ma-duration" class="field-textarea" placeholder="持续(分钟)" data-i18n="alert.duration" data-i18n-attr="placeholder">
           <select id="ma-level" class="field-textarea"><option value="1" data-i18n="alert.l1">P1 紧急</option><option value="2" data-i18n="alert.l2">P2 严重</option><option value="3" selected data-i18n="alert.l3">P3 重要</option><option value="4" data-i18n="alert.l4">P4 一般</option><option value="5" data-i18n="alert.l5">P5 提示</option></select>
         </div>
+        <div class="field" id="ma-mount-wrap" style="display:none;margin-top:8px">
+          <label data-i18n="alert.mount">挂载点</label>
+          <input id="ma-mount" class="field-textarea" list="ma-mount-list" placeholder="/" value="/">
+          <datalist id="ma-mount-list"></datalist>
+        </div>
         <div class="field" style="margin-top:8px"><label data-i18n="alert.recipients">收件邮箱（逗号分隔）</label><input class="field-textarea" id="ma-recipients"></div>
         <details style="margin-top:8px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)" data-i18n="alert.extra">选填：标签 / 负责人 / 链接 / 升级</summary>
           <div class="alert-form-grid" style="margin-top:8px">

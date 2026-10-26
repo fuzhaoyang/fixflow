@@ -1056,11 +1056,14 @@ export async function startWeb(config = {}, deps = {}) {
           sendJson(res, { error: "名称/指标/运算符/阈值/收件人必填" }, 400);
           return;
         }
+        const mount = r.metric === "disk" ? (String(r.mount || "/").trim() || "/") : "";
+        if (mount && !mount.startsWith("/")) { sendJson(res, { error: "挂载点必须以 / 开头" }, 400); return; }
         const rule = {
           id: `m${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
           name: String(r.name), metric: r.metric, op: r.op, threshold: Number(r.threshold),
           duration: Number(r.duration) || 5, level: Math.min(5, Math.max(1, Number(r.level) || 3)),
           recipients: r.recipients, enabled: true,
+          mount,
           env: r.env || "", service: r.service || "", team: r.team || "", owner: r.owner || "",
           runbookUrl: r.runbookUrl || "", dashboardUrl: r.dashboardUrl || "", logUrl: r.logUrl || "",
           escalateTo: Array.isArray(r.escalateTo) ? r.escalateTo : [], escalateAfter: Number(r.escalateAfter) || 30,
@@ -1075,8 +1078,10 @@ export async function startWeb(config = {}, deps = {}) {
         const rules = await metricAlerts.list();
         const rule = rules.find((x) => x.id === r.id);
         if (!rule) { sendJson(res, { error: "规则不存在" }, 404); return; }
-        for (const k of ["name", "metric", "op", "env", "service", "team", "owner", "runbookUrl", "dashboardUrl", "logUrl"]) if (r[k] !== undefined) rule[k] = String(r[k]);
+        for (const k of ["name", "metric", "op", "mount", "env", "service", "team", "owner", "runbookUrl", "dashboardUrl", "logUrl"]) if (r[k] !== undefined) rule[k] = String(r[k]);
         for (const k of ["threshold", "duration", "level", "escalateAfter"]) if (r[k] !== undefined) rule[k] = Number(r[k]);
+        if (rule.metric === "disk" && !rule.mount) rule.mount = "/";
+        if (rule.metric === "disk" && !String(rule.mount || "").startsWith("/")) { sendJson(res, { error: "挂载点必须以 / 开头" }, 400); return; }
         if (r.enabled !== undefined) rule.enabled = Boolean(r.enabled);
         if (Array.isArray(r.recipients)) rule.recipients = r.recipients;
         if (Array.isArray(r.escalateTo)) rule.escalateTo = r.escalateTo;
