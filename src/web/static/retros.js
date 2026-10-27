@@ -93,7 +93,11 @@ function renderRetros() {
 }
 
 async function loadRetros() {
-  retroGrid.innerHTML = `<div class="retro-empty">${escapeHtml(t("retro.loading"))}</div>`;
+  if (!retroCards.length) {
+    if (retroPager) retroPager.innerHTML = "";
+    if (retroDeleteBtn) retroDeleteBtn.disabled = true;
+    retroGrid.innerHTML = listLoadingHtml(t("retro.loading"));
+  }
   try {
     const res = await fetch("api/retros");
     const data = await res.json();

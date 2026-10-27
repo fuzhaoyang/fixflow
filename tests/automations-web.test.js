@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { startWeb } from "../src/web/server.js";
+import { readIncidents } from "../src/incidents.js";
+import { readRetros } from "../src/retros.js";
 
 const testCaptchas = { create: () => ({ id: "c", code: "0000" }), verify: (id, code) => String(code) === "0000" };
 const live = [];
@@ -231,6 +233,12 @@ test("对话内自动化模式接线", () => {
   assert.match(auto, /function enterAutoMode/);
   assert.match(auto, /function renderAutomationHistory/);
   assert.match(auto, /function buildAutomationScript/);
+  assert.match(auto, /AUTO_RUN_PAGE_SIZE = 15/);
+  assert.match(auto, /data-auto-run-del/);
+  assert.match(auto, /data-auto-run-select/);
+  assert.match(html, /id="auto-run-delete-mask"/);
+  assert.match(auto, /function askAutoRunDelete/);
+  assert.match(auto, /closest\("#auto-run-delete"\)/);
   assert.match(css, /\.input-actions\s*\{[^}]*margin-left:\s*auto/);
 });
 
@@ -283,6 +291,23 @@ test("nginx 下线：先发告警，verify 通过后发修复成功邮件", asyn
   assert.match(mails[1].subject, /自动化修复成功/);
   assert.match(mails[1].body, /nginx/);
   assert.match(mails[1].body, /通过/);
+  const incs = (await readIncidents(join(dir, "incidents.json"))).incidents;
+  assert.equal(incs.length, 1);
+  assert.equal(incs[0].service, "nginx");
+  assert.equal(incs[0].source, "automation");
+  assert.equal(incs[0].status, "resolved");
+  assert.equal(incs[0].automation?.ok, true);
+  assert.ok(Array.isArray(incs[0].automation?.checks));
+  let retros = [];
+  for (let i = 0; i < 50; i++) {
+    retros = await readRetros(join(dir, "retros.json"));
+    if (retros.length) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.equal(retros.length, 1);
+  assert.equal(retros[0].incidentId, incs[0].id);
+  assert.match(retros[0].markdown, /## 自动化/);
+  assert.match(retros[0].markdown, /nginx/);
   w.close();
 });
 
@@ -309,6 +334,10 @@ test("自动化修复后 verify 未通过：发修复失败邮件", async () => 
   assert.match(mails[0].subject, /服务下线/);
   assert.match(mails[1].subject, /自动化修复失败/);
   assert.match(mails[1].body, /未达预期|失败/);
+  const incs = (await readIncidents(join(dir, "incidents.json"))).incidents;
+  assert.equal(incs.length, 1);
+  assert.equal(incs[0].status, "open");
+  assert.equal(incs[0].automation?.ok, false);
   w.close();
 });
 
@@ -341,5 +370,50 @@ test("有自动化规则时监控不重复发下线/恢复邮件", async () => {
   assert.match(mails[0].subject, /服务下线/);
   await w.checkDownServices();
   assert.equal(mails.length, 2, "自动化处理后不再发通用恢复邮件");
+  w.close();
+});
+
+test("运行历史支持单个和批量删除，并分页展示", async () => {
+  const exec = async (cmd) => ({ exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" });
+  const { promise, dir } = makeServer({}, { noAutomationTimer: true, runCommand: exec });
+  const w = await promise;
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await login(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const runsPath = join(dir, "automation-runs.jsonl");
+  const rows = [1, 2, 3].map((n) => ({ id: `AR-${n}`, automationId: "A-1", at: n, ok: true, checks: [], output: "" }));
+  writeFileSync(runsPath, rows.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const list = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.runs.length, 3);
+
+  const bad = await fetch(`${base}/api/automations/runs`, { method: "DELETE", headers: H, body: JSON.stringify({ ids: ["AR-1"], password: "badpass" }) });
+  assert.equal(bad.status, 403);
+  const one = await fetch(`${base}/api/automations/runs`, { method: "DELETE", headers: H, body: JSON.stringify({ id: "AR-1", password: "rootpw" }) });
+  assert.equal(one.status, 200);
+  assert.equal((await one.json()).deleted, 1);
+  const batch = await fetch(`${base}/api/automations/runs`, { method: "DELETE", headers: H, body: JSON.stringify({ ids: ["AR-2", "AR-3"], password: "rootpw" }) });
+  assert.equal(batch.status, 200);
+  assert.equal((await batch.json()).deleted, 2);
+  const after = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
+  assert.equal(after.runs.length, 0);
+  w.close();
+});
+
+test("旧版无 id 的失败运行记录可删除", async () => {
+  const exec = async () => ({ exitCode: 0, stdout: "", stderr: "" });
+  const { promise, dir } = makeServer({}, { noAutomationTimer: true, runCommand: exec });
+  const w = await promise;
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await login(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  writeFileSync(join(dir, "automation-runs.jsonl"), JSON.stringify({ automationId: "A-1", at: 1, ok: false, test: true }) + "\n");
+  const list = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.runs.length, 1);
+  assert.match(list.runs[0].id, /^AR-L/);
+  const del = await fetch(`${base}/api/automations/runs`, { method: "DELETE", headers: H, body: JSON.stringify({ ids: [list.runs[0].id], password: "rootpw" }) });
+  assert.equal(del.status, 200);
+  assert.equal((await del.json()).deleted, 1);
+  const after = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
+  assert.equal(after.runs.length, 0);
   w.close();
 });

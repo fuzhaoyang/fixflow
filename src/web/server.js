@@ -30,7 +30,7 @@ import { createOrMergeIncidents, listIncidents, getIncident, addEvidence, setInc
 import { collectEvidence, normalizePlaybooks } from "../incidents-playbook.js";
 import { analyzeIncident } from "../incidents-rca.js";
 import { addDeployment, readDeployments } from "../deployments.js";
-import { normalizeAutomation, readAutomations, writeAutomations, readRuns, createAutomationEngine, runAutomationNow, runLocalTest, buildVmTestScript, appendRun } from "../automations.js";
+import { normalizeAutomation, readAutomations, writeAutomations, readRuns, createAutomationEngine, runAutomationNow, runLocalTest, buildVmTestScript, appendRun, deleteRuns } from "../automations.js";
 import { chat } from "../agent.js";
 import { redactSecrets } from "../tools.js";
 
@@ -531,7 +531,7 @@ export async function startWeb(config = {}, deps = {}) {
       alerts: [{ id, fingerprint, source, service, host, alertname: title, title, severity, status, startedAt, labels }],
     });
     const r = results[0];
-    if (!r) return null;
+    if (!r?.incident) return null;
     if (r.resolved) { if (!skipAnalysis) finalizeIncident(r.incident); }
     else if (r.created && !skipAnalysis) startIncidentAnalysis(r.incident);
     broadcast({ type: "incidents" });
@@ -677,6 +677,23 @@ export async function startWeb(config = {}, deps = {}) {
     : a.type === "run_command" ? a.command
     : `POST ${a.url}`;
   const automationChecksText = (run) => (run.checks || []).map((c) => `- ${c.type}: ${c.ok ? "通过" : "失败"} ${c.detail || ""}`).join("\n") || "- 无";
+  const automationIncidentFingerprint = (rule) => rule.trigger?.type === "service_down" ? `service:down:${rule.trigger.service}` : `automation:${rule.id}`;
+  const automationIncidentService = (rule) => rule.trigger?.type === "service_down" ? rule.trigger.service : rule.trigger?.type === "metric" ? "host" : "http";
+  const automationIncidentTitle = (rule) => {
+    if (rule.trigger?.type === "service_down") return `服务 ${rule.trigger.service} 下线（自动化修复）`;
+    if (rule.trigger?.type === "metric") return `指标触发自动化：${rule.name}`;
+    if (rule.trigger?.type === "http") return `HTTP 探测触发自动化：${rule.name}`;
+    return `定时自动化：${rule.name}`;
+  };
+  const automationIncidentSeverity = (rule) => rule.risk === "high" ? 2 : rule.risk === "low" ? 4 : 3;
+  const findOpenAutomationIncident = async (rule) => {
+    const list = await listIncidents(incidentsPath);
+    const fp = automationIncidentFingerprint(rule);
+    const byRule = list.find((i) => i.status !== "resolved" && (i.fingerprint === fp || i.labels?.automation === rule.id));
+    if (byRule) return byRule;
+    if (rule.trigger?.type !== "service_down") return null;
+    return list.find((i) => i.status !== "resolved" && i.source === "service" && i.service === rule.trigger.service) || null;
+  };
   const automationEngine = createAutomationEngine({
     filePath: automationsPath,
     runsPath: automationRunsPath,
@@ -684,6 +701,28 @@ export async function startWeb(config = {}, deps = {}) {
     monitor,
     allowCommands: config.automationCommands,
     onTrigger: async (rule, result) => {
+      if (rule.trigger?.type !== "cron") {
+        const existing = await findOpenAutomationIncident(rule);
+        const inc = await syncPanelIncident({
+          id: existing?.id,
+          fingerprint: existing?.fingerprint || automationIncidentFingerprint(rule),
+          source: existing?.source || "automation",
+          service: existing?.service || automationIncidentService(rule),
+          host: existing?.host || hostname(),
+          title: existing?.title || automationIncidentTitle(rule),
+          severity: existing?.severity || automationIncidentSeverity(rule),
+          status: "firing",
+          startedAt: existing?.startedAt || Date.now(),
+          labels: { ...(existing?.labels || {}), automation: rule.id, rule: rule.name, trigger: rule.trigger.type },
+        });
+        if (inc) {
+          await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
+            x.labels = { ...(x.labels || {}), automation: rule.id, rule: rule.name, trigger: rule.trigger.type };
+            x.automation = { ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, action: rule.action, startedAt: Date.now() };
+            x.timeline.push({ ts: Date.now(), text: `自动化规则「${rule.name}」触发，动作：${automationActionText(rule.action)}` });
+          } });
+        }
+      }
       if (rule.trigger?.type !== "service_down") return;
       const service = rule.trigger.service;
       if (autoDownNotified.has(service)) return;
@@ -696,6 +735,33 @@ export async function startWeb(config = {}, deps = {}) {
     },
     onRun: async (run, rule) => {
       broadcast({ type: "automations" });
+      if (rule.trigger?.type !== "cron") {
+        const inc = await findOpenAutomationIncident(rule);
+        if (inc) {
+          await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
+            x.evidence = Array.isArray(x.evidence) ? x.evidence : [];
+            x.evidence.push({ kind: "automation", command: `自动化：${rule.name} / ${automationActionText(rule.action)}`, output: redactSecrets(run.output || ""), ok: run.ok, ts: Date.now() });
+            x.automation = { ...(x.automation || {}), ok: run.ok, checks: run.checks || [], output: redactSecrets(run.output || ""), durationMs: run.durationMs };
+            const total = (run.checks || []).length;
+            const passed = (run.checks || []).filter((c) => c.ok).length;
+            x.timeline.push({ ts: Date.now(), text: run.ok ? `自动化修复成功：${passed}/${total} 项断言通过，耗时 ${run.durationMs}ms` : `自动化修复失败：${total - passed}/${total} 项断言未通过` });
+          } });
+          if (run.ok) {
+            await syncPanelIncident({
+              id: inc.id,
+              fingerprint: inc.fingerprint,
+              source: inc.source || "automation",
+              service: inc.service,
+              host: inc.host || hostname(),
+              title: inc.title,
+              severity: inc.severity || automationIncidentSeverity(rule),
+              status: "resolved",
+              startedAt: inc.startedAt,
+              labels: inc.labels,
+            });
+          }
+        }
+      }
       if (rule.trigger?.type !== "service_down") return;
       const service = rule.trigger.service;
       if (run.ok) {
@@ -1267,6 +1333,16 @@ export async function startWeb(config = {}, deps = {}) {
         const body = JSON.parse(await readBody(req) || "{}");
         await writeAutomations(automationsPath, (await readAutomations(automationsPath)).filter((x) => x.id !== body.id));
         sendJson(res, { ok: true });
+      } else if (url.pathname === "/api/automations/runs" && req.method === "DELETE") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(String).filter(Boolean).slice(0, 500);
+        if (!ids.length) { sendJson(res, { error: "请选择要删除的运行记录" }, 400); return; }
+        const adminUser = await resolveAdminUser();
+        if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
+        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误，删除未执行" }, 403); return; }
+        const r = await deleteRuns({ filePath: automationRunsPath, ids });
+        broadcast({ type: "automations" });
+        sendJson(res, { ok: true, deleted: r.deleted });
       } else if (url.pathname === "/api/automations/run" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         const r = await runAutomationNow({ filePath: automationsPath, runsPath: automationRunsPath, id: body.id, exec: execCmd, allowCommands: config.automationCommands });

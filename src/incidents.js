@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
@@ -57,7 +57,9 @@ export async function readIncidents(filePath) {
 
 export async function writeIncidents(filePath, state) {
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify({ incidents: (state.incidents || []).slice(0, MAX) }, null, 2));
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, JSON.stringify({ incidents: (state.incidents || []).slice(0, MAX) }, null, 2));
+  await rename(tmp, filePath);
 }
 
 let chain = Promise.resolve();
@@ -87,6 +89,8 @@ export function createOrMergeIncidents({ filePath, alerts, now = Date.now(), mer
           found.timeline.push({ ts: now, text: "告警再次触发" });
           results.push({ incident: found, created: false, resolved: false });
         }
+      } else if (a.status === "resolved") {
+        results.push({ incident: null, created: false, resolved: false, skipped: true });
       } else {
         const incident = {
           id: a.id || "INC-" + randomUUID().slice(0, 8),
@@ -97,13 +101,13 @@ export function createOrMergeIncidents({ filePath, alerts, now = Date.now(), mer
           alertname: a.alertname,
           title: a.title,
           severity: a.severity,
-          status: a.status === "resolved" ? "resolved" : "open",
+          status: "open",
           startedAt: a.startedAt,
           lastSeen: now,
-          resolvedAt: a.status === "resolved" ? now : 0,
+          resolvedAt: 0,
           labels: a.labels || {},
           annotations: a.annotations || {},
-          timeline: [{ ts: now, text: a.status === "resolved" ? "收到恢复告警" : "告警接入" }],
+          timeline: [{ ts: now, text: "告警接入" }],
           evidence: [],
           rca: null,
           playbookAt: 0,

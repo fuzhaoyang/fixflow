@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir, appendFile, chmod } from "node:fs/promises";
 import { dirname } from "node:path";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { sampleMetrics, METRICS } from "./metric-alerts.js";
 import { runCommand, redactSecrets } from "./tools.js";
 
@@ -150,14 +150,29 @@ export async function writeAutomations(filePath, rules) {
 export async function readRuns(filePath) {
   try {
     return (await readFile(filePath, "utf8")).split("\n").filter(Boolean).map((l) => {
-      try { return JSON.parse(l); } catch { return null; }
+      try {
+        const run = JSON.parse(l);
+        if (run && typeof run === "object" && !run.id) run.id = "AR-L" + createHash("sha1").update(l).digest("hex").slice(0, 8);
+        return run;
+      } catch { return null; }
     }).filter(Boolean).slice(-MAX_RUNS_READ);
   } catch { return []; }
 }
 
 export async function appendRun(filePath, run) {
   await mkdir(dirname(filePath), { recursive: true });
-  await appendFile(filePath, JSON.stringify(run) + "\n", { mode: 0o600 });
+  const row = run && typeof run === "object" && !run.id ? { ...run, id: newRunId() } : run;
+  await appendFile(filePath, JSON.stringify(row) + "\n", { mode: 0o600 });
+}
+
+export async function deleteRuns({ filePath, ids = [] }) {
+  const set = new Set((Array.isArray(ids) ? ids : [ids]).map(String).filter(Boolean));
+  const runs = await readRuns(filePath);
+  const remaining = runs.filter((r) => !set.has(r.id));
+  await mkdir(dirname(filePath), { recursive: true });
+  await writeFile(filePath, remaining.map((r) => JSON.stringify(r)).join("\n") + (remaining.length ? "\n" : ""), { mode: 0o600 });
+  await chmod(filePath, 0o600).catch(() => {});
+  return { deleted: runs.length - remaining.length, runs: remaining };
 }
 
 function triggerHit(op, value, threshold) {

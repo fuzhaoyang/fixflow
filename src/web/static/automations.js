@@ -25,6 +25,13 @@ const autoActionCopy = document.getElementById("auto-action-copy");
 const autoRunTest = document.getElementById("auto-run-test");
 const autoRunStatus = document.getElementById("auto-run-status");
 const autoRunResult = document.getElementById("auto-run-result");
+const autoRunDeleteMask = document.getElementById("auto-run-delete-mask");
+const autoRunDeleteText = document.getElementById("auto-run-delete-text");
+const autoRunDeletePw = document.getElementById("auto-run-delete-password");
+const autoRunDeleteErr = document.getElementById("auto-run-delete-err");
+const autoRunDeleteClose = document.getElementById("auto-run-delete-close");
+const autoRunDeleteCancel = document.getElementById("auto-run-delete-cancel");
+const autoRunDeleteConfirm = document.getElementById("auto-run-delete-confirm");
 
 let autoRules = [];
 let autoRuns = [];
@@ -37,6 +44,10 @@ let autoEditingVerify = [];
 let autoScript = "";
 let autoBusy = false;
 let autoMode = false;
+let autoRunPage = 1;
+let autoRunSelected = new Set();
+let autoRunDeleteIds = [];
+const AUTO_RUN_PAGE_SIZE = 15;
 
 const autoTime = (ts) => {
   const d = new Date(ts);
@@ -105,13 +116,52 @@ function renderAutoRules() {
   }).join("");
 }
 
-function renderAutoRuns() {
+function autoRunFiltered() {
   const q = autoQuery.trim().toLowerCase();
   const nameOf = (id) => autoRules.find((r) => r.id === id)?.name || id;
-  const list = q ? autoRuns.filter((r) => [nameOf(r.automationId), r.output, r.stdout, r.stderr, r.script, JSON.stringify(r.checks || [])].join(" ").toLowerCase().includes(q)) : autoRuns;
-  if (autoCount) autoCount.textContent = t("auto.count").replace("{n}", list.length);
-  if (!list.length) { autoRunsEl.innerHTML = `<div class="retro-empty">${escapeHtml(t("auto.noRuns"))}</div>`; return; }
-  autoRunsEl.innerHTML = list.map((r) => {
+  return q ? autoRuns.filter((r) => [nameOf(r.automationId), r.output, r.stdout, r.stderr, r.script, JSON.stringify(r.checks || [])].join(" ").toLowerCase().includes(q)) : autoRuns;
+}
+
+function autoRunPageItems() {
+  return autoRunFiltered().slice((autoRunPage - 1) * AUTO_RUN_PAGE_SIZE, autoRunPage * AUTO_RUN_PAGE_SIZE);
+}
+
+function updateAutoRunSelection() {
+  const ids = autoRunPageItems().map((r) => r.id);
+  const selected = ids.filter((id) => autoRunSelected.has(id)).length;
+  const all = document.getElementById("auto-run-select-all");
+  if (all) {
+    all.checked = ids.length > 0 && selected === ids.length;
+    all.indeterminate = selected > 0 && selected < ids.length;
+  }
+  const del = document.getElementById("auto-run-delete");
+  if (del) {
+    del.disabled = autoRunSelected.size === 0;
+    del.textContent = t("auto.deleteSelected") + (autoRunSelected.size ? ` (${autoRunSelected.size})` : "");
+  }
+}
+
+function renderAutoRunPager(pages) {
+  if (pages <= 1) return "";
+  return `<div class="incident-pager"><button class="btn small" data-auto-run-page="${autoRunPage - 1}" ${autoRunPage <= 1 ? "disabled" : ""}>‹</button><span>${autoRunPage}/${pages}</span><button class="btn small" data-auto-run-page="${autoRunPage + 1}" ${autoRunPage >= pages ? "disabled" : ""}>›</button></div>`;
+}
+
+function renderAutoRuns() {
+  const list = autoRunFiltered();
+  const nameOf = (id) => autoRules.find((r) => r.id === id)?.name || id;
+  const pages = Math.max(1, Math.ceil(list.length / AUTO_RUN_PAGE_SIZE));
+  if (autoRunPage > pages) autoRunPage = pages;
+  if (autoRunPage < 1) autoRunPage = 1;
+  if (autoCount) autoCount.textContent = `${t("auto.count").replace("{n}", list.length)} · ${t("auto.page").replace("{p}", autoRunPage).replace("{n}", pages)}`;
+  const items = list.slice((autoRunPage - 1) * AUTO_RUN_PAGE_SIZE, autoRunPage * AUTO_RUN_PAGE_SIZE);
+  const selectedOnPage = items.filter((r) => autoRunSelected.has(r.id)).length;
+  const toolbar = `<div class="auto-runs-toolbar"><label class="inc-select-all"><input type="checkbox" id="auto-run-select-all" ${items.length > 0 && selectedOnPage === items.length ? "checked" : ""}><span>${t("auto.selectAll")}</span></label><button class="btn small danger" id="auto-run-delete" ${autoRunSelected.size ? "" : "disabled"}>${t("auto.deleteSelected")}${autoRunSelected.size ? ` (${autoRunSelected.size})` : ""}</button></div>`;
+  if (!list.length) {
+    autoRunsEl.innerHTML = toolbar + `<div class="retro-empty">${escapeHtml(t("auto.noRuns"))}</div>`;
+    updateAutoRunSelection();
+    return;
+  }
+  autoRunsEl.innerHTML = toolbar + items.map((r) => {
     const scriptTest = r.kind === "script-test";
     const title = scriptTest ? t("auto.scriptTest") : nameOf(r.automationId);
     const meta = `${autoTime(r.at)} · ${r.durationMs || 0}ms${scriptTest ? " · " + t("auto.exitCode") + " " + (r.exitCode ?? "—") : ""}${r.test ? " · " + t("auto.testBadge") : ""}${r.manual ? " · " + t("auto.manualBadge") : ""}`;
@@ -127,13 +177,43 @@ function renderAutoRuns() {
       <pre class="auto-run-out">${escapeHtml(r.output || "")}</pre>`;
     return `<details class="auto-run">
       <summary>
+        <label class="incident-check"><input type="checkbox" data-auto-run-select="${escapeHtml(r.id)}" ${autoRunSelected.has(r.id) ? "checked" : ""}></label>
         ${autoStatusBadge(r.ok, r.ok ? t("auto.runOk") : t("auto.runFail"))}
         <b>${escapeHtml(title)}</b>
         <span class="auto-run-meta">${escapeHtml(meta)}</span>
+        <button class="btn small danger auto-run-del" data-auto-run-del="${escapeHtml(r.id)}">${escapeHtml(t("auto.delete"))}</button>
       </summary>
       <div class="auto-run-body">${body}</div>
     </details>`;
-  }).join("");
+  }).join("") + renderAutoRunPager(pages);
+  updateAutoRunSelection();
+}
+
+function askAutoRunDelete(ids) {
+  autoRunDeleteIds = ids.filter(Boolean);
+  if (!autoRunDeleteIds.length) return;
+  autoRunDeleteText.textContent = t("auto.deleteRunText").replace("{n}", autoRunDeleteIds.length);
+  autoRunDeleteErr.textContent = "";
+  autoRunDeletePw.value = "";
+  autoRunDeleteMask.classList.add("show");
+  setTimeout(() => autoRunDeletePw.focus(), 50);
+}
+
+async function confirmAutoRunDelete() {
+  const password = autoRunDeletePw.value.trim();
+  if (!password) { autoRunDeleteErr.textContent = t("auto.rootPwdRequired"); return; }
+  autoRunDeleteConfirm.disabled = true;
+  try {
+    const res = await fetch("api/automations/runs", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: autoRunDeleteIds, password }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) { autoRunDeleteErr.textContent = data.error || t("auto.deleteRunFail"); return; }
+    for (const id of autoRunDeleteIds) autoRunSelected.delete(id);
+    autoRunDeleteMask.classList.remove("show");
+    if (typeof showSaveMsg === "function") showSaveMsg(t("auto.runsDeleted").replace("{n}", data.deleted ?? autoRunDeleteIds.length), "ok");
+    await loadAutomations();
+  } finally {
+    autoRunDeleteConfirm.disabled = false;
+  }
 }
 
 function renderAutoAll() {
@@ -144,6 +224,9 @@ function renderAutoAll() {
 }
 
 async function loadAutomations() {
+  if (autoTab !== "commands" && !(autoTab === "runs" ? autoRuns.length : autoRules.length)) {
+    (autoTab === "runs" ? autoRunsEl : autoRulesEl).innerHTML = listLoadingHtml(t("auto.loading"));
+  }
   try {
     const res = await fetch("api/automations");
     const data = await res.json();
@@ -154,6 +237,8 @@ async function loadAutomations() {
     autoRules = [];
     autoRuns = [];
   }
+  const runIds = new Set(autoRuns.map((r) => r.id));
+  autoRunSelected = new Set([...autoRunSelected].filter((id) => runIds.has(id)));
   renderAutoAll();
 }
 
@@ -533,7 +618,7 @@ async function runAutoNow(rule) {
   }
 }
 
-autoSearch.addEventListener("input", () => { autoQuery = autoSearch.value; renderAutoAll(); });
+autoSearch.addEventListener("input", () => { autoQuery = autoSearch.value; autoRunPage = 1; renderAutoAll(); });
 autoRefresh.addEventListener("click", loadAutomations);
 const closeAutoDetail = () => { if (!autoBusy) autoMask.classList.remove("show"); };
 autoClose.addEventListener("click", closeAutoDetail);
@@ -566,6 +651,34 @@ autoCommandsSave.addEventListener("click", async () => {
   if (data.error) alert(data.error);
   else { autoCommandsList = data.commands || commands; autoCommands.value = autoCommandsList.join("\n"); }
 });
+
+autoRunsEl.addEventListener("click", (e) => {
+  const batch = e.target.closest("#auto-run-delete");
+  if (batch) { e.preventDefault(); e.stopPropagation(); askAutoRunDelete([...autoRunSelected]); return; }
+  const del = e.target.closest("[data-auto-run-del]");
+  if (del) { e.preventDefault(); e.stopPropagation(); askAutoRunDelete([del.dataset.autoRunDel]); return; }
+  const cb = e.target.closest("[data-auto-run-select]");
+  if (cb) {
+    e.stopPropagation();
+    if (cb.checked) autoRunSelected.add(cb.dataset.autoRunSelect); else autoRunSelected.delete(cb.dataset.autoRunSelect);
+    updateAutoRunSelection();
+    return;
+  }
+  const page = e.target.closest("[data-auto-run-page]");
+  if (page) { e.preventDefault(); e.stopPropagation(); autoRunPage = Number(page.dataset.autoRunPage) || 1; renderAutoRuns(); }
+});
+autoRunsEl.addEventListener("change", (e) => {
+  if (e.target.id !== "auto-run-select-all") return;
+  const ids = autoRunPageItems().map((r) => r.id);
+  for (const id of ids) { if (e.target.checked) autoRunSelected.add(id); else autoRunSelected.delete(id); }
+  renderAutoRuns();
+});
+
+if (autoRunDeleteClose) autoRunDeleteClose.onclick = () => autoRunDeleteMask.classList.remove("show");
+if (autoRunDeleteCancel) autoRunDeleteCancel.onclick = () => autoRunDeleteMask.classList.remove("show");
+if (autoRunDeleteConfirm) autoRunDeleteConfirm.onclick = confirmAutoRunDelete;
+if (autoRunDeletePw) autoRunDeletePw.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); confirmAutoRunDelete(); } });
+if (autoRunDeleteMask) autoRunDeleteMask.addEventListener("click", (e) => { if (e.target === autoRunDeleteMask) autoRunDeleteMask.classList.remove("show"); });
 
 autoRulesEl.addEventListener("click", (e) => {
   const btn = e.target.closest("button");

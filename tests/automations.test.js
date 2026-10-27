@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { normalizeAutomation, writeAutomations, readAutomations, evaluateTrigger, executeAutomation, runAutomationNow, runLocalTest, buildVmTestScript, createAutomationEngine, readRuns } from "../src/automations.js";
+import { normalizeAutomation, writeAutomations, readAutomations, evaluateTrigger, executeAutomation, runAutomationNow, runLocalTest, buildVmTestScript, createAutomationEngine, readRuns, appendRun, deleteRuns } from "../src/automations.js";
 
 const dir = () => mkdtempSync(join(tmpdir(), "ff-auto-"));
 
@@ -138,4 +138,32 @@ test("executeAutomation 汇总动作与断言", async () => {
   const run = await executeAutomation(rule, { exec: async (cmd) => ({ exitCode: cmd.includes("is-active") ? 3 : 0, stdout: "" }), now: () => 1 });
   assert.equal(run.ok, false);
   assert.equal(run.checks[0].ok, false);
+});
+
+test("readRuns 为旧记录生成稳定 ID，deleteRuns 可删除", async () => {
+  const d = dir();
+  const file = join(d, "runs.jsonl");
+  writeFileSync(file, JSON.stringify({ automationId: "A-1", at: 1, ok: false }) + "\n" + JSON.stringify({ id: "AR-1", automationId: "A-1", at: 2, ok: true }) + "\n");
+  const runs = await readRuns(file);
+  assert.equal(runs.length, 2);
+  assert.match(runs[0].id, /^AR-L/);
+  const again = await readRuns(file);
+  assert.equal(again[0].id, runs[0].id);
+  const r = await deleteRuns({ filePath: file, ids: [runs[0].id] });
+  assert.equal(r.deleted, 1);
+  assert.deepEqual((await readRuns(file)).map((x) => x.id), ["AR-1"]);
+});
+
+test("deleteRuns 支持单个和批量删除", async () => {
+  const d = dir();
+  const file = join(d, "runs.jsonl");
+  await appendRun(file, { id: "AR-1", automationId: "A-1" });
+  await appendRun(file, { id: "AR-2", automationId: "A-1" });
+  await appendRun(file, { id: "AR-3", automationId: "A-1" });
+  const one = await deleteRuns({ filePath: file, ids: ["AR-1"] });
+  assert.equal(one.deleted, 1);
+  assert.deepEqual((await readRuns(file)).map((r) => r.id), ["AR-2", "AR-3"]);
+  const rest = await deleteRuns({ filePath: file, ids: ["AR-2", "AR-3", "AR-missing"] });
+  assert.equal(rest.deleted, 2);
+  assert.equal((await readRuns(file)).length, 0);
 });

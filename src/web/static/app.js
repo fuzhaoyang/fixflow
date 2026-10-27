@@ -128,6 +128,10 @@ let logsView = false;
 let metrics = {};
 let busy = false;
 
+function listLoadingHtml(text) {
+  return `<div class="list-loading"><span class="spinner"></span><span>${escapeHtml(text)}</span></div>`;
+}
+
 // ---------- 路由（hash：#/system、#/network、#/chat） ----------
 function applyRoute() {
   const raw = (location.hash.replace(/^#\/?/, "") || "all").trim();

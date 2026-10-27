@@ -95,6 +95,11 @@ function renderIncidents() {
 }
 
 async function loadIncidents() {
+  if (!incidentItems.length) {
+    if (incidentPager) incidentPager.innerHTML = "";
+    if (incidentDeleteBtn) incidentDeleteBtn.disabled = true;
+    incidentList.innerHTML = listLoadingHtml(t("incident.loading"));
+  }
   try {
     const res = await fetch("api/incidents");
     const data = await res.json();

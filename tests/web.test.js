@@ -1816,3 +1816,12 @@ test("总览时间范围下拉支持一周，前端按分钟切换历史数据�
   assert.doesNotMatch(monitorJs, /function loadHistory\b/, "monitor.js 不得定义 loadHistory，会与 chat.js 同名覆盖");
   assert.match(monitorJs, /function loadMonitorHistory\b/);
 });
+
+test("事件/复盘/自动化列表包含统一 loading 状态", () => {
+  const dir = new URL("../src/web/static/", import.meta.url);
+  const app = readFileSync(new URL("app.js", dir), "utf8");
+  assert.match(app, /function listLoadingHtml/);
+  for (const name of ["incidents.js", "retros.js", "automations.js"]) {
+    assert.match(readFileSync(new URL(name, dir), "utf8"), /listLoadingHtml/);
+  }
+});

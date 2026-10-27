@@ -233,6 +233,17 @@ test("启动时对账：服务已恢复的 open 事件自动 resolved 并生成�
   await w.close();
 });
 
+test("只有 resolved 的告警不创建新事件", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-inc-resolved-"));
+  const file = join(dir, "incidents.json");
+  const r = await createOrMergeIncidents({
+    filePath: file,
+    alerts: [{ fingerprint: "fp-resolved", source: "service", service: "s", host: "h", alertname: "a", title: "t", severity: 2, status: "resolved", startedAt: Date.now() - 1000, labels: {} }],
+  });
+  assert.equal(r.results[0]?.skipped, true);
+  assert.equal((await readIncidents(file)).incidents.length, 0);
+});
+
 test("deleteIncidents 支持单个和批量删除", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-inc-del-"));
   const file = join(dir, "incidents.json");

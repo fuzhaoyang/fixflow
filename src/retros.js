@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, rename } from "node:fs/promises";
 import { dirname } from "node:path";
 import { chat as defaultChat } from "./agent.js";
 import { METRICS, metricLabel, LEVEL_NAME } from "./metric-alerts.js";
@@ -22,7 +22,9 @@ export async function readRetros(filePath) {
 
 export async function writeRetros(filePath, cards) {
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify(cards.slice(0, MAX_CARDS), null, 2));
+  const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  await writeFile(tmp, JSON.stringify(cards.slice(0, MAX_CARDS), null, 2));
+  await rename(tmp, filePath);
 }
 
 export async function deleteRetros({ filePath, ids = [] }) {
@@ -140,6 +142,13 @@ export function buildIncidentMarkdown(incident, card) {
   const evidence = (incident.evidence || []).map((e) => `### [${e.kind}] ${e.command}\n\n\`\`\`\n${String(e.output || "").slice(0, 3000)}\n\`\`\``).join("\n\n");
   const rca = incident.rca || {};
   const timeline = (incident.timeline || []).map((t) => `- ${fmtTime(t.ts)} ${t.text}`).join("\n");
+  const auto = incident.automation;
+  const autoAction = auto?.action || {};
+  const autoActionText = autoAction.type === "restart_service" ? `重启 ${autoAction.service || ""}`
+    : autoAction.type === "reload_service" ? `重载 ${autoAction.service || ""}`
+    : autoAction.type === "run_command" ? autoAction.command || ""
+    : autoAction.type === "webhook" ? `POST ${autoAction.url || ""}` : "—";
+  const automation = auto ? `## 自动化\n\n- 规则：${auto.ruleName || auto.ruleId || "—"}\n- 动作：${autoActionText}\n- 结果：${auto.ok ? "成功" : "失败"}\n- 断言：${(auto.checks || []).map((c) => `${c.type}:${c.ok ? "通过" : "失败"} ${c.detail || ""}`.trim()).join("；") || "—"}\n\n` : "";
   return `# ${card.title}
 
 - 事件：${incident.id}
@@ -159,7 +168,7 @@ ${card.summary}
 
 ${card.ai ? "> 以下结论由模型根据取证结果生成，仅供参考。\n\n" : ""}${card.rootCause}
 
-## 证据
+${automation}## 证据
 
 ${evidence || "暂无证据。"}
 
