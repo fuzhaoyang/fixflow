@@ -1705,6 +1705,8 @@ test("服务页前端：renderSystemd 交互钩子存在", async () => {
   assert.match(js, /api\/systemd\/logs/);
   assert.match(js, /SYS_DANGEROUS/);
   assert.match(js, /SYS_HIDDEN_SERVICES/);
+  assert.match(js, /s\.canReload !== false/);
+  assert.match(js, /serviceHide/);
   assert.match(js, /SYS_HIDDEN_SOCKETS/);
   assert.match(js, /isHiddenSystemd/);
   assert.match(js, /function serviceCategory/);
@@ -1833,5 +1835,8 @@ test("事件/复盘/自动化列表包含统一 loading 状态", () => {
 
 test("文件写操作提示 root/sudo 密码，避免与面板登录密码混淆", () => {
   const fs = readFileSync(new URL("../src/web/static/fs.js", import.meta.url), "utf8");
-  assert.match(fs, /setProcPwdLabel\("proc"\)/);
+  const settings = readFileSync(new URL("../src/web/static/settings.js", import.meta.url), "utf8");
+  assert.match(fs, /setProcPwdLabel\("root"\)/);
+  assert.match(settings, /kind === "db"/);
+  assert.match(settings, /kind === "root"/);
 });

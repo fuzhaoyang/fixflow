@@ -4,6 +4,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { normalizeAlertPayload, createOrMergeIncidents, readIncidents, deleteIncidents } from "../src/incidents.js";
+import { readRetros } from "../src/retros.js";
 import { addDeployment, readDeployments } from "../src/deployments.js";
 import { collectEvidence, normalizePlaybooks } from "../src/incidents-playbook.js";
 import { analyzeIncident } from "../src/incidents-rca.js";
@@ -264,14 +265,16 @@ test("/api/incidents DELETE 需要 root 密码，支持单个和批量", async (
   const dir = mkdtempSync(join(tmpdir(), "ff-inc-del-api-"));
   const cfg = join(dir, "config.json");
   const incidentsPath = join(dir, "incidents.json");
+  const retrosPath = join(dir, "retros.json");
   writeFileSync(cfg, "{}");
   const mk = (id, ts) => ({ id, fingerprint: "fp-" + id, source: "generic", service: "s", host: "h", alertname: "a", title: id, severity: 2, status: "resolved", startedAt: ts, lastSeen: ts, resolvedAt: ts, labels: {}, annotations: {}, timeline: [], evidence: [], rca: null, retroId: null });
   writeFileSync(incidentsPath, JSON.stringify({ incidents: [mk("INC-1", 3), mk("INC-2", 2), mk("INC-3", 1)] }));
+  writeFileSync(retrosPath, JSON.stringify([{ id: "R-1", incidentId: "INC-1" }, { id: "R-2", incidentId: "INC-2" }]));
   const exec = async (cmd) => {
     if (cmd.includes("sudo -S")) return { exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" };
     return { exitCode: 0, stdout: "", stderr: "" };
   };
-  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, incidentsPath }, { captchas: testCaptchas, noAlertsTimer: true, noAutomationTimer: true, runCommand: exec });
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, incidentsPath, retrosPath }, { captchas: testCaptchas, noAlertsTimer: true, noAutomationTimer: true, runCommand: exec });
   live.push(w);
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const H = { "Content-Type": "application/json" };
@@ -289,13 +292,17 @@ test("/api/incidents DELETE 需要 root 密码，支持单个和批量", async (
 
   const one = await fetch(`${base}/api/incidents`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["INC-1"], password: "rootpw" }) });
   assert.equal(one.status, 200);
-  assert.equal((await one.json()).deleted, 1);
+  const oneData = await one.json();
+  assert.equal(oneData.deleted, 1);
+  assert.equal(oneData.retrosDeleted, 1);
   assert.equal((await readIncidents(incidentsPath)).incidents.length, 2);
+  assert.deepEqual((await readRetros(retrosPath)).map((c) => c.id), ["R-2"]);
 
   const batch = await fetch(`${base}/api/incidents`, { method: "DELETE", headers: auth, body: JSON.stringify({ ids: ["INC-2", "INC-3"], password: "rootpw" }) });
   assert.equal(batch.status, 200);
   assert.equal((await batch.json()).deleted, 2);
   assert.equal((await readIncidents(incidentsPath)).incidents.length, 0);
+  assert.equal((await readRetros(retrosPath)).length, 0);
   await w.close();
 });
 

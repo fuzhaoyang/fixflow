@@ -30,7 +30,7 @@ import { createOrMergeIncidents, listIncidents, getIncident, addEvidence, setInc
 import { collectEvidence, normalizePlaybooks } from "../incidents-playbook.js";
 import { analyzeIncident } from "../incidents-rca.js";
 import { addDeployment, readDeployments } from "../deployments.js";
-import { normalizeAutomation, readAutomations, writeAutomations, readRuns, createAutomationEngine, runAutomationNow, runLocalTest, buildVmTestScript, appendRun, deleteRuns } from "../automations.js";
+import { normalizeAutomation, readAutomations, writeAutomations, readRuns, createAutomationEngine, runAutomationNow, appendRun, deleteRuns } from "../automations.js";
 import { chat } from "../agent.js";
 import { redactSecrets } from "../tools.js";
 
@@ -310,6 +310,8 @@ export async function startWeb(config = {}, deps = {}) {
   config.knowledge = normalizeKnowledge(config.knowledge);
   config.playbooks = config.playbooks && typeof config.playbooks === "object" && !Array.isArray(config.playbooks) ? config.playbooks : {};
   config.automationCommands = Array.isArray(config.automationCommands) ? config.automationCommands.map(String).map((s) => s.trim()).filter(Boolean) : [];
+  config.serviceHide = Array.isArray(config.serviceHide) ? config.serviceHide.map(String).map((s) => s.trim()).filter(Boolean) : [];
+  config.serviceHideSockets = Array.isArray(config.serviceHideSockets) ? config.serviceHideSockets.map(String).map((s) => s.trim()).filter(Boolean) : [];
   const clients = new Set();
   const metricsCache = createTtlCache(3000);
   const statusCache = createTtlCache(2000);
@@ -368,7 +370,7 @@ export async function startWeb(config = {}, deps = {}) {
   const readAuth = async () => (await readConfigFile()).auth || null;
   const persistConfig = async () => {
     const existing = await readConfigFile();
-    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections, knowledge: config.knowledge, playbooks: config.playbooks };
+    const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, sslAlerts: config.sslAlerts, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB, dbConnections: config.dbConnections, knowledge: config.knowledge, playbooks: config.playbooks, serviceHide: config.serviceHide, serviceHideSockets: config.serviceHideSockets };
     await mkdir(dirname(configPath), { recursive: true });
     await writeFile(configPath, JSON.stringify(saved, null, 2));
     await chmod(configPath, 0o600).catch(() => {});
@@ -1184,9 +1186,13 @@ export async function startWeb(config = {}, deps = {}) {
         if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
         if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
         const r = await deleteIncidents({ filePath: incidentsPath, ids });
+        const incSet = new Set(ids);
+        const retroIds = (await readRetros(retrosPath)).filter((c) => incSet.has(c.incidentId)).map((c) => c.id);
+        let retrosDeleted = 0;
+        if (retroIds.length) retrosDeleted = (await deleteRetros({ filePath: retrosPath, ids: retroIds })).deleted;
         for (const id of ids) incidentAnalyses.delete(id);
         broadcast({ type: "incidents" });
-        sendJson(res, { ok: true, deleted: r.deleted });
+        sendJson(res, { ok: true, deleted: r.deleted, retrosDeleted });
       } else if (url.pathname.startsWith("/api/incidents/") && req.method === "GET") {
         const id = decodeURIComponent(url.pathname.slice("/api/incidents/".length));
         const inc = await getIncident(incidentsPath, id);
@@ -1351,18 +1357,6 @@ export async function startWeb(config = {}, deps = {}) {
         if (r.error) { sendJson(res, r, 404); return; }
         broadcast({ type: "automations" });
         sendJson(res, r);
-      } else if (url.pathname === "/api/automations/test" && req.method === "POST") {
-        const body = JSON.parse(await readBody(req) || "{}");
-        const rule = (await readAutomations(automationsPath)).find((x) => x.id === body.id);
-        if (!rule) { sendJson(res, { error: "自动化不存在" }, 404); return; }
-        if (body.mode === "vm") { sendJson(res, { ok: true, script: buildVmTestScript(rule) }); return; }
-        const run = await runLocalTest(rule, {
-          exec: execCmd,
-          allowCommands: config.automationCommands,
-          confirm: (info) => requestConfirm(info),
-        });
-        if (!run.error) { await appendRun(automationRunsPath, run); broadcast({ type: "automations" }); }
-        sendJson(res, run, run.error ? 400 : 200);
       } else if (url.pathname === "/api/automations/commands" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         const commands = (Array.isArray(body.commands) ? body.commands : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 50);
@@ -1372,23 +1366,6 @@ export async function startWeb(config = {}, deps = {}) {
         await writeFile(configPath, JSON.stringify({ ...existing, automationCommands: commands }, null, 2));
         await chmod(configPath, 0o600).catch(() => {});
         sendJson(res, { ok: true, commands });
-      } else if (url.pathname === "/api/automations/parse" && req.method === "POST") {
-        const body = JSON.parse(await readBody(req) || "{}");
-        const text = String(body.text || "").trim();
-        if (!text) { sendJson(res, { error: "请输入自然语言描述" }, 400); return; }
-        if (!config.apiKey) { sendJson(res, { error: "请先在设置中配置模型" }, 400); return; }
-        const schema = '{"name":"","description":"","trigger":{"type":"service_down|metric|http|cron",...},"action":{"type":"restart_service|reload_service|run_command|webhook",...},"verify":[],"cooldownSec":300,"maxRunsPerHour":3,"risk":"medium"}';
-        const prompt = `把下面的运维自动化需求转换成 JSON 规则，只输出 JSON，不要解释、不要 markdown。\nJSON 结构示例：${schema}\n触发类型字段：service_down 用 service；metric 用 metric(cpu|mem|disk|net|sessions)、op(>=|<=)、threshold、mount(仅 disk)、durationSec；http 用 url、method、expectStatus、consecutiveFailures；cron 用 everySec 或 dailyAt(HH:MM)。\n动作类型字段：restart_service/reload_service 用 service；run_command 用 command（必须以上述白名单前缀开头：${JSON.stringify(config.automationCommands)}）；webhook 用 url。\n需求：${text}`;
-        try {
-          const out = await chat({ apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model, messages: [{ role: "user", content: prompt }], timeout: 60000 });
-          const raw = String(out.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-          const parsed = JSON.parse(raw);
-          const r = normalizeAutomation({ ...parsed, id: undefined, createdAt: undefined, state: undefined }, { allowCommands: config.automationCommands });
-          if (r.error) sendJson(res, { error: r.error, raw }, 400);
-          else sendJson(res, { ok: true, rule: r.rule });
-        } catch (e) {
-          sendJson(res, { error: `解析失败：${e?.message || e}` }, 400);
-        }
       } else if (url.pathname === "/api/automations/chat" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         const text = String(body.text || "").trim();
@@ -1629,26 +1606,28 @@ export async function startWeb(config = {}, deps = {}) {
         if (!next.url) { sendJson(res, { ok: false, error: "请先填写知识库完整地址" }); return; }
         sendJson(res, await testKnowledge(next));
       } else if (url.pathname === "/api/config" && req.method === "GET") {
-        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
+        sendJson(res, { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, serviceHide: config.serviceHide, serviceHideSockets: config.serviceHideSockets, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
       } else if (url.pathname === "/api/config" && req.method === "POST") {
         const body = await readBody(req);
-        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, lang, theme, fsCollapsed, memLimitMB } = JSON.parse(body || "{}");
+        const { baseUrl, apiKey, model, sslSites, pingTargets, serviceKeywords, serviceHide, serviceHideSockets, lang, theme, fsCollapsed, memLimitMB } = JSON.parse(body || "{}");
         if (baseUrl) config.baseUrl = baseUrl;
         if (apiKey) config.apiKey = apiKey;
         if (model) config.model = model;
         if (Array.isArray(sslSites)) config.sslSites = sslSites;
         if (Array.isArray(pingTargets)) config.pingTargets = pingTargets;
         if (Array.isArray(serviceKeywords)) config.serviceKeywords = serviceKeywords.map((s) => String(s).trim()).filter(Boolean);
+        if (Array.isArray(serviceHide)) config.serviceHide = serviceHide.map((s) => String(s).trim()).filter(Boolean);
+        if (Array.isArray(serviceHideSockets)) config.serviceHideSockets = serviceHideSockets.map((s) => String(s).trim()).filter(Boolean);
         if (lang === "en" || lang === "zh") config.lang = lang;
         if (theme === "light" || theme === "dark") config.theme = theme;
         if (typeof fsCollapsed === "boolean") config.fsCollapsed = fsCollapsed;
         if (Number.isFinite(memLimitMB) && memLimitMB > 0) config.memLimitMB = memLimitMB;
         let existing = {};
         existing = await readJsonFile(configPath);
-        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB };
+        const saved = { ...existing, baseUrl: config.baseUrl, apiKey: config.apiKey, model: config.model, sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, serviceHide: config.serviceHide, serviceHideSockets: config.serviceHideSockets, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB };
         await mkdir(dirname(configPath), { recursive: true });
         await writeFile(configPath, JSON.stringify(saved, null, 2));
-        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
+        sendJson(res, { ok: true, baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey ? "••••" + config.apiKey.slice(-4) : "", sslSites: config.sslSites, pingTargets: config.pingTargets, serviceKeywords: config.serviceKeywords, serviceHide: config.serviceHide, serviceHideSockets: config.serviceHideSockets, lang: config.lang, theme: config.theme, fsCollapsed: config.fsCollapsed, memLimitMB: config.memLimitMB });
       } else if (url.pathname === "/api/history" && req.method === "GET") {
         sendJson(res, { messages: await readHistoryFile(historyPath) });
       } else if (url.pathname === "/api/history" && req.method === "POST") {

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { normalizeAutomation, writeAutomations, readAutomations, evaluateTrigger, executeAutomation, runAutomationNow, runLocalTest, buildVmTestScript, createAutomationEngine, readRuns, appendRun, deleteRuns } from "../src/automations.js";
+import { normalizeAutomation, writeAutomations, readAutomations, evaluateTrigger, executeAutomation, runAutomationNow, createAutomationEngine, readRuns, appendRun, deleteRuns } from "../src/automations.js";
 
 const dir = () => mkdtempSync(join(tmpdir(), "ff-auto-"));
 
@@ -88,49 +88,6 @@ test("手动运行会记录状态与历史", async () => {
   const saved = (await readAutomations(file))[0];
   assert.equal(saved.state.lastRunAt, 5000);
   assert.equal(saved.state.runTimes.at(-1), 5000);
-});
-
-test("本机测试执行注入、动作、断言和恢复，并在用户拒绝时不执行", async () => {
-  const rule = normalizeAutomation(baseRule()).rule;
-  const calls = [];
-  let active = false;
-  const exec = async (cmd) => {
-    calls.push(cmd);
-    if (cmd.startsWith("systemctl stop")) active = false;
-    if (cmd.startsWith("systemctl restart")) active = true;
-    if (cmd.includes("is-active")) return { exitCode: 0, stdout: active ? "active" : "inactive" };
-    return { exitCode: 0, stdout: "" };
-  };
-  const rejected = await runLocalTest(rule, { confirm: async () => false, exec });
-  assert.equal(rejected.rejected, true);
-  assert.equal(calls.length, 0);
-  const run = await runLocalTest(rule, { confirm: async () => true, exec });
-  assert.equal(run.ok, true);
-  assert.equal(run.restored, true);
-  assert.ok(calls.includes("systemctl stop nginx"));
-  assert.ok(calls.includes("systemctl restart nginx"));
-  assert.ok(calls.includes("systemctl start nginx"));
-});
-
-test("禁止本机测试停止面板/SSH 等关键服务", async () => {
-  for (const service of ["fixflow", "sshd", "systemd"]) {
-    const rule = normalizeAutomation({ name: "x", trigger: { type: "service_down", service }, action: { type: "restart_service", service } }).rule;
-    const r = await runLocalTest(rule, { confirm: async () => true, exec: async () => ({ exitCode: 0, stdout: "" }) });
-    assert.match(r.error, /不允许/);
-  }
-});
-
-test("KVM 脚本只生成，不执行，并包含清理与断言", () => {
-  const script = buildVmTestScript(normalizeAutomation(baseRule()).rule);
-  assert.match(script, /qemu-system-x86_64/);
-  assert.match(script, /cloud-localds/);
-  assert.match(script, /trap cleanup EXIT/);
-  const b64 = script.match(/echo '([A-Za-z0-9+/=]+)' \| base64 -d/)[1];
-  const guest = Buffer.from(b64, "base64").toString("utf8");
-  assert.match(guest, /systemctl restart nginx/);
-  assert.match(guest, /systemctl is-active --quiet nginx/);
-  assert.match(guest, /systemctl start nginx/);
-  assert.match(script, /base64 -d/);
 });
 
 test("executeAutomation 汇总动作与断言", async () => {

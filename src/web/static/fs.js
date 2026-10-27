@@ -256,7 +256,7 @@ document.querySelectorAll("#fs-table th[data-sort]").forEach((th) => {
   };
 });
 function fsAskPassword(title, text, body, op) {
-  setProcPwdLabel("proc");
+  setProcPwdLabel("root");
   procTarget = { kind: "fs", op, body };
   document.getElementById("proc-title").textContent = title;
   document.getElementById("proc-text").textContent = text;

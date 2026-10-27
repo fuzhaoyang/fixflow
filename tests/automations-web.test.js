@@ -34,7 +34,7 @@ const ruleBody = {
   maxRunsPerHour: 2,
 };
 
-test("自动化 API：增删改查、白名单持久化、KVM 脚本", async () => {
+test("自动化 API：增删改查、白名单持久化", async () => {
   const { promise, dir } = makeServer();
   const w = await promise;
   const base = `http://127.0.0.1:${w.server.address().port}`;
@@ -67,64 +67,9 @@ test("自动化 API：增删改查、白名单持久化、KVM 脚本", async () 
   const cfg = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
   assert.deepEqual(cfg.automationCommands, ["systemctl"]);
 
-  const vm = await fetch(`${base}/api/automations/test`, { method: "POST", headers: H, body: JSON.stringify({ id: rule.id, mode: "vm" }) });
-  assert.equal(vm.status, 200);
-  assert.match((await vm.json()).script, /qemu-system-x86_64/);
-
-  const parse = await fetch(`${base}/api/automations/parse`, { method: "POST", headers: H, body: JSON.stringify({ text: "nginx 挂了就重启" }) });
-  assert.equal(parse.status, 400);
-
   const del = await fetch(`${base}/api/automations`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id }) });
   assert.equal(del.status, 200);
   assert.equal((await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json()).rules.length, 0);
-  w.close();
-});
-
-test("本机测试通过 SSE 确认后执行并记录历史", async () => {
-  let active = false;
-  const calls = [];
-  const exec = async (cmd) => {
-    calls.push(cmd);
-    if (cmd.startsWith("systemctl stop")) active = false;
-    if (cmd.startsWith("systemctl restart") || cmd.startsWith("systemctl start")) active = true;
-    if (cmd.includes("is-active")) return { exitCode: 0, stdout: active ? "active" : "inactive", stderr: "" };
-    return { exitCode: 0, stdout: "", stderr: "" };
-  };
-  const { promise } = makeServer({}, { runCommand: exec });
-  const w = await promise;
-  const base = `http://127.0.0.1:${w.server.address().port}`;
-  const cookie = await login(base);
-  const H = { Cookie: cookie, "Content-Type": "application/json" };
-  const rule = (await (await fetch(`${base}/api/automations`, { method: "POST", headers: H, body: JSON.stringify(ruleBody) })).json()).rule;
-
-  const sse = await fetch(`${base}/api/stream`, { headers: { Cookie: cookie } });
-  const reader = sse.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = "";
-  const testPromise = fetch(`${base}/api/automations/test`, { method: "POST", headers: H, body: JSON.stringify({ id: rule.id, mode: "local" }) });
-  while (!buf.includes('"type":"confirm"')) {
-    const { value, done } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-  }
-  const line = buf.split("\n").find((l) => l.startsWith("data: ") && l.includes('"type":"confirm"'));
-  assert.ok(line, "应收到确认事件");
-  const confirmEvent = JSON.parse(line.slice(6));
-  await fetch(`${base}/api/confirm`, { method: "POST", headers: H, body: JSON.stringify({ id: confirmEvent.id, ok: true }) });
-
-  const res = await testPromise;
-  assert.equal(res.status, 200);
-  const run = await res.json();
-  assert.equal(run.ok, true);
-  assert.equal(run.mode, "local");
-  assert.ok(calls.includes("systemctl stop nginx"));
-  assert.ok(calls.includes("systemctl restart nginx"));
-
-  const list = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
-  assert.equal(list.runs.length, 1);
-  assert.equal(list.runs[0].test, true);
-
-  reader.cancel().catch(() => {});
   w.close();
 });
 

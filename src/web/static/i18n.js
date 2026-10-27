@@ -22,7 +22,7 @@ const I18N_ZH = {
   "auto.empty": "暂无自动化规则，请在 Agent 对话中进入自动化模式创建", "auto.emptyMatch": "没有匹配的规则", "auto.enabled": "已启用", "auto.disabled": "已停用", "auto.toggle": "启用/停用",
   "auto.risk": "风险", "auto.trigger": "触发", "auto.action": "动作", "auto.cooldown": "冷却", "auto.maxRuns": "每小时上限",
   "auto.lastRun": "最近运行", "auto.neverRun": "从未运行", "auto.runOk": "成功", "auto.runFail": "失败", "auto.testBadge": "测试", "auto.manualBadge": "手动",
-  "auto.runNow": "立即运行", "auto.test": "测试", "auto.edit": "编辑", "auto.delete": "删除", "auto.delConfirm": "确认删除自动化「{name}」？",
+  "auto.runNow": "立即运行", "auto.edit": "编辑", "auto.delete": "删除", "auto.delConfirm": "确认删除自动化「{name}」？",
   "auto.tabRules": "规则", "auto.tabRuns": "运行历史", "auto.tabCommands": "命令白名单", "auto.commandsHint": "run_command 动作只允许以这些前缀开头的命令，每行一个；留空表示禁用 run_command。", "auto.saveCommands": "保存白名单",
   "auto.nlLabel": "自然语言生成规则", "auto.nlPh": "例如：nginx 挂了就重启它，5 分钟内只执行一次", "auto.parse": "解析", "auto.parsing": "解析中…", "auto.parseFail": "解析失败", "auto.parsed": "已填入表单，请确认后保存",
   "auto.name": "名称", "auto.desc": "描述", "auto.riskLevel": "风险等级", "auto.tService": "服务异常", "auto.tMetric": "指标阈值", "auto.tHttp": "HTTP 探测", "auto.tCron": "定时",
@@ -31,7 +31,6 @@ const I18N_ZH = {
   "auto.everySec": "间隔秒数", "auto.dailyAt": "每天时间", "auto.every": "每", "auto.daily": "每天",
   "auto.aRestart": "重启服务", "auto.aReload": "重载服务", "auto.aCommand": "执行命令", "auto.aWebhook": "调用 Webhook", "auto.command": "命令（须匹配白名单前缀）",
   "auto.nameRequired": "名称不能为空", "auto.saveFail": "保存失败",
-  "auto.testHint": "本机测试会真实执行动作，需要二次确认；KVM 模式只生成一次性虚拟机脚本，不自动运行。", "auto.testLocal": "本机测试", "auto.testVm": "生成 KVM 脚本",
   "auto.waitConfirm": "已发送确认请求，请在对话页或右侧 AI 弹窗确认…", "auto.generating": "生成中…", "auto.rejected": "已取消测试", "auto.result": "测试结果",
   "auto.copied": "已复制", "auto.copyFail": "复制失败", "auto.copy": "复制脚本", "auto.close": "关闭", "auto.noRuns": "暂无运行记录",
   "auto.modeTitle": "自动化模式", "auto.modeOn": "自动化模式", "auto.modeHint": "描述你想要的自动化；生成后点脚本卡片上的「应用」打开规则弹窗。", "auto.modeExit": "退出", "auto.modeNew": "新建规则", "auto.modeNewHint": "已清空当前草稿，描述新的自动化需求。", "auto.modePlaceholder": "描述自动化需求，例如：nginx 挂了就重启，测试脚本先停 nginx 再恢复", "auto.apply": "应用", "auto.applyTitle": "应用自动化规则", "auto.actionScriptTitle": "自动化脚本", "auto.actionScriptHint": "由结构化规则生成，展示触发条件、动作和断言；实际执行由自动化引擎完成。", "auto.cardText": "已生成自动化规则「{name}」", "auto.savedNotice": "已保存自动化规则「{name}」",
@@ -40,7 +39,7 @@ const I18N_ZH = {
   "auto.scriptTitle": "本机测试脚本", "auto.scriptEmpty": "（还没有测试脚本，先在对话里描述需求）", "auto.scriptGenerated": "未找到已保存的测试脚本，已按当前规则生成默认测试脚本；保存后生效。", "auto.copyScript": "复制脚本", "auto.scriptTest": "本机脚本测试",
   "auto.runTest": "运行测试", "auto.runSaving": "保存中…", "auto.runWaiting": "已发送确认请求，请在对话页或右侧 AI 弹窗确认…", "auto.running": "执行中…", "auto.needScript": "请先生成测试脚本", "auto.runResult": "运行结果", "auto.exitCode": "退出码", "auto.duration": "耗时",
   "incident.refresh": "刷新", "incident.count": "共 {n} 条", "incident.empty": "暂无事件", "incident.open": "处理中", "incident.resolved": "已恢复", "incident.statusLabel": "状态：{s}", "incident.pending": "等待 RCA…", "incident.notFound": "事件不存在", "incident.rcaTitle": "RCA", "incident.summary": "结论", "incident.rootCause": "根因", "incident.confidence": "置信度", "incident.suggestion": "建议动作", "incident.rollback": "回滚建议", "incident.missing": "缺失信息", "incident.noRca": "RCA 尚未生成", "incident.evidence": "证据", "incident.noEvidence": "暂无证据", "incident.timeline": "时间线", "incident.viewRetro": "查看复盘", "incident.actions": "可执行动作", "incident.actionTitle": "执行动作", "incident.risk": "风险", "incident.actionDone": "动作执行成功", "incident.actionFail": "动作执行失败", "incident.actionLog": "执行记录", "incident.noActions": "没有允许执行的动作，点 Playbook 配置。",
-  "incident.selectAll": "全选本页", "incident.deleteSelected": "删除所选", "incident.delete": "删除", "incident.deleteTitle": "删除事件", "incident.deleteText": "确认删除选中的 {n} 条事件？此操作不可恢复。", "incident.rootPwdLabel": "root / sudo 密码", "incident.rootPwdPh": "请输入 root 或 sudo 密码以验证身份", "incident.rootPwdRequired": "请输入 root / sudo 密码", "incident.deleteConfirm": "确认删除", "incident.deleted": "已删除 {n} 条事件", "incident.deleteFail": "删除失败", "incident.page": "第 {p}/{n} 页",
+  "incident.selectAll": "全选本页", "incident.deleteSelected": "删除所选", "incident.delete": "删除", "incident.deleteTitle": "删除事件", "incident.deleteText": "确认删除选中的 {n} 条事件？此操作不可恢复。", "incident.deleteRetroNote": "其中 {n} 条事件有关联复盘，删除事件会同时删除这些复盘。", "incident.rootPwdLabel": "root / sudo 密码", "incident.rootPwdPh": "请输入 root 或 sudo 密码以验证身份", "incident.rootPwdRequired": "请输入 root / sudo 密码", "incident.deleteConfirm": "确认删除", "incident.deleted": "已删除 {n} 条事件", "incident.deleteFail": "删除失败", "incident.page": "第 {p}/{n} 页",
   "pb.button": "Playbook", "pb.title": "Playbook 管理", "pb.addService": "+ 新增服务", "pb.save": "保存", "pb.cancel": "取消", "pb.serviceName": "服务", "pb.logs": "日志命令（一行一条）", "pb.upstreams": "上游地址（一行一个）", "pb.releaseService": "发布服务名", "pb.kb": "知识库查询", "pb.actions": "可执行动作", "pb.key": "Key", "pb.label": "显示名称", "pb.command": "命令", "pb.risk": "风险", "pb.riskLow": "低", "pb.riskMedium": "中", "pb.riskHigh": "高", "pb.addAction": "+ 新增动作", "pb.delete": "删除", "pb.deleteService": "删除服务", "pb.deleteConfirm": "删除服务「{name}」及其动作？", "pb.servicePrompt": "新服务名（如 nginx / order）", "pb.invalidService": "服务名只能包含字母、数字、_ . @ -", "pb.invalidKey": "动作 key 不合法或重复", "pb.serviceExists": "服务已存在", "pb.saved": "Playbook 已保存并生效", "pb.apiMissing": "接口不可用，请先重启面板服务（新版本 API 未加载）",
   "alert.viewRetro": "查看复盘",
   "retro.search": "搜索复盘…", "retro.empty": "暂无复盘", "retro.loading": "加载中…", "retro.count": "共 {n} 条", "retro.minutes": "分钟", "retro.pending": "待补充", "retro.ai": "AI 推测", "retro.download": "下载 MD", "retro.close": "关闭", "retro.notFound": "复盘不存在",
@@ -68,7 +67,7 @@ const I18N_ZH = {
   "audit.clearConfirm": "确认清空面板操作日志？此操作不可恢复。",
   "audit.exportConfirm": "导出面板操作日志需要验证 root 密码，确定继续吗？",
   "db.addBtn": "添加连接", "db.empty": "（暂无数据库连接，点右上角添加）",
-  "db.name": "名称", "db.type": "类型", "db.host": "主机", "db.port": "端口", "db.database": "库名", "db.user": "用户名", "db.password": "密码", "db.path": "数据库文件路径",
+  "db.name": "名称", "db.type": "类型", "db.host": "主机", "db.port": "端口", "db.database": "库名", "db.user": "用户名", "db.password": "密码", "db.testPwdLabel": "数据库密码", "db.testPwdPh": "请输入该连接的数据库密码", "db.path": "数据库文件路径",
   "db.typePostgres": "PostgreSQL", "db.typeMysql": "MySQL / MariaDB", "db.typeRedis": "Redis", "db.typeMongo": "MongoDB", "db.typeSqlite": "SQLite",
   "db.testBtn": "测试连接", "db.editBtn": "编辑", "db.delBtn": "删除", "db.enableBtn": "启用", "db.disableBtn": "停用",
   "db.testing": "测试中…", "db.testOk": "连接成功", "db.testFail": "连接失败", "db.testingHint": "输入该连接密码以测试", "db.delConfirm": "确认删除该数据库连接？",
@@ -118,7 +117,7 @@ const I18N_ZH = {
   "restart.confirm": "确认重启", "restart.cancel": "取消",
   "logout.title": "退出登录", "logout.text": "退出后需要重新输入账号密码才能使用面板。确认退出登录吗？", "logout.cancel": "取消", "logout.confirm": "确认退出",
   "kicked.title": "登录已失效", "kicked.text": "该账号已在另一处登录，本机会话已下线。请重新登录。", "kicked.confirm": "重新登录",
-  "proc.title": "密码验证", "proc.pwdLabel": "root / sudo 密码", "proc.pwdPh": "请输入 root / sudo 密码以验证身份",
+  "proc.title": "密码验证", "proc.pwdLabel": "登录密码", "proc.pwdPh": "请输入面板登录密码以验证身份", "proc.rootPwdLabel": "root / sudo 密码", "proc.rootPwdPh": "请输入 root 或 sudo 密码以验证身份",
   "proc.confirm": "确认执行", "proc.cancel": "取消", "proc.pwdRequired": "请输入 root / sudo 密码", "proc.pwdErr": "密码错误，操作未执行",
   "fw.closeTitle": "关闭端口", "fw.closeText": "确认关闭端口 {port}/{proto}（{mode}）吗？此操作需输入 root 密码验证。",
   "fw.state": "防火墙状态", "fw.enabled": "已启用", "fw.disabled": "未启用 / 降级", "fw.rules": "放行规则", "fw.open": "对全网开放", "fw.danger": "（危险 {n}）",
@@ -289,7 +288,7 @@ const I18N_EN = {
   "auto.empty": "No automation rules. Create one in Automation mode in the Agent chat.", "auto.emptyMatch": "No matching rules", "auto.enabled": "Enabled", "auto.disabled": "Disabled", "auto.toggle": "Enable / disable",
   "auto.risk": "Risk", "auto.trigger": "Trigger", "auto.action": "Action", "auto.cooldown": "Cooldown", "auto.maxRuns": "Max per hour",
   "auto.lastRun": "Last run", "auto.neverRun": "Never run", "auto.runOk": "OK", "auto.runFail": "Failed", "auto.testBadge": "test", "auto.manualBadge": "manual",
-  "auto.runNow": "Run now", "auto.test": "Test", "auto.edit": "Edit", "auto.delete": "Delete", "auto.delConfirm": "Delete automation \"{name}\"?",
+  "auto.runNow": "Run now", "auto.edit": "Edit", "auto.delete": "Delete", "auto.delConfirm": "Delete automation \"{name}\"?",
   "auto.tabRules": "Rules", "auto.tabRuns": "Run history", "auto.tabCommands": "Command allowlist", "auto.commandsHint": "run_command may only start with one of these prefixes, one per line. Leave empty to disable run_command.", "auto.saveCommands": "Save allowlist",
   "auto.nlLabel": "Generate from natural language", "auto.nlPh": "e.g. restart nginx when it is down, at most once every 5 minutes", "auto.parse": "Parse", "auto.parsing": "Parsing…", "auto.parseFail": "Parse failed", "auto.parsed": "Filled in. Review and save.",
   "auto.name": "Name", "auto.desc": "Description", "auto.riskLevel": "Risk level", "auto.tService": "Service down", "auto.tMetric": "Metric threshold", "auto.tHttp": "HTTP probe", "auto.tCron": "Schedule",
@@ -298,7 +297,6 @@ const I18N_EN = {
   "auto.everySec": "Every N seconds", "auto.dailyAt": "Daily at", "auto.every": "Every", "auto.daily": "Daily",
   "auto.aRestart": "Restart service", "auto.aReload": "Reload service", "auto.aCommand": "Run command", "auto.aWebhook": "Call webhook", "auto.command": "Command (must match allowlist)",
   "auto.nameRequired": "Name is required", "auto.saveFail": "Save failed",
-  "auto.testHint": "Local test really runs the action and asks for confirmation; KVM mode only generates a disposable VM script and never runs it.", "auto.testLocal": "Local test", "auto.testVm": "Generate KVM script",
   "auto.waitConfirm": "Confirmation sent. Approve it in the chat page or the AI popup…", "auto.generating": "Generating…", "auto.rejected": "Test cancelled", "auto.result": "Result",
   "auto.copied": "Copied", "auto.copyFail": "Copy failed", "auto.copy": "Copy script", "auto.close": "Close", "auto.noRuns": "No run history",
   "auto.modeTitle": "Automation mode", "auto.modeOn": "Automation mode", "auto.modeHint": "Describe the automation; after it is generated, click Apply on the script card to open the rule dialog.", "auto.modeExit": "Exit", "auto.modeNew": "New rule", "auto.modeNewHint": "Draft cleared. Describe the new automation.", "auto.modePlaceholder": "Describe the automation, e.g. restart nginx when it is down; the test script stops nginx and restores it", "auto.apply": "Apply", "auto.applyTitle": "Apply automation rule", "auto.actionScriptTitle": "Automation script", "auto.actionScriptHint": "Generated from the structured rule: trigger, action and checks. The automation engine performs the real run.", "auto.cardText": "Generated automation rule \"{name}\"", "auto.savedNotice": "Saved automation rule \"{name}\"",
@@ -307,7 +305,7 @@ const I18N_EN = {
   "auto.scriptTitle": "Local test script", "auto.scriptEmpty": "(No test script yet. Describe it in the chat first.)", "auto.scriptGenerated": "No saved test script found. A default test script was generated from the current rule; save to keep it.", "auto.copyScript": "Copy script", "auto.scriptTest": "Local script test",
   "auto.runTest": "Run test", "auto.runSaving": "Saving…", "auto.runWaiting": "Confirmation sent. Approve it in the chat page or the AI popup…", "auto.running": "Running…", "auto.needScript": "Generate a test script first", "auto.runResult": "Result", "auto.exitCode": "Exit code", "auto.duration": "Duration",
   "incident.refresh": "Refresh", "incident.count": "{n} items", "incident.empty": "No incidents", "incident.open": "Open", "incident.resolved": "Resolved", "incident.statusLabel": "Status: {s}", "incident.pending": "Waiting for RCA…", "incident.notFound": "Incident not found", "incident.rcaTitle": "RCA", "incident.summary": "Summary", "incident.rootCause": "Root cause", "incident.confidence": "Confidence", "incident.suggestion": "Suggested action", "incident.rollback": "Rollback", "incident.missing": "Missing information", "incident.noRca": "RCA not generated yet", "incident.evidence": "Evidence", "incident.noEvidence": "No evidence", "incident.timeline": "Timeline", "incident.viewRetro": "View postmortem", "incident.actions": "Allowed actions", "incident.actionTitle": "Run action", "incident.risk": "Risk", "incident.actionDone": "Action succeeded", "incident.actionFail": "Action failed", "incident.actionLog": "Action log", "incident.noActions": "No allowed actions. Click Playbook to configure.",
-  "incident.selectAll": "Select page", "incident.deleteSelected": "Delete selected", "incident.delete": "Delete", "incident.deleteTitle": "Delete incidents", "incident.deleteText": "Delete {n} selected incident(s)? This cannot be undone.", "incident.rootPwdLabel": "root / sudo password", "incident.rootPwdPh": "Enter root or sudo password to verify", "incident.rootPwdRequired": "Root / sudo password is required", "incident.deleteConfirm": "Delete", "incident.deleted": "Deleted {n} incident(s)", "incident.deleteFail": "Delete failed", "incident.page": "Page {p}/{n}",
+  "incident.selectAll": "Select page", "incident.deleteSelected": "Delete selected", "incident.delete": "Delete", "incident.deleteTitle": "Delete incidents", "incident.deleteText": "Delete {n} selected incident(s)? This cannot be undone.", "incident.deleteRetroNote": "{n} incident(s) have linked postmortems; deleting the incidents will delete them too.", "incident.rootPwdLabel": "root / sudo password", "incident.rootPwdPh": "Enter root or sudo password to verify", "incident.rootPwdRequired": "Root / sudo password is required", "incident.deleteConfirm": "Delete", "incident.deleted": "Deleted {n} incident(s)", "incident.deleteFail": "Delete failed", "incident.page": "Page {p}/{n}",
   "pb.button": "Playbook", "pb.title": "Playbook", "pb.addService": "+ Add service", "pb.save": "Save", "pb.cancel": "Cancel", "pb.serviceName": "Service", "pb.logs": "Log commands (one per line)", "pb.upstreams": "Upstreams (one per line)", "pb.releaseService": "Release service", "pb.kb": "Query knowledge base", "pb.actions": "Allowed actions", "pb.key": "Key", "pb.label": "Label", "pb.command": "Command", "pb.risk": "Risk", "pb.riskLow": "Low", "pb.riskMedium": "Medium", "pb.riskHigh": "High", "pb.addAction": "+ Add action", "pb.delete": "Delete", "pb.deleteService": "Delete service", "pb.deleteConfirm": "Delete service \"{name}\" and its actions?", "pb.servicePrompt": "New service name (e.g. nginx / order)", "pb.invalidService": "Service name may only contain letters, digits, _ . @ -", "pb.invalidKey": "Action key is invalid or duplicated", "pb.serviceExists": "Service already exists", "pb.saved": "Playbook saved and applied", "pb.apiMissing": "API unavailable. Restart the panel service to load the new API.",
   "alert.viewRetro": "View postmortem",
   "retro.search": "Search postmortems…", "retro.empty": "No postmortems", "retro.loading": "Loading…", "retro.count": "{n} items", "retro.minutes": "min", "retro.pending": "TBD", "retro.ai": "AI guess", "retro.download": "Download MD", "retro.close": "Close", "retro.notFound": "Postmortem not found",
@@ -335,7 +333,7 @@ const I18N_EN = {
   "audit.clearConfirm": "Clear the panel audit log? This cannot be undone.",
   "audit.exportConfirm": "Exporting the panel audit log requires root password verification. Continue?",
   "db.addBtn": "Add connection", "db.empty": "(No database connections, click add on the top right)",
-  "db.name": "Name", "db.type": "Type", "db.host": "Host", "db.port": "Port", "db.database": "Database", "db.user": "Username", "db.password": "Password", "db.path": "Database file path",
+  "db.name": "Name", "db.type": "Type", "db.host": "Host", "db.port": "Port", "db.database": "Database", "db.user": "Username", "db.password": "Password", "db.testPwdLabel": "Database password", "db.testPwdPh": "Enter the database password for this connection", "db.path": "Database file path",
   "db.typePostgres": "PostgreSQL", "db.typeMysql": "MySQL / MariaDB", "db.typeRedis": "Redis", "db.typeMongo": "MongoDB", "db.typeSqlite": "SQLite",
   "db.testBtn": "Test", "db.editBtn": "Edit", "db.delBtn": "Delete", "db.enableBtn": "Enable", "db.disableBtn": "Disable",
   "db.testing": "Testing…", "db.testOk": "Connected", "db.testFail": "Connection failed", "db.testingHint": "Enter this connection's password to test", "db.delConfirm": "Delete this database connection?",
@@ -386,7 +384,7 @@ const I18N_EN = {
   "logout.title": "Logout", "logout.text": "You will need to log in again to use the panel. Confirm logout?", "logout.cancel": "Cancel", "logout.confirm": "Logout",
   "kicked.title": "Session Expired", "kicked.text": "This account has logged in elsewhere, and this session has been signed out. Please log in again.", "kicked.confirm": "Log in again",
   "logout.confirm": "Logout", "logout.cancel": "Cancel",
-  "proc.title": "Password Verify", "proc.pwdLabel": "Root / sudo password", "proc.pwdPh": "Enter root / sudo password to verify",
+  "proc.title": "Password Verify", "proc.pwdLabel": "Login password", "proc.pwdPh": "Enter panel login password to verify", "proc.rootPwdLabel": "Root / sudo password", "proc.rootPwdPh": "Enter root or sudo password to verify",
   "proc.confirm": "Confirm", "proc.cancel": "Cancel", "proc.pwdRequired": "Please enter the root / sudo password", "proc.pwdErr": "Wrong password, operation not executed",
   "fw.closeTitle": "Close Port", "fw.closeText": "Confirm closing port {port}/{proto} ({mode})? Root password required.",
   "fw.state": "Firewall Status", "fw.enabled": "Enabled", "fw.disabled": "Disabled / Fallback", "fw.rules": "Rules", "fw.open": "Open to all", "fw.danger": "(dangerous {n})",
@@ -848,6 +846,7 @@ ${FIG.knowledgeFooter}
   <li>服务下线流程：先发「服务下线」邮件 → 自动修复 → verify 全部通过后发「自动化修复成功」邮件；失败发「自动化修复失败」邮件并按冷却 / 退避重试。</li>
   <li>邮件使用「告警 → 邮箱配置」的 SMTP 和收件人；已有启用 service_down 规则的服务，不再重复发通用下线 / 恢复邮件。</li>
   <li>「命令白名单」只约束 run_command 和 command_exit 断言，按前缀匹配，不是安全沙箱，建议只填精确前缀。</li>
+  <li>定时（cron）自动化只记录运行历史，不生成事件 / 复盘；服务下线 / 指标 / HTTP 自动化会参与事件链路。</li>
 </ul>
 
 <h3 id="incidents">事件</h3>
@@ -897,7 +896,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">配置与进阶</h3>
 <ul>
-  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
+  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>serviceHide</code> / <code>serviceHideSockets</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
   <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
   <li>面板监听 <code>0.0.0.0</code>，用「随机端口 + 随机入口路径」保护（无入口前缀的请求返回 404）；启动时会尝试自动放行本机防火墙端口。可用 nginx 反代绑定域名，或启用内置 HTTPS（自签证书）。</li>
   <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
@@ -1179,6 +1178,7 @@ ${FIG.knowledgeFooter}
   <li>Service-down flow: send the "service down" email first, repair automatically, then send "automation repair succeeded" when all verify checks pass; on failure send "automation repair failed" and retry with cooldown / backoff.</li>
   <li>Emails use the SMTP / recipients in "Alerts → Mail settings"; services with an enabled service_down rule no longer receive duplicate generic down / recovery emails.</li>
   <li>The command allowlist only restricts run_command and command_exit checks and matches by prefix. It is not a sandbox, so keep prefixes narrow.</li>
+  <li>Cron automations only record run history; they do not create incidents / postmortems. Service-down, metric and HTTP automations participate in the incident flow.</li>
 </ul>
 
 <h3 id="incidents">Incidents</h3>
@@ -1228,7 +1228,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">Configuration &amp; Advanced</h3>
 <ul>
-  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
+  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>serviceHide</code> / <code>serviceHideSockets</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
   <li>Environment variables override: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
   <li>The panel listens on <code>0.0.0.0</code> and is protected by a "random port + random entry path" (requests without the entry prefix get 404); it tries to open the port in the local firewall on startup. You can reverse-proxy with nginx to a domain, or enable built-in HTTPS (self-signed).</li>
   <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; logs at <code>~/.config/fixflow/cli.log</code>.</li>

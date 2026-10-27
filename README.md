@@ -240,6 +240,8 @@ fixflow
 | `pingTargets` | 连通性检测目标 | `[]` |
 | `downServices` | 服务异常关闭监控（非 active 即发邮件，收件人填「告警→邮箱配置」） | `["nginx"]` |
 | `automationCommands` | 自动化 `run_command` 动作的命令前缀白名单；留空禁用该动作 | `[]` |
+| `serviceHide` | 服务页额外隐藏的 systemd 服务名（不含类型后缀） | `[]` |
+| `serviceHideSockets` | 服务页额外隐藏的 socket 名称 | `[]` |
 | `alertSmtp` | 告警邮件 SMTP 配置（host / port / user / pass / from / to，面板「告警→邮箱配置」写入） | `{}` |
 | `lang` / `theme` | 面板语言 / 主题 | `zh` / `dark` |
 

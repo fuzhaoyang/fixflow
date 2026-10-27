@@ -181,7 +181,7 @@ function applyNginxPerf(orig) {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
-  setProcPwdLabel("proc");
+  setProcPwdLabel("root");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 }

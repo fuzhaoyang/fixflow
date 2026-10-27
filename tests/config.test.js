@@ -108,3 +108,12 @@ test("dbConnections 从配置文件加载并规范化", () => {
   assert.equal(cfg2.dbConnections[0].type, "redis");
   assert.equal(cfg2.dbConnections[0].port, "6379");
 });
+
+test("serviceHide / serviceHideSockets 读取并过滤空值", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ serviceHide: [" alsa-restore ", ""], serviceHideSockets: ["podman", " "] }));
+  const cfg = loadConfig({ filePath: file });
+  assert.deepEqual(cfg.serviceHide, ["alsa-restore"]);
+  assert.deepEqual(cfg.serviceHideSockets, ["podman"]);
+});

@@ -430,6 +430,7 @@ FragmentPath=/lib/systemd/system/nginx.service
 ActiveEnterTimestamp=Sun 2026-10-04 08:00:00 CST
 MainPID=1234
 MemoryCurrent=1048576
+CanReload=yes
 
 Id=cron.timer
 ActiveState=failed
@@ -443,6 +444,7 @@ Requires=
 After=basic.target
 RequiredBy=multi-user.target
 UnitFileState=enabled
+CanReload=no
 
 Id=ssh.socket
 ActiveState=inactive
@@ -468,6 +470,7 @@ UnitFileState=static
   assert.equal(nginx.desc, "nginx web server");
   assert.equal(nginx.loadState, "loaded");
   assert.equal(nginx.nRestarts, 3);
+  assert.equal(nginx.canReload, true);
   assert.equal(nginx.exitStatus, 0);
   assert.equal(nginx.restartPolicy, "on-failure");
   assert.deepEqual(nginx.requires, ["basic.target", "system.slice"]);

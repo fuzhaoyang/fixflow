@@ -535,8 +535,20 @@ document.getElementById("token-unit-select").onchange = (e) => {
   renderChart();
 };
 
+async function loadServiceHideConfig() {
+  try {
+    const res = await fetch("api/config");
+    const cfg = await res.json();
+    for (const name of cfg.serviceHide || []) SYS_HIDDEN_SERVICES.add(String(name));
+    for (const name of cfg.serviceHideSockets || []) SYS_HIDDEN_SOCKETS.add(String(name));
+    if (currentFilter === "systemd") renderCards();
+    if (typeof renderLogList === "function") renderLogList();
+  } catch {}
+}
+
 function initOverview() {
   initRings();
+  loadServiceHideConfig();
   switchTrafficTab("trend");
   document.getElementById("unit-select").value = "MB/s";
   unitDivider = 1024 * 1024;
@@ -892,8 +904,10 @@ function renderSystemd(m) {
     const dangerous = SYS_DANGEROUS.test(s.name);
     const ops = [];
     if (!dangerous) {
-      if (s.state === "active") ops.push(opBtn(s, "stop"), opBtn(s, "restart"), opBtn(s, "reload"));
-      else ops.push(opBtn(s, "start"));
+      if (s.state === "active") {
+        ops.push(opBtn(s, "stop"), opBtn(s, "restart"));
+        if (s.canReload !== false) ops.push(opBtn(s, "reload"));
+      } else ops.push(opBtn(s, "start"));
       ops.push(opBtn(s, s.unitFileState === "enabled" ? "disable" : "enable"));
     }
     const opHtml = ops.length ? `<span class="proc-ops">${ops.join("")}</span>` : (dangerous ? `<span class="tag">${t("srv.dangerous")}</span>` : "—");
@@ -931,7 +945,7 @@ cards.addEventListener("click", (e) => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
-  setProcPwdLabel("proc");
+  setProcPwdLabel("root");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
@@ -1089,7 +1103,7 @@ document.addEventListener("click", async (e) => {
       document.getElementById("proc-err").textContent = "";
       const pw = document.getElementById("proc-password");
       pw.value = "";
-      setProcPwdLabel("proc");
+      setProcPwdLabel("db");
       procMask.classList.add("show");
       setTimeout(() => pw.focus(), 50);
     }

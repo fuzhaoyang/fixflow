@@ -155,6 +155,7 @@ function incidentAskPassword(action) {
   document.getElementById("proc-title").textContent = t("incident.actionTitle");
   document.getElementById("proc-text").textContent = `${action.label}：${action.command}（${t("incident.risk")}：${action.risk}）`;
   document.getElementById("proc-err").textContent = "";
+  setProcPwdLabel("proc");
   const pw = document.getElementById("proc-password");
   pw.value = "";
   procMask.classList.add("show");
@@ -165,7 +166,8 @@ function incidentAskPassword(action) {
 function askIncidentDelete(ids) {
   incidentDeleteIds = ids.filter(Boolean);
   if (!incidentDeleteIds.length) return;
-  incidentDeleteText.textContent = t("incident.deleteText").replace("{n}", incidentDeleteIds.length);
+  const withRetro = incidentDeleteIds.filter((id) => incidentItems.find((i) => i.id === id)?.retroId).length;
+  incidentDeleteText.textContent = t("incident.deleteText").replace("{n}", incidentDeleteIds.length) + (withRetro ? "\n" + t("incident.deleteRetroNote").replace("{n}", withRetro) : "");
   incidentDeleteErr.textContent = "";
   incidentDeletePw.value = "";
   incidentDeleteMask.classList.add("show");

@@ -422,10 +422,11 @@ const procMask = document.getElementById("proc-mask");
 function setProcPwdLabel(kind) {
   const label = procMask.querySelector("label");
   const input = document.getElementById("proc-password");
-  const isFw = kind === "fw";
-  label.textContent = isFw ? t("fw.rootPwdLabel") : t("proc.pwdLabel");
-  input.placeholder = isFw ? t("fw.rootPwdPh") : t("proc.pwdPh");
-  input.setAttribute("autocomplete", isFw ? "current-password" : "current-password");
+  const isRoot = kind === "fw" || kind === "root";
+  const isDb = kind === "db";
+  label.textContent = isDb ? t("db.testPwdLabel") : isRoot ? t("proc.rootPwdLabel") : t("proc.pwdLabel");
+  input.placeholder = isDb ? t("db.testPwdPh") : isRoot ? t("proc.rootPwdPh") : t("proc.pwdPh");
+  input.setAttribute("autocomplete", "current-password");
 }
 let procTarget = null;
 function openClearModal() {
@@ -433,6 +434,7 @@ function openClearModal() {
   document.getElementById("proc-title").textContent = t("chat.clearTitle");
   document.getElementById("proc-text").textContent = t("chat.clearConfirm");
   document.getElementById("proc-err").textContent = "";
+  setProcPwdLabel("root");
   const pw = document.getElementById("proc-password");
   pw.value = "";
   setProcPwdLabel("fw");
@@ -494,7 +496,7 @@ document.getElementById("nginx-conf-save").onclick = () => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
-  setProcPwdLabel("proc");
+  setProcPwdLabel("root");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 };
@@ -511,7 +513,7 @@ document.addEventListener("click", (e) => {
   document.getElementById("proc-err").textContent = "";
   const pw = document.getElementById("proc-password");
   pw.value = "";
-  setProcPwdLabel("proc");
+  setProcPwdLabel("root");
   procMask.classList.add("show");
   setTimeout(() => pw.focus(), 50);
 });
