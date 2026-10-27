@@ -964,14 +964,14 @@ function renderNginxSkeleton() {
 
 function renderNginx(m, logs) {
   if (m?.error) return `<pre>${escapeHtml(m.error)}</pre>`;
+  const running = Boolean(m.status?.ok);
   const info = `<div class="sys-info" style="font-size:14px">
-    <span class="${m.status?.ok ? "ok" : "bad"}">● ${escapeHtml(m.status?.detail || t("nginx.unknown"))}</span>
+    <span class="health-status nginx-live ${running ? "ok" : "bad"}"><i class="live-dot"></i>${escapeHtml(m.status?.detail || t("nginx.unknown"))}</span>
     <span class="sep"></span>${t("nginx.version")} ${escapeHtml(m.version || "—")}
     <span class="sep"></span>${t("nginx.configCheck")} <span class="${m.config?.ok ? "ok" : "bad"}">${m.config?.ok ? t("nginx.pass") : t("nginx.fail")}</span>
     <span class="sep"></span>${t("nginx.worker")} ${m.workers || 0}
     <span class="sep"></span>${t("nginx.running")} ${escapeHtml(m.uptime || "—")}
   </div>`;
-  const running = Boolean(m.status?.ok);
   const ops = `<div style="display:flex;gap:8px;margin:10px 0">
     <button class="btn small" data-nginx-op="reload">${t("nginx.opReloadCfg")}</button>
     <button class="btn small" data-nginx-op="restart">${t("nginx.opRestartSvc")}</button>
