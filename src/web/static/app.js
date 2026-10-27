@@ -35,11 +35,12 @@ const searchBox = document.getElementById("search");
 
 // ---------- 全局会话失效处理：另一处登录被踢下线 ----------
 let kickedShown = false;
+let panelReady = false;
 const kickedMask = document.getElementById("kicked-mask");
 const origFetch = window.fetch;
 window.fetch = async (...args) => {
   const res = await origFetch(...args);
-  if (res.status === 401 && !kickedShown && kickedMask && !/^api\/(login|register|captcha|status)/.test(String(args[0]))) {
+  if (res.status === 401 && panelReady && !kickedShown && kickedMask && !/^api\/(login|register|captcha|status)/.test(String(args[0]))) {
     kickedShown = true;
     kickedMask.classList.add("show");
   }

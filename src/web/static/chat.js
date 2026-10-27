@@ -509,6 +509,7 @@ document.querySelectorAll(".theme-btn").forEach((b) => b.addEventListener("click
 applyLang(localStorage.getItem("fixflow_lang") === "en" ? "en" : "zh");
 applyTheme(localStorage.getItem("fixflow_theme") === "light" ? "light" : "dark");
  function initPanel() {
+   panelReady = true;
    applyRoute();
    initOverview();
    refreshMetrics();

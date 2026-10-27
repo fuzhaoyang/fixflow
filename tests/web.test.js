@@ -1840,3 +1840,12 @@ test("文件写操作提示 root/sudo 密码，避免与面板登录密码混淆
   assert.match(settings, /kind === "db"/);
   assert.match(settings, /kind === "root"/);
 });
+
+test("登录成功前不展示被踢下线弹窗", () => {
+  const dir = new URL("../src/web/static/", import.meta.url);
+  const app = readFileSync(new URL("app.js", dir), "utf8");
+  const chat = readFileSync(new URL("chat.js", dir), "utf8");
+  assert.match(app, /panelReady/);
+  assert.match(app, /res\.status === 401[\s\S]*panelReady/);
+  assert.match(chat, /panelReady = true/);
+});
