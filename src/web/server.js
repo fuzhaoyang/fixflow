@@ -18,11 +18,11 @@ import { lanIPs, publicIP } from "../netip.js";
 import { buildUrls } from "../panel-access.js";
 import { createMetricAlerts, buildAlertEmail, METRICS, metricLabel } from "../metric-alerts.js";
 import { restart as restartService } from "../service.js";
-import { hashPasswordAsync, verifyPassword, verifyPasswordAsync, isStrongPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
+import { hashPasswordAsync, verifyPasswordAsync, isStrongPassword, createSessionStore, parseCookie, createCaptchaStore, captchaSvg } from "../auth.js";
 import { createMonitor, readProcStat, readNetDev, readDiskstats, nowTs, calcCpuUsage } from "../net.js";
 import { parseDf, parseFree, parseLoad } from "../health.js";
 import { runCommand } from "../tools.js";
-import { verifySudo, verifyAdminPassword, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
+import { isRoot, verifyAdminPassword, runPrivileged, detectBackend, activeZones, syncAclRules, sudoCmd } from "../firewall.js";
 import { detectPkgManager, resolvePkgName, listInstalledCmd, parseInstalledNames, searchCmd, parseSearch, versionsCmd, parseVersions, installCmd, uninstallCmd, withPmLock, pmErrorHint } from "../pkgs.js";
 import { normalizeKnowledge, isOpsQuestion, queryKnowledge, testKnowledge, maskToken, formatKbAnswer } from "../kb.js";
 import { createRetroFromIncident, readRetros, retroFilename, deleteRetros } from "../retros.js";
@@ -383,7 +383,11 @@ export async function startWeb(config = {}, deps = {}) {
   const execCmd = deps.runCommand || runCommand;
   const chatImpl = deps.chat || chat;
   const sendMail = deps.sendEmail || sendEmail;
-  const fwVerify = (password) => verifySudo(password, { run: execCmd });
+  const fwVerify = async (password) => {
+    if (!password) return false;
+    const adminUser = isRoot() ? await resolveAdminUser() : "";
+    return verifyAdminPassword(password, { run: execCmd, user: adminUser });
+  };
   const fwRun = (cmd, password, timeout) => runPrivileged(cmd, password, { run: execCmd, timeout });
   const firewalldBackend = async () => (await detectBackend({ run: execCmd })) === "firewalld";
   const firewalldOps = async (zoneCmd, password) => {
@@ -633,8 +637,7 @@ export async function startWeb(config = {}, deps = {}) {
     return b;
   };
   const fsWriteGuard = async (body, res) => {
-    const auth = await readAuth();
-    if (!auth || !verifyPassword(body.password || "", auth)) {
+    if (!(await fwVerify(body.password || ""))) {
       sendJson(res, { error: "密码错误，操作未执行" }, 403);
       return false;
     }
@@ -1192,8 +1195,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname.startsWith("/api/incidents/") && url.pathname.endsWith("/action") && req.method === "POST") {
         const id = decodeURIComponent(url.pathname.slice("/api/incidents/".length, -"/action".length));
         const body = JSON.parse(await readBody(req) || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(body.password || "", auth)) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
         const inc = await getIncident(incidentsPath, id);
         if (!inc) { sendJson(res, { error: "事件不存在" }, 404); return; }
         const action = (await allowedActionsFor(inc)).find((a) => a.key === body.action);
@@ -1591,8 +1593,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/ssl/renew" && req.method === "POST") {
         const body = await readBody(req);
         const { id, password } = JSON.parse(body || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(password || "", auth)) {
+        if (!(await fwVerify(password || ""))) {
           sendJson(res, { error: "密码错误，操作未执行" }, 403);
           return;
         }
@@ -1864,8 +1865,7 @@ export async function startWeb(config = {}, deps = {}) {
             const pathField = parts.find((p) => p.type === "field" && p.name === "path");
             const passField = parts.find((p) => p.type === "field" && p.name === "password");
             const file = parts.find((p) => p.type === "file");
-            const auth = await readAuth();
-            if (!auth || !verifyPassword(passField?.value || "", auth)) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
+            if (!(await fwVerify(passField?.value || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
             else {
               const base = safeFsPath(pathField?.value);
               const fname = file ? basename(file.filename || "").replace(/[\\/]/g, "") : "";
@@ -2125,8 +2125,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {
         const body = await readBody(req);
         const { unit, action, password } = JSON.parse(body || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(password || "", auth)) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
         if (!SYS_ACTIONS.includes(action)) { sendJson(res, { error: "不支持的操作" }, 400); return; }
         const u = String(unit || "").trim();
         if (!/^[a-zA-Z0-9_.@-]+$/.test(u)) { sendJson(res, { error: "非法的服务名" }, 400); return; }
@@ -2151,8 +2150,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/nginx/conf" && req.method === "POST") {
         const body = await readBody(req);
         const { path, content, password } = JSON.parse(body || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(password || "", auth)) {
+        if (!(await fwVerify(password || ""))) {
           sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else {
           const r = await writeNginxConf(path, content ?? "");
@@ -2161,8 +2159,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/nginx/reload" && req.method === "POST") {
         const body = await readBody(req);
         const { action, password } = JSON.parse(body || "{}");
-        const auth = await readAuth();
-        if (!auth || !verifyPassword(password || "", auth)) {
+        if (!(await fwVerify(password || ""))) {
           sendJson(res, { error: "密码错误，操作未执行" }, 403);
         } else {
           const cmds = { start: "systemctl start nginx", stop: "systemctl stop nginx", restart: "systemctl restart nginx", reload: "systemctl reload nginx" };

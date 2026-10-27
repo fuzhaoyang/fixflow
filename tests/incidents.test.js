@@ -124,7 +124,10 @@ test("/api/incidents 列表、详情、动作与复盘联动", async () => {
   writeFileSync(join(dir, "incidents.json"), JSON.stringify({ incidents: [inc] }));
   writeFileSync(join(dir, "retros.json"), JSON.stringify([card]));
   const playbooks = { order: { actions: { restart: { command: "echo restarted", label: "重启服务", risk: "medium" } } } };
-  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, playbooks }, { captchas: testCaptchas });
+  const runCommand = async (cmd) => cmd.includes("sudo -S")
+    ? { exitCode: 0, stdout: "", stderr: "" }
+    : { exitCode: 0, stdout: "restarted\n", stderr: "" };
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, playbooks }, { captchas: testCaptchas, runCommand });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const H = { "Content-Type": "application/json" };
   await fetch(`${base}/api/register`, { method: "POST", headers: H, body: JSON.stringify({ username: "admin", password: "Secret123!", captchaCode: "0000" }) });

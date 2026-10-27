@@ -56,7 +56,7 @@ const I18N_ZH = {
   "store.install": "安装", "store.installTitle": "安装软件", "store.installConfirm": "确认安装 {pkg}？此操作需要 root 权限并可能修改系统。", "store.doneMsg": "安装已完成",
   "store.uninstall": "卸载", "store.uninstallTitle": "卸载软件", "store.uninstallConfirm": "确认卸载 {pkg}？卸载后将移除该软件及其配置文件，不可恢复。", "store.uninstallMsg": "卸载已完成",
   "store.installing": "正在安装…", "store.uninstalling": "正在卸载…", "store.installErr": "安装失败，详情见日志", "store.uninstallErr": "卸载失败，详情见日志", "store.close": "关闭",
-  "app.openManage": "点击管理此应用", "app.state": "状态", "app.ok": "运行中", "app.unknown": "状态未知", "app.fail": "加载失败", "app.svcHint": "操作需输入面板登录密码确认。",
+  "app.openManage": "点击管理此应用", "app.state": "状态", "app.ok": "运行中", "app.unknown": "状态未知", "app.fail": "加载失败", "app.svcHint": "操作需输入 root / sudo 密码确认。",
   "app.sec.service": "服务", "app.sec.config": "配置修改", "app.sec.version": "切换版本", "app.sec.perf": "性能调整", "app.sec.load": "负载状态", "app.sec.logs": "错误日志",
   "app.installed": "已安装版本", "app.candidate": "候选版本", "app.installedMark": "已安装", "app.installVer": "安装此版本", "app.noVersion": "无可用版本", "app.installVerTitle": "安装指定版本", "app.installVerConfirm": "确认安装 nginx {ver}？此操作需要 root 权限。",
   "app.perf.workers": "处理进程(auto=自动)", "app.perf.conns": "最大并发连接数", "app.perf.keepalive": "连接超时时间(秒)", "app.perf.gzip": "开启压缩传输", "app.perf.gzipMin": "最小压缩文件(KB)", "app.perf.gzipLevel": "压缩率", "app.perf.maxBody": "最大上传文件(MB)", "app.perf.hashBucket": "服务器名hash表大小", "app.perf.headBuf": "请求头buffer大小(KB)", "app.perf.bodyBuf": "请求主体缓冲区(KB)", "app.perf.apply": "应用修改", "app.perf.applyConfirm": "应用修改将保存 nginx 配置并自动重载，配置校验失败会自动回滚。确认执行？", "app.perf.hint": "已存在的参数直接覆盖，缺失的参数自动写入对应块；保存后自动 nginx -t 校验并重载。",
@@ -93,7 +93,7 @@ const I18N_ZH = {
   "srv.desc": "描述", "srv.loadState": "加载状态", "srv.unitFileState": "单元文件", "srv.nRestarts": "重启次数", "srv.exitStatus": "退出码", "srv.restartPolicy": "重启策略",
   "srv.depsAfter": "After 依赖", "srv.depsRequires": "Requires 依赖", "srv.depsRequiredBy": "被依赖",
   "srv.logs": "查看日志", "srv.logsHint": "（加载日志）", "srv.logsLoading": "加载中…", "srv.logsEmpty": "（无日志内容）",
-  "srv.opConfirm": "确认对服务 {unit} 执行「{op}」？此操作需输入登录密码验证。", "srv.opDone": "操作已执行",
+  "srv.opConfirm": "确认对服务 {unit} 执行「{op}」？此操作需输入 root / sudo 密码验证。", "srv.opDone": "操作已执行",
   "ssl.host": "域名", "ssl.expire": "到期时间", "ssl.left": "剩余", "ssl.note": "备注",
   "ssl.days": "天", "ssl.expired": "已过期", "ssl.noConfig": "（未配置监控域名，可在设置中配置）",
   "ssl.sumTotal": "共 <b>{n}</b> 张", "ssl.sumWarn": "临期 ≤30 天", "ssl.sumBad": "严重 ≤7 天", "ssl.sumTool": "续签工具：{tool}",
@@ -118,8 +118,8 @@ const I18N_ZH = {
   "restart.confirm": "确认重启", "restart.cancel": "取消",
   "logout.title": "退出登录", "logout.text": "退出后需要重新输入账号密码才能使用面板。确认退出登录吗？", "logout.cancel": "取消", "logout.confirm": "确认退出",
   "kicked.title": "登录已失效", "kicked.text": "该账号已在另一处登录，本机会话已下线。请重新登录。", "kicked.confirm": "重新登录",
-  "proc.title": "密码验证", "proc.pwdLabel": "登录密码", "proc.pwdPh": "请输入登录密码以验证身份",
-  "proc.confirm": "确认执行", "proc.cancel": "取消", "proc.pwdRequired": "请输入登录密码", "proc.pwdErr": "密码错误，操作未执行",
+  "proc.title": "密码验证", "proc.pwdLabel": "root / sudo 密码", "proc.pwdPh": "请输入 root / sudo 密码以验证身份",
+  "proc.confirm": "确认执行", "proc.cancel": "取消", "proc.pwdRequired": "请输入 root / sudo 密码", "proc.pwdErr": "密码错误，操作未执行",
   "fw.closeTitle": "关闭端口", "fw.closeText": "确认关闭端口 {port}/{proto}（{mode}）吗？此操作需输入 root 密码验证。",
   "fw.state": "防火墙状态", "fw.enabled": "已启用", "fw.disabled": "未启用 / 降级", "fw.rules": "放行规则", "fw.open": "对全网开放", "fw.danger": "（危险 {n}）",
   "fw.closeBtn": "关闭端口", "fw.noRules": "未检测到防火墙规则", "fw.noRisk": "未发现对全网开放的端口",
@@ -153,13 +153,13 @@ const I18N_ZH = {
   "acl.delWlTitle": "移除白名单", "acl.delBlTitle": "移除黑名单", "acl.delText": "确认将 {ip} 移出名单？此操作需输入 root 密码验证。",
   "acl.addDone": "规则已添加", "acl.delDone": "规则已移除",
   "acl.loadFail": "加载失败：请确认已重启 fixflow 服务（若升级后仍如此，说明正在运行旧版本）",
-  "fs.mkdirTitle": "新建文件夹", "fs.mkdirText": "确认在 {path} 下创建文件夹「{name}」？此操作需输入登录密码验证。",
-  "fs.renameTitle": "重命名", "fs.renameText": "将「{old}」重命名为「{new}」？此操作需输入登录密码验证。",
-  "fs.deleteTitle": "删除", "fs.deleteText": "删除「{name}」？{note}删除后不可恢复！此操作需输入登录密码验证。",
-  "fs.uploadTitle": "上传文件", "fs.uploadText": "上传「{name}」({size}) 到 {path}？此操作需输入登录密码验证。",
-  "fs.writeTitle": "保存文件", "fs.writeText": "保存修改到 {path}？此操作需输入登录密码验证。",
+  "fs.mkdirTitle": "新建文件夹", "fs.mkdirText": "确认在 {path} 下创建文件夹「{name}」？此操作需输入 root / sudo 密码验证。",
+  "fs.renameTitle": "重命名", "fs.renameText": "将「{old}」重命名为「{new}」？此操作需输入 root / sudo 密码验证。",
+  "fs.deleteTitle": "删除", "fs.deleteText": "删除「{name}」？{note}删除后不可恢复！此操作需输入 root / sudo 密码验证。",
+  "fs.uploadTitle": "上传文件", "fs.uploadText": "上传「{name}」({size}) 到 {path}？此操作需输入 root / sudo 密码验证。",
+  "fs.writeTitle": "保存文件", "fs.writeText": "保存修改到 {path}？此操作需输入 root / sudo 密码验证。",
   "fs.dirRecursive": "目录将递归删除，",
-  "fs.mkdirPrompt": "新建文件夹名称：", "fs.renamePrompt": "新名称：", "fs.sizeTooBig": "文件超过 50MB", "fs.tooMany": "单次最多上传 50 个文件", "fs.batchTooBig": "单次上传总大小不能超过 200MB", "fs.uploadBatchText": "上传 {n} 个文件（共 {size}）到 {path}？此操作需输入登录密码验证。", "fs.uploadResult": "上传完成：成功 {ok} 个，失败 {fail} 个", "fs.uploading": "正在上传 {n} 个文件", "fs.cancelUpload": "取消上传", "fs.uploadCanceled": "已取消：成功 {ok} 个，未上传 {skip} 个", "fs.open": "打开",
+  "fs.mkdirPrompt": "新建文件夹名称：", "fs.renamePrompt": "新名称：", "fs.sizeTooBig": "文件超过 50MB", "fs.tooMany": "单次最多上传 50 个文件", "fs.batchTooBig": "单次上传总大小不能超过 200MB", "fs.uploadBatchText": "上传 {n} 个文件（共 {size}）到 {path}？此操作需输入 root / sudo 密码验证。", "fs.uploadResult": "上传完成：成功 {ok} 个，失败 {fail} 个", "fs.uploading": "正在上传 {n} 个文件", "fs.cancelUpload": "取消上传", "fs.uploadCanceled": "已取消：成功 {ok} 个，未上传 {skip} 个", "fs.open": "打开",
   "auth.resetHint": "请在服务器上运行 fixflow reset-password 重置密码。",
   "ai.title": "提问AI？", "ai.fullscreen": "全屏",
   "chat.clear": "清空历史", "chat.clearTitle": "清空聊天历史", "chat.clearConfirm": "清空聊天历史需要验证 root 密码，确定要清空吗？", "chat.inputPh": "例如：检查磁盘占用，帮我清理旧日志（Enter 发送，Shift+Enter 换行）",
@@ -183,7 +183,7 @@ const I18N_ZH = {
   "ov.tokPrompt": "输入 prompt", "ov.tokCompletion": "输出 completion", "ov.tokTotal": "总 token",
   "term.title": "终端", "term.clear": "清空", "term.log": "记录", "term.files": "文件操作", "term.close": "✕",
   "term.time": "时间", "term.user": "用户", "term.command": "命令",
-  "term.connecting": "连接中…", "term.fail": "连接失败", "term.pwdHint": "此操作需输入登录密码验证。",
+  "term.connecting": "连接中…", "term.fail": "连接失败", "term.pwdHint": "此操作需输入 root / sudo 密码验证。",
   "term.logTitle": "终端操作记录",
   "term.searchPh": "搜索命令…", "term.userAll": "全部用户",
   "term.rangeAll": "全部时间", "term.rangeToday": "今天", "term.range7": "近7天", "term.range30": "近30天",
@@ -193,9 +193,9 @@ const I18N_ZH = {
   "fs.dir": "目录", "fs.symlink": "符号链接", "fs.text": "文本", "fs.archive": "压缩包", "fs.binary": "二进制", "fs.image": "图片", "fs.file": "文件",
   "fs.editTitle": "编辑文件", "fs.save": "保存", "fs.cancel": "取消",
   "nginx.title": "Nginx 配置", "nginx.edit": "编辑", "nginx.close": "关闭", "nginx.saveReload": "保存并重载",
-  "nginx.saveTitle": "保存 Nginx 配置", "nginx.saveText": "确认保存 {path} 并重载 nginx 吗？此操作需输入登录密码验证。",
+  "nginx.saveTitle": "保存 Nginx 配置", "nginx.saveText": "确认保存 {path} 并重载 nginx 吗？此操作需输入 root / sudo 密码验证。",
   "nginx.opReload": "重载", "nginx.opRestart": "重启", "nginx.opStart": "启动", "nginx.opStop": "停止",
-  "nginx.opText": "确认{label} nginx 服务吗？此操作需输入登录密码验证。",
+  "nginx.opText": "确认{label} nginx 服务吗？此操作需输入 root / sudo 密码验证。",
   "nginx.unknown": "未知", "nginx.version": "版本", "nginx.configCheck": "配置校验", "nginx.pass": "通过", "nginx.fail": "失败", "nginx.worker": "worker", "nginx.running": "运行",
   "nginx.opReloadCfg": "重载配置", "nginx.opRestartSvc": "重启服务", "nginx.opStopSvc": "停止服务", "nginx.opStartSvc": "启动服务",
   "nginx.saveDone": "配置已保存并重载", "nginx.opDone": "「{action}」操作成功",
@@ -323,7 +323,7 @@ const I18N_EN = {
   "store.install": "Install", "store.installTitle": "Install Software", "store.installConfirm": "Install {pkg}? This requires root privileges and may modify the system.", "store.doneMsg": "Install complete",
   "store.uninstall": "Uninstall", "store.uninstallTitle": "Uninstall Software", "store.uninstallConfirm": "Uninstall {pkg}? This will remove the software and its config files, and cannot be undone.", "store.uninstallMsg": "Uninstall complete",
   "store.installing": "Installing…", "store.uninstalling": "Uninstalling…", "store.installErr": "Install failed, see log", "store.uninstallErr": "Uninstall failed, see log", "store.close": "Close",
-  "app.openManage": "Click to manage this app", "app.state": "State", "app.ok": "Running", "app.unknown": "Unknown", "app.fail": "Failed to load", "app.svcHint": "Operations require the panel login password.",
+  "app.openManage": "Click to manage this app", "app.state": "State", "app.ok": "Running", "app.unknown": "Unknown", "app.fail": "Failed to load", "app.svcHint": "Operations require the root / sudo password.",
   "app.sec.service": "Service", "app.sec.config": "Config", "app.sec.version": "Version", "app.sec.perf": "Performance", "app.sec.load": "Load", "app.sec.logs": "Error logs",
   "app.installed": "Installed version", "app.candidate": "Candidate version", "app.installedMark": "Installed", "app.installVer": "Install this version", "app.noVersion": "No available versions", "app.installVerTitle": "Install specific version", "app.installVerConfirm": "Install nginx {ver}? This requires root privileges.",
   "app.perf.workers": "Worker processes (auto)", "app.perf.conns": "Max connections", "app.perf.keepalive": "Keepalive timeout (s)", "app.perf.gzip": "Enable gzip", "app.perf.gzipMin": "Min gzip size (KB)", "app.perf.gzipLevel": "Compression level", "app.perf.maxBody": "Max body size (MB)", "app.perf.hashBucket": "Server name hash bucket size", "app.perf.headBuf": "Header buffer size (KB)", "app.perf.bodyBuf": "Body buffer size (KB)", "app.perf.apply": "Apply", "app.perf.applyConfirm": "Applying saves nginx config and reloads it; invalid config rolls back automatically. Confirm?", "app.perf.hint": "Existing params are overwritten; missing ones are auto-added to the right block; nginx -t is run and config reloaded after saving.",
@@ -360,7 +360,7 @@ const I18N_EN = {
   "srv.desc": "Description", "srv.loadState": "Load state", "srv.unitFileState": "Unit file", "srv.nRestarts": "Restarts", "srv.exitStatus": "Exit status", "srv.restartPolicy": "Restart policy",
   "srv.depsAfter": "After", "srv.depsRequires": "Requires", "srv.depsRequiredBy": "Required by",
   "srv.logs": "View logs", "srv.logsHint": "(load logs)", "srv.logsLoading": "Loading…", "srv.logsEmpty": "(no log content)",
-  "srv.opConfirm": "Run \"{op}\" on service {unit}? Login password required.", "srv.opDone": "Operation executed",
+  "srv.opConfirm": "Run \"{op}\" on service {unit}? Root / sudo password required.", "srv.opDone": "Operation executed",
   "ssl.host": "Host", "ssl.expire": "Expires", "ssl.left": "Left", "ssl.note": "Note",
   "ssl.days": "d", "ssl.expired": "Expired", "ssl.noConfig": "(No monitored domains configured. Configure in settings.)",
   "ssl.sumTotal": "Total <b>{n}</b>", "ssl.sumWarn": "Expiring ≤30d", "ssl.sumBad": "Critical ≤7d", "ssl.sumTool": "Renew tool: {tool}",
@@ -386,8 +386,8 @@ const I18N_EN = {
   "logout.title": "Logout", "logout.text": "You will need to log in again to use the panel. Confirm logout?", "logout.cancel": "Cancel", "logout.confirm": "Logout",
   "kicked.title": "Session Expired", "kicked.text": "This account has logged in elsewhere, and this session has been signed out. Please log in again.", "kicked.confirm": "Log in again",
   "logout.confirm": "Logout", "logout.cancel": "Cancel",
-  "proc.title": "Password Verify", "proc.pwdLabel": "Login password", "proc.pwdPh": "Enter login password to verify",
-  "proc.confirm": "Confirm", "proc.cancel": "Cancel", "proc.pwdRequired": "Please enter login password", "proc.pwdErr": "Wrong password, operation not executed",
+  "proc.title": "Password Verify", "proc.pwdLabel": "Root / sudo password", "proc.pwdPh": "Enter root / sudo password to verify",
+  "proc.confirm": "Confirm", "proc.cancel": "Cancel", "proc.pwdRequired": "Please enter the root / sudo password", "proc.pwdErr": "Wrong password, operation not executed",
   "fw.closeTitle": "Close Port", "fw.closeText": "Confirm closing port {port}/{proto} ({mode})? Root password required.",
   "fw.state": "Firewall Status", "fw.enabled": "Enabled", "fw.disabled": "Disabled / Fallback", "fw.rules": "Rules", "fw.open": "Open to all", "fw.danger": "(dangerous {n})",
   "fw.closeBtn": "Close Port", "fw.noRules": "No firewall rules detected", "fw.noRisk": "No open-to-all ports",
@@ -421,13 +421,13 @@ const I18N_EN = {
   "acl.delWlTitle": "Remove from Whitelist", "acl.delBlTitle": "Remove from Blacklist", "acl.delText": "Remove {ip} from the list? Root password required.",
   "acl.addDone": "Rule added", "acl.delDone": "Rule removed",
   "acl.loadFail": "Load failed: restart the fixflow service. If still failing after upgrade, an old version is running.",
-  "fs.mkdirTitle": "New Folder", "fs.mkdirText": "Confirm creating folder 「{name}」 under {path}? Login password required.",
-  "fs.renameTitle": "Rename", "fs.renameText": "Rename 「{old}」 to 「{new}」? Login password required.",
-  "fs.deleteTitle": "Delete", "fs.deleteText": "Delete 「{name}」? {note}This cannot be undone! Login password required.",
-  "fs.uploadTitle": "Upload File", "fs.uploadText": "Upload 「{name}」 ({size}) to {path}? Login password required.",
-  "fs.writeTitle": "Save File", "fs.writeText": "Save changes to {path}? Login password required.",
+  "fs.mkdirTitle": "New Folder", "fs.mkdirText": "Confirm creating folder 「{name}」 under {path}? Root / sudo password required.",
+  "fs.renameTitle": "Rename", "fs.renameText": "Rename 「{old}」 to 「{new}」? Root / sudo password required.",
+  "fs.deleteTitle": "Delete", "fs.deleteText": "Delete 「{name}」? {note}This cannot be undone! Root / sudo password required.",
+  "fs.uploadTitle": "Upload File", "fs.uploadText": "Upload 「{name}」 ({size}) to {path}? Root / sudo password required.",
+  "fs.writeTitle": "Save File", "fs.writeText": "Save changes to {path}? Root / sudo password required.",
   "fs.dirRecursive": "Folder will be deleted recursively, ",
-  "fs.mkdirPrompt": "New folder name:", "fs.renamePrompt": "New name:", "fs.sizeTooBig": "File exceeds 50MB", "fs.tooMany": "Up to 50 files per upload", "fs.batchTooBig": "Total upload size cannot exceed 200MB", "fs.uploadBatchText": "Upload {n} files ({size} total) to {path}? Login password required.", "fs.uploadResult": "Upload complete: {ok} succeeded, {fail} failed", "fs.uploading": "Uploading {n} files", "fs.cancelUpload": "Cancel upload", "fs.uploadCanceled": "Canceled: {ok} succeeded, {skip} not uploaded", "fs.open": "Open",
+  "fs.mkdirPrompt": "New folder name:", "fs.renamePrompt": "New name:", "fs.sizeTooBig": "File exceeds 50MB", "fs.tooMany": "Up to 50 files per upload", "fs.batchTooBig": "Total upload size cannot exceed 200MB", "fs.uploadBatchText": "Upload {n} files ({size} total) to {path}? Root / sudo password required.", "fs.uploadResult": "Upload complete: {ok} succeeded, {fail} failed", "fs.uploading": "Uploading {n} files", "fs.cancelUpload": "Cancel upload", "fs.uploadCanceled": "Canceled: {ok} succeeded, {skip} not uploaded", "fs.open": "Open",
   "auth.resetHint": "Run `fixflow reset-password` on the server to reset your password.",
   "ai.title": "Ask AI?", "ai.fullscreen": "Fullscreen",
   "chat.clear": "Clear history", "chat.clearTitle": "Clear chat history", "chat.clearConfirm": "Clearing chat history requires root password verification. Clear it now?", "chat.inputPh": "e.g. Check disk usage, clean old logs (Enter to send, Shift+Enter newline)",
@@ -451,7 +451,7 @@ const I18N_EN = {
   "ov.tokPrompt": "Prompt in", "ov.tokCompletion": "Completion out", "ov.tokTotal": "Total",
   "term.title": "Terminal", "term.clear": "Clear", "term.log": "Log", "term.files": "Files", "term.close": "✕",
   "term.time": "Time", "term.user": "User", "term.command": "Command",
-  "term.connecting": "Connecting…", "term.fail": "Connection failed", "term.pwdHint": "Login password required.",
+  "term.connecting": "Connecting…", "term.fail": "Connection failed", "term.pwdHint": "Root / sudo password required.",
   "term.logTitle": "Terminal History",
   "term.searchPh": "Search commands…", "term.userAll": "All users",
   "term.rangeAll": "All time", "term.rangeToday": "Today", "term.range7": "Last 7 days", "term.range30": "Last 30 days",
@@ -461,9 +461,9 @@ const I18N_EN = {
   "fs.dir": "Folder", "fs.symlink": "Symlink", "fs.text": "Text", "fs.archive": "Archive", "fs.binary": "Binary", "fs.image": "Image", "fs.file": "File",
   "fs.editTitle": "Edit File", "fs.save": "Save", "fs.cancel": "Cancel",
   "nginx.title": "Nginx Config", "nginx.edit": "Edit", "nginx.close": "Close", "nginx.saveReload": "Save & Reload",
-  "nginx.saveTitle": "Save Nginx Config", "nginx.saveText": "Confirm saving {path} and reloading nginx? Login password required.",
+  "nginx.saveTitle": "Save Nginx Config", "nginx.saveText": "Confirm saving {path} and reloading nginx? Root / sudo password required.",
   "nginx.opReload": "reload", "nginx.opRestart": "restart", "nginx.opStart": "start", "nginx.opStop": "stop",
-  "nginx.opText": "Confirm {label} the nginx service? Login password required.",
+  "nginx.opText": "Confirm {label} the nginx service? Root / sudo password required.",
   "nginx.unknown": "Unknown", "nginx.version": "Version", "nginx.configCheck": "Config check", "nginx.pass": "OK", "nginx.fail": "Failed", "nginx.worker": "worker", "nginx.running": "Uptime",
   "nginx.opReloadCfg": "Reload config", "nginx.opRestartSvc": "Restart service", "nginx.opStopSvc": "Stop service", "nginx.opStartSvc": "Start service",
   "nginx.saveDone": "Config saved and reloaded", "nginx.opDone": "「{action}」succeeded",
@@ -715,7 +715,7 @@ ${FIG.firewall}
 <ol>
   <li>查看防火墙状态与放行规则列表（基于 UFW）。</li>
   <li>「对全网开放」的端口会标红提示风险，建议限制来源 IP。</li>
-  <li>点「关闭端口」可一键移除放行（敏感操作，需重输登录密码）。</li>
+  <li>点「关闭端口」可一键移除放行（敏感操作，需重输 root / sudo 密码）。</li>
   <li>手动在服务器上放行的规则会自动同步显示到这里。</li>
 </ol>
 <h4 id="view-acl">黑白名单</h4>
@@ -748,7 +748,7 @@ ${FIG.ssl}
 <ol>
   <li>自动发现服务器上的证书，也可手动添加站点（本地或远程）。</li>
   <li>每张卡显示到期进度与 SAN 域名；即将到期会标黄、已过期标红。</li>
-  <li>点「续签」一键更新（敏感操作，需重输登录密码）。</li>
+  <li>点「续签」一键更新（敏感操作，需重输 root / sudo 密码）。</li>
   <li>到期告警通过「告警管理」的指标规则触发，可设置提前 N 天提醒。</li>
 </ol>
 <h4 id="view-services">服务</h4>
@@ -764,7 +764,7 @@ ${FIG.store}
 <ol>
   <li>浏览内置精选软件，也可按关键词搜索 apt / dnf / yum / apk / pacman / zypper 源里的软件。</li>
   <li>查看软件说明、可用版本与是否已安装。</li>
-  <li>点「安装」执行安装（安装类操作会弹确认，需重输登录密码），安装进度实时显示。</li>
+  <li>点「安装」执行安装（安装类操作会弹确认，需重输 root / sudo 密码），安装进度实时显示。</li>
   <li>已安装的软件可卸载；不同发行版会自动换算包名（如 docker.io → docker）。</li>
 </ol>
 <h4 id="view-logs">日志</h4>
@@ -780,7 +780,7 @@ ${FIG.chat}
 <ol>
   <li>直接打字让助手干活，回复逐字显示；支持上传图片让模型看图。</li>
   <li>会改动系统的操作会弹「变更审批单」，展示命令与影响，确认后才执行。</li>
-  <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输登录密码。</li>
+  <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输 root / sudo 密码。</li>
   <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
   <li>聊天窗右上角「知识库」可配置知识库；运维 / 产品知识问题会优先查询知识库。</li>
   <li>输入栏「自动化」进入自动化模式，与普通对话共用当前聊天窗和历史；生成规则 / 脚本后点「应用」打开规则弹窗。</li>
@@ -865,7 +865,7 @@ ${FIG.knowledgeFooter}
   <li>主机级默认日志：<code>journalctl -p err -n 200 --no-pager</code>；服务级默认：<code>journalctl -u &lt;service&gt; -n 200 --no-pager</code>。</li>
   <li>发布记录：<code>fixflow deploy-note --service order --version 1.2.3 --commit abc --rollback "..."</code>（以 root 执行，与服务同一 HOME）。</li>
   <li>RCA 展示结论、根因、置信度、证据引用、建议动作、回滚建议、缺失信息；只展示，不自动执行。</li>
-  <li>「可执行动作」来自 Playbook 或最新发布记录；执行需输入登录密码，结果写回时间线。</li>
+  <li>「可执行动作」来自 Playbook 或最新发布记录；执行需输入 root / sudo 密码，结果写回时间线。</li>
   <li>指标和服务事件恢复后自动生成复盘卡片，可点「查看复盘」；SSL 事件只记录，不自动生成复盘。</li>
 </ol>
 <h4 id="inc-manage">列表与删除</h4>
@@ -1046,7 +1046,7 @@ ${FIG.firewall}
 <ol>
   <li>View firewall status and the allow-rule list (UFW-based).</li>
   <li>Ports open to the whole internet are marked red — restrict source IPs.</li>
-  <li>"Close port" removes an allow rule in one click (sensitive action, requires re-entering the login password).</li>
+  <li>"Close port" removes an allow rule in one click (sensitive action, requires re-entering the root / sudo password).</li>
   <li>Rules added manually on the server are synced and shown here automatically.</li>
 </ol>
 <h4 id="view-acl">Blacklist / Whitelist</h4>
@@ -1079,7 +1079,7 @@ ${FIG.ssl}
 <ol>
   <li>Certificates on the server are discovered automatically; you can also add sites manually (local or remote).</li>
   <li>Each card shows expiry progress and SAN domains; about to expire is yellow, expired is red.</li>
-  <li>"Renew" renews in one click (sensitive action, requires re-entering the login password).</li>
+  <li>"Renew" renews in one click (sensitive action, requires re-entering the root / sudo password).</li>
   <li>Expiry alerts are driven by metric rules in "Alert management" — set a reminder N days in advance.</li>
 </ol>
 <h4 id="view-services">Services</h4>
@@ -1095,7 +1095,7 @@ ${FIG.store}
 <ol>
   <li>Browse built-in curated software, or search apt / dnf / yum / apk / pacman / zypper repositories by keyword.</li>
   <li>Check descriptions, available versions and whether already installed.</li>
-  <li>"Install" runs the install (install actions pop a confirmation and require re-entering the login password); progress shows live.</li>
+  <li>"Install" runs the install (install actions pop a confirmation and require re-entering the root / sudo password); progress shows live.</li>
   <li>Installed apps can be uninstalled; package names are mapped across distros (e.g. docker.io → docker).</li>
 </ol>
 <h4 id="view-logs">Logs</h4>
@@ -1111,7 +1111,7 @@ ${FIG.chat}
 <ol>
   <li>Type naturally and let the assistant work; replies stream word by word. You can upload images for the model to see.</li>
   <li>System-changing operations pop a "change approval form" showing the commands and impact — confirm before it runs.</li>
-  <li>Sensitive actions (close a port, change config, write files, renew certs…) also require re-entering the login password.</li>
+  <li>Sensitive actions (close a port, change config, write files, renew certs…) also require re-entering the root / sudo password.</li>
   <li>"Clear history" above the input resets the session; "Terminal" opens the built-in terminal on the right.</li>
   <li>The "Knowledge Base" button at the top-right of the chat window configures the KB; ops / product-knowledge questions query it first.</li>
   <li>"Automation" in the input bar enters automation mode, sharing the current chat window and history; after rule / script generation, click "Apply" to open the rule dialog.</li>
@@ -1196,7 +1196,7 @@ ${FIG.knowledgeFooter}
   <li>Host-level default logs: <code>journalctl -p err -n 200 --no-pager</code>; service-level default: <code>journalctl -u &lt;service&gt; -n 200 --no-pager</code>.</li>
   <li>Record a release with <code>fixflow deploy-note --service order --version 1.2.3 --commit abc --rollback "..."</code> (run as root, same HOME as the service).</li>
   <li>RCA shows summary, root cause, confidence, evidence references, suggested action, rollback and missing information; it is display-only and never executed automatically.</li>
-  <li>"Allowed actions" comes from the Playbook or the latest release record; running one requires the login password and the result is written back to the timeline.</li>
+  <li>"Allowed actions" comes from the Playbook or the latest release record; running one requires the root / sudo password and the result is written back to the timeline.</li>
   <li>Resolved metric/service incidents generate postmortem cards with "View postmortem"; SSL incidents are recorded but do not generate a postmortem automatically.</li>
 </ol>
 <h4 id="inc-manage">List &amp; deletion</h4>

@@ -1034,7 +1034,7 @@ test("SSL 接口：增删改查与手动条目保护", async () => {
 });
 
 test("SSL 续签：密码错误 403，非 local 400", async () => {
-  const w = await makeServer();
+  const w = await makeServer({}, { runCommand: async (cmd) => ({ exitCode: cmd.includes("wrong") ? 1 : 0, stdout: "", stderr: "" }) });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const H = { Cookie: cookie, "Content-Type": "application/json" };
@@ -1117,7 +1117,7 @@ test("config 接口保存 serviceKeywords 白名单", async () => {
 
 test("/api/nginx 接口鉴权与重载", async () => {
   const calls = [];
-  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "ok", stderr: "" }; } });
+  const w = await makeServer({}, { runCommand: async (cmd) => { calls.push(cmd); return { exitCode: cmd.includes("wrong") ? 1 : 0, stdout: "ok", stderr: "" }; } });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const noauth = await fetch(`${base}/api/nginx/confs`);
   assert.equal(noauth.status, 401);
@@ -1133,7 +1133,7 @@ test("/api/nginx 接口鉴权与重载", async () => {
     body: JSON.stringify({ action: "reload", password: "wrong" }),
   });
   assert.equal(badReload.status, 403);
-  assert.equal(calls.length, 0);
+  assert.ok(!calls.some((c) => c.includes("systemctl")));
   const okReload = await fetch(`${base}/api/nginx/reload`, {
     method: "POST", headers,
     body: JSON.stringify({ action: "restart", password: "Secret123!" }),
@@ -1154,7 +1154,7 @@ test("/api/nginx/reload 支持 start/stop/restart/reload", async () => {
     assert.equal(res.status, 200);
     assert.equal((await res.json()).ok, true);
   }
-  assert.deepEqual(calls, ["systemctl start nginx", "systemctl stop nginx", "systemctl restart nginx", "systemctl reload nginx"]);
+  assert.deepEqual(calls.filter((c) => c.startsWith("systemctl")), ["systemctl start nginx", "systemctl stop nginx", "systemctl restart nginx", "systemctl reload nginx"]);
   w.close();
 });
 
@@ -1303,7 +1303,7 @@ test("/api/fs 浏览与路径校验", async () => {
 
 test("/api/fs 写操作鉴权与执行", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-fs-"));
-  const w = await makeServer();
+  const w = await makeServer({}, { runCommand: async (cmd) => ({ exitCode: cmd.includes("wrong") ? 1 : 0, stdout: "", stderr: "" }) });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const H = { Cookie: cookie, "Content-Type": "application/json" };
@@ -1331,7 +1331,7 @@ test("/api/fs 写操作鉴权与执行", async () => {
 
 test("/api/fs/upload multipart 上传", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-fs-"));
-  const w = await makeServer();
+  const w = await makeServer({}, { runCommand: async (cmd) => ({ exitCode: cmd.includes("wrong") ? 1 : 0, stdout: "", stderr: "" }) });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
   const boundary = "----TestBoundary123";
@@ -1656,7 +1656,11 @@ test("数据库页前端：renderDb 相关钩子存在", async () => {
 });
 
 test("服务操作接口：鉴权/危险保护/执行", async () => {
-  const runCommand = async (cmd) => ({ exitCode: cmd.startsWith("systemctl restart nginx.service") ? 0 : 1, stdout: "", stderr: "" });
+  const calls = [];
+  const runCommand = async (cmd) => {
+    calls.push(cmd);
+    return { exitCode: cmd.includes("wrong") ? 1 : (cmd.includes("sudo -S") || cmd.startsWith("systemctl restart nginx.service") ? 0 : 1), stdout: "", stderr: "" };
+  };
   const w = await makeServer({}, { runCommand });
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await registerAndLogin(base);
@@ -1671,6 +1675,7 @@ test("服务操作接口：鉴权/危险保护/执行", async () => {
   const ok = await fetch(`${base}/api/systemd/op`, { method: "POST", headers: H, body: JSON.stringify({ unit: "nginx", action: "restart", password: "Secret123!" }) });
   assert.equal(ok.status, 200);
   assert.equal((await ok.json()).ok, true);
+  assert.ok(calls.some((c) => c.includes("sudo -S") || c.includes("su -c true root")));
   w.close();
 });
 

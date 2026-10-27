@@ -787,8 +787,8 @@
     <h2><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="10" width="15" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span data-i18n="ssl.renewTitle">续签证书</span></h2>
     <p class="modal-text" id="ssl-renew-text"></p>
     <div class="field">
-      <label data-i18n="proc.pwdLabel">登录密码</label>
-      <div class="pwd-wrap"><input id="ssl-renew-password" type="password" autocomplete="new-password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
+      <label data-i18n="proc.pwdLabel">root / sudo 密码</label>
+      <div class="pwd-wrap"><input id="ssl-renew-password" type="password" autocomplete="new-password" placeholder="请输入 root / sudo 密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
       <div class="hint" id="ssl-renew-err" style="color:var(--bad)"></div>
     </div>
     <div class="modal-actions">
@@ -824,9 +824,9 @@
     <h2 id="proc-title">进程操作</h2>
     <p class="modal-text" id="proc-text"></p>
     <div class="field">
-      <label data-i18n="proc.pwdLabel">登录密码</label>
+      <label data-i18n="proc.pwdLabel">root / sudo 密码</label>
       <input type="text" class="autofill-decoy" autocomplete="username" tabindex="-1" aria-hidden="true">
-      <div class="pwd-wrap"><input id="proc-password" type="password" autocomplete="new-password" placeholder="请输入登录密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
+      <div class="pwd-wrap"><input id="proc-password" type="password" autocomplete="new-password" placeholder="请输入 root / sudo 密码以验证身份" data-i18n="proc.pwdPh" data-i18n-attr="placeholder"><button type="button" class="pwd-eye" title="显示/隐藏密码" data-i18n="pwd.eyeTitle" data-i18n-attr="title" aria-label="显示/隐藏密码"><svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg></button></div>
       <div class="hint" id="proc-err" style="color:var(--bad)"></div>
     </div>
     <div class="modal-actions">
@@ -1011,7 +1011,7 @@ Nginx 配置有问题吗，帮我看看
       <tr><td>apply_fix</td><td>执行修复命令</td><td>必须确认</td></tr>
       <tr><td>clear_history</td><td>清空会话历史</td><td>自动执行</td></tr>
     </table>
-    <p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。面板里的敏感操作（关端口、改配置、文件写操作、证书续签等）还需重输登录密码。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
+    <p>所有写入 / 删除 / 修改操作执行前都会弹确认：命令行输入 <code>y</code> 才执行，面板点「确认执行」。面板里的敏感操作（关端口、改配置、文件写操作、证书续签等）还需重输 root / sudo 密码。已执行的修改无法自动撤销，但操作前都有确认环节。</p>
 
     <h3>六、配置与进阶</h3>
     <ul>
