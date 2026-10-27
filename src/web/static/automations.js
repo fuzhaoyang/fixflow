@@ -20,9 +20,13 @@ const termAutoOpen = document.getElementById("term-auto-open");
 const autoModalStatus = document.getElementById("auto-modal-status");
 const autoScriptEl = document.getElementById("auto-script");
 const autoScriptCopy = document.getElementById("auto-script-copy");
+const autoManager = document.getElementById("auto-manager");
+const autoDetect = document.getElementById("auto-detect");
+const autoStatusCommand = document.getElementById("auto-status-command");
 const autoActionScriptEl = document.getElementById("auto-action-script");
 const autoActionCopy = document.getElementById("auto-action-copy");
 const autoRunTest = document.getElementById("auto-run-test");
+const autoAiFix = document.getElementById("auto-ai-fix");
 const autoRunStatus = document.getElementById("auto-run-status");
 const autoRunResult = document.getElementById("auto-run-result");
 const autoRunDeleteMask = document.getElementById("auto-run-delete-mask");
@@ -283,6 +287,34 @@ function setActionType(type) {
   });
 }
 
+function setManager(type) {
+  const manager = AUTO_MANAGERS.has(type) ? type : "systemd";
+  autoManager.value = manager;
+  document.querySelectorAll("[data-manager]").forEach((p) => { p.style.display = p.dataset.manager === manager ? "block" : "none"; });
+  if (manager === "custom") {
+    const at = autoField("auto-action-type").value;
+    if (at === "restart_service" || at === "reload_service") setActionType("run_command");
+  }
+}
+
+async function detectAutoManager() {
+  const raw = autoTr("auto-trig-service") || autoTr("auto-act-service");
+  const service = raw.replace(/\/+$/, "").split("/").pop();
+  if (!service) { autoModalStatus.textContent = t("auto.serviceRequired"); return; }
+  autoDetect.disabled = true;
+  autoModalStatus.textContent = t("auto.detecting");
+  try {
+    const res = await fetch("api/automations/detect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ service }) });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) { autoModalStatus.textContent = data.error || t("auto.detectFail"); return; }
+    setManager(data.manager);
+    autoModalStatus.textContent = t("auto.detected").replace("{manager}", data.manager);
+    if (data.manager === "custom" && !autoStatusCommand.value.trim()) autoStatusCommand.focus();
+  } finally {
+    autoDetect.disabled = false;
+  }
+}
+
 function applyRuleToForm(rule) {
   const tr = rule.trigger || { type: "service_down" };
   autoField("auto-name").value = rule.name || "";
@@ -290,6 +322,8 @@ function applyRuleToForm(rule) {
   autoField("auto-risk").value = rule.risk || "medium";
   autoField("auto-cooldown").value = rule.cooldownSec ?? 300;
   autoField("auto-max").value = rule.maxRunsPerHour ?? 3;
+  setManager(rule.manager || "systemd");
+  if (autoStatusCommand) autoStatusCommand.value = tr.statusCommand || "";
   setTriggerType(tr.type || "service_down");
   autoField("auto-trig-service").value = tr.service || "";
   autoField("auto-metric").value = tr.metric || "cpu";
@@ -306,6 +340,7 @@ function applyRuleToForm(rule) {
   autoField("auto-daily").value = tr.dailyAt || "";
   const a = rule.action || { type: "restart_service" };
   setActionType(a.type || "restart_service");
+  if (autoManager.value === "custom" && ["restart_service", "reload_service"].includes(autoField("auto-action-type").value)) setActionType("run_command");
   autoField("auto-act-service").value = a.service || "";
   autoField("auto-act-command").value = a.command || "";
   autoField("auto-act-url").value = a.url || "";
@@ -314,58 +349,85 @@ function applyRuleToForm(rule) {
 
 const autoShq = (v) => "'" + String(v ?? "").replace(/'/g, "'\\''") + "'";
 
+const AUTO_MANAGERS = new Set(["systemd", "pm2", "docker", "supervisor", "custom"]);
+const autoManagerOf = (rule) => AUTO_MANAGERS.has(rule?.manager) ? rule.manager : "systemd";
+function autoManagerAction(rule) {
+  const a = rule.action || {};
+  const manager = autoManagerOf(rule);
+  if (a.type === "run_command") return a.command || "# 未配置命令";
+  if (a.type === "webhook") return `curl -fsS -X POST --max-time ${a.timeoutSec || 10} ${autoShq(a.url || "")}`;
+  const verb = a.type === "reload_service" ? "reload" : "restart";
+  const svc = a.service || "?";
+  if (manager === "systemd") return `systemctl ${verb} ${svc}`;
+  if (manager === "pm2") return `pm2 ${verb} ${svc}`;
+  if (manager === "docker") return `docker restart ${svc}`;
+  if (manager === "supervisor") return `supervisorctl restart ${svc}`;
+  return "# 自定义管理器请使用 run_command";
+}
+function autoManagerVerify(v) {
+  if (v.type === "service_active") return `systemctl is-active --quiet ${v.service || "?"}`;
+  if (v.type === "pm2_online") return `pm2 describe ${v.service || "?"} | grep -q online`;
+  if (v.type === "docker_running") return `test "$(docker inspect -f '{{.State.Running}}' ${v.service || "?"})" = "true"`;
+  if (v.type === "supervisor_running") return `supervisorctl status ${v.service || "?"} | grep -q RUNNING`;
+  if (v.type === "custom_active") return v.command || "# 未配置状态检查命令";
+  if (v.type === "http_status") return `test "$(curl -s -o /dev/null -w '%{http_code}' ${autoShq(v.url || "")})" = "${v.expectStatus ?? 200}"`;
+  if (v.type === "command_exit") return v.command || "# 未配置断言命令";
+  return "# 未知断言";
+}
+function autoManagerStop(manager, service) {
+  if (manager === "systemd") return `systemctl stop ${service}`;
+  if (manager === "pm2") return `pm2 stop ${service}`;
+  if (manager === "docker") return `docker stop ${service}`;
+  if (manager === "supervisor") return `supervisorctl stop ${service}`;
+  return "";
+}
+function autoManagerStart(manager, service) {
+  if (manager === "systemd") return `systemctl start ${service}`;
+  if (manager === "pm2") return `pm2 start ${service}`;
+  if (manager === "docker") return `docker start ${service}`;
+  if (manager === "supervisor") return `supervisorctl start ${service}`;
+  return "";
+}
+
 function buildAutomationScript(rule) {
-  const lines = ["#!/usr/bin/env bash", `# 自动化：${rule.name || "未命名"}`];
+  const manager = autoManagerOf(rule);
+  const lines = ["#!/usr/bin/env bash", `# 自动化：${rule.name || "未命名"}（${manager}）`];
   const tr = rule.trigger || {};
-  if (tr.type === "service_down") lines.push(`# 触发：服务 ${tr.service || "?"} 不是 active`);
+  if (tr.type === "service_down") lines.push(`# 触发：${manager} 服务 ${tr.service || "?"} 不是运行中`);
   else if (tr.type === "metric") lines.push(`# 触发：${tr.metric || "?"} ${tr.op || ">="} ${tr.threshold ?? "?"}${tr.durationSec ? `，持续 ${tr.durationSec}s` : ""}`);
   else if (tr.type === "http") lines.push(`# 触发：${tr.method || "GET"} ${tr.url || "?"} 状态码不等于 ${tr.expectStatus ?? 200}（连续 ${tr.consecutiveFailures ?? 2} 次）`);
   else if (tr.type === "cron") lines.push(`# 触发：${tr.everySec ? `每 ${tr.everySec}s` : `每天 ${tr.dailyAt || "?"}`}`);
-  lines.push("", "# 动作");
-  const a = rule.action || {};
-  if (a.type === "restart_service") lines.push(`systemctl restart ${a.service || "?"}`);
-  else if (a.type === "reload_service") lines.push(`systemctl reload ${a.service || "?"}`);
-  else if (a.type === "run_command") lines.push(a.command || "# 未配置命令");
-  else if (a.type === "webhook") lines.push(`curl -fsS -X POST --max-time ${a.timeoutSec || 10} ${autoShq(a.url || "")}`);
+  lines.push("", "# 动作", autoManagerAction(rule));
   if (Array.isArray(rule.verify) && rule.verify.length) {
     lines.push("", "# 断言");
-    for (const v of rule.verify) {
-      if (v.type === "service_active") lines.push(`systemctl is-active --quiet ${v.service || "?"}`);
-      else if (v.type === "http_status") lines.push(`test "$(curl -s -o /dev/null -w '%{http_code}' ${autoShq(v.url || "")})" = "${v.expectStatus ?? 200}"`);
-      else if (v.type === "command_exit") lines.push(v.command || "# 未配置断言命令");
-    }
+    for (const v of rule.verify) lines.push(autoManagerVerify(v));
   }
   return lines.join("\n") + "\n";
 }
 
 function buildDefaultTestScript(rule) {
+  const manager = autoManagerOf(rule);
   const tr = rule.trigger || {};
   const a = rule.action || {};
-  const svc = tr.type === "service_down" ? (tr.service || "") : "";
+  const svc = manager !== "custom" && tr.type === "service_down" ? (tr.service || "") : "";
   const verify = Array.isArray(rule.verify) ? rule.verify.slice() : [];
-  if (!verify.length && a.service) verify.push({ type: "service_active", service: a.service });
-  const lines = ["#!/usr/bin/env bash", "set -euo pipefail", `# 默认测试脚本：${rule.name || "自动化"}`];
+  if (!verify.length && a.service) {
+    const type = { systemd: "service_active", pm2: "pm2_online", docker: "docker_running", supervisor: "supervisor_running" }[manager];
+    if (type) verify.push({ type, service: a.service });
+  }
+  const lines = ["#!/usr/bin/env bash", "set -euo pipefail", `# 默认测试脚本：${rule.name || "自动化"}（${manager}）`];
   if (svc) {
-    lines.push(`restore() { systemctl start ${svc} || true; }`, "trap restore EXIT");
-    lines.push(`echo "[1/4] 停止 ${svc}"`, `systemctl stop ${svc}`);
+    lines.push(`restore() { ${autoManagerStart(manager, svc)} || true; }`, "trap restore EXIT");
+    lines.push(`echo "[1/4] 停止 ${svc}"`, autoManagerStop(manager, svc));
   } else {
     lines.push(`echo "[1/4] 准备测试（该触发类型无需注入故障）"`);
   }
-  lines.push(`echo "[2/4] 执行动作"`);
-  if (a.type === "restart_service") lines.push(`systemctl restart ${a.service || "?"}`);
-  else if (a.type === "reload_service") lines.push(`systemctl reload ${a.service || "?"}`);
-  else if (a.type === "run_command") lines.push(a.command || "# 未配置命令");
-  else if (a.type === "webhook") lines.push(`curl -fsS -X POST --max-time ${a.timeoutSec || 10} ${autoShq(a.url || "")}`);
+  lines.push(`echo "[2/4] 执行动作"`, autoManagerAction(rule));
   lines.push(`echo "[3/4] 断言"`);
-  if (verify.length) {
-    for (const v of verify) {
-      if (v.type === "service_active") lines.push(`systemctl is-active --quiet ${v.service || "?"}`);
-      else if (v.type === "http_status") lines.push(`test "$(curl -s -o /dev/null -w '%{http_code}' ${autoShq(v.url || "")})" = "${v.expectStatus ?? 200}"`);
-      else if (v.type === "command_exit") lines.push(v.command || "# 未配置断言命令");
-    }
-  } else lines.push("true");
+  if (verify.length) for (const v of verify) lines.push(autoManagerVerify(v));
+  else lines.push("true");
   lines.push(`echo "[4/4] 清理"`);
-  if (svc) lines.push(`systemctl start ${svc}`);
+  if (svc) lines.push(autoManagerStart(manager, svc));
   lines.push(`echo "测试通过"`);
   return lines.join("\n") + "\n";
 }
@@ -489,6 +551,8 @@ function openAutoDetail(rule) {
   autoFormTitle.textContent = persisted ? t("auto.edit") : t("auto.applyTitle");
   applyRuleToForm(rule || {});
   renderAutoScript();
+  autoLastRun = null;
+  if (autoAiFix) autoAiFix.style.display = "none";
   autoRunResult.innerHTML = "";
   autoRunStatus.textContent = "";
   autoModalStatus.textContent = generatedScript ? t("auto.scriptGenerated") : "";
@@ -500,7 +564,7 @@ function openAutoDetail(rule) {
 function collectAutoRule() {
   const type = autoField("auto-trigger-type").value;
   let trigger;
-  if (type === "service_down") trigger = { type, service: autoTr("auto-trig-service") };
+  if (type === "service_down") trigger = { type, service: autoTr("auto-trig-service"), ...(autoManager.value === "custom" ? { statusCommand: autoTr("auto-status-command") } : {}) };
   else if (type === "metric") trigger = { type, metric: autoField("auto-metric").value, op: autoField("auto-op").value, threshold: Number(autoTr("auto-threshold")), mount: autoTr("auto-mount") || "/", durationSec: Number(autoTr("auto-duration")) || 0 };
   else if (type === "http") trigger = { type, url: autoTr("auto-url"), method: autoField("auto-method").value, expectStatus: Number(autoTr("auto-expect")), consecutiveFailures: Number(autoTr("auto-consecutive")), timeoutSec: Number(autoTr("auto-to")) };
   else {
@@ -514,6 +578,7 @@ function collectAutoRule() {
   return {
     name: autoTr("auto-name"),
     description: autoTr("auto-desc"),
+    manager: autoManager.value,
     risk: autoField("auto-risk").value,
     trigger,
     action,
@@ -559,6 +624,8 @@ async function saveAutoRule(keepOpen = false) {
 }
 
 function renderRunResult(run) {
+  autoLastRun = run;
+  if (autoAiFix) autoAiFix.style.display = run?.kind === "script-test" && run.ok === false ? "" : "none";
   if (run.kind === "script-test") {
     const out = (label, text) => text ? `<div class="auto-run-line"><span>${escapeHtml(label)}</span></div><pre>${escapeHtml(text)}</pre>` : "";
     autoRunResult.innerHTML = `<div class="auto-card-line"><span>${escapeHtml(t("auto.runResult"))}</span>${autoStatusBadge(run.ok, run.ok ? t("auto.runOk") : t("auto.runFail"))}</div>
@@ -588,6 +655,33 @@ function handleAutoConfirm(ev) {
   const answer = (ok) => fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok }) });
   document.getElementById("auto-confirm-yes").onclick = () => { autoRunStatus.textContent = t("auto.running"); autoRunResult.innerHTML = ""; answer(true); };
   document.getElementById("auto-confirm-no").onclick = () => { autoRunStatus.textContent = t("auto.rejected"); autoRunResult.innerHTML = ""; answer(false); };
+}
+
+async function runAutoFix() {
+  if (!autoLastRun || !autoScript.trim() || autoAiFix.disabled) return;
+  autoAiFix.disabled = true;
+  autoRunStatus.textContent = t("auto.aiFixing");
+  try {
+    const base = autoEditing || autoDraft || {};
+    const rule = { ...collectAutoRule(), id: base.id, createdAt: base.createdAt, state: base.state, verify: autoEditingVerify };
+    const res = await fetch("api/automations/test-fix", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rule, script: autoScript, run: autoLastRun }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) { autoRunStatus.textContent = data.error || t("auto.aiFixFail"); return; }
+    autoDraft = data.rule;
+    autoScript = data.script || data.rule.testScript || "";
+    autoEditingVerify = Array.isArray(data.rule.verify) ? data.rule.verify : [];
+    applyRuleToForm(data.rule);
+    renderAutoScript();
+    if (autoAiFix) autoAiFix.style.display = "none";
+    autoRunStatus.textContent = t("auto.aiFixApplied");
+    autoRunResult.innerHTML = `<div class="auto-card-line"><span>${escapeHtml(t("auto.aiFixResult"))}</span>${autoStatusBadge(true, t("auto.aiFixed"))}</div>${data.explanation ? `<div class="auto-run-line"><span>${escapeHtml(t("auto.aiExplain"))}</span>${escapeHtml(data.explanation)}</div>` : ""}`;
+  } finally {
+    autoAiFix.disabled = false;
+  }
 }
 
 async function runAutoScript() {
@@ -643,6 +737,7 @@ autoClose.addEventListener("click", closeAutoDetail);
 autoCancel.addEventListener("click", closeAutoDetail);
 autoSave.addEventListener("click", () => saveAutoRule(false));
 autoRunTest.addEventListener("click", runAutoScript);
+autoAiFix.addEventListener("click", runAutoFix);
 autoScriptCopy.addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(autoScript); autoRunStatus.textContent = t("auto.copied"); }
   catch { autoRunStatus.textContent = t("auto.copyFail"); }
@@ -660,6 +755,8 @@ termAutoOpen?.addEventListener("click", () => (autoMode ? exitAutoMode() : enter
 autoField("auto-trigger-type").addEventListener("change", (e) => setTriggerType(e.target.value));
 autoField("auto-action-type").addEventListener("change", (e) => setActionType(e.target.value));
 autoField("auto-metric").addEventListener("change", () => setTriggerType(autoField("auto-trigger-type").value));
+autoManager.addEventListener("change", (e) => setManager(e.target.value));
+autoDetect.addEventListener("click", detectAutoManager);
 document.querySelectorAll("[data-auto-tab]").forEach((b) => b.addEventListener("click", () => setAutoTab(b.dataset.autoTab)));
 
 autoCommandsSave.addEventListener("click", async () => {

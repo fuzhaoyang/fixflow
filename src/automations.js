@@ -3,6 +3,7 @@ import { dirname } from "node:path";
 import { randomUUID, createHash } from "node:crypto";
 import { sampleMetrics, METRICS } from "./metric-alerts.js";
 import { runCommand, redactSecrets } from "./tools.js";
+import { normalizeManager, serviceStatus, actionCommand, verifyFor } from "./process-manager.js";
 
 const SERVICE_RE = /^[A-Za-z0-9_.@-]+$/;
 const MAX_RULES = 200;
@@ -10,7 +11,7 @@ const MAX_RUNS_READ = 500;
 const MAX_SCRIPT = 20000;
 const TRIGGER_TYPES = new Set(["service_down", "metric", "http", "cron"]);
 const ACTION_TYPES = new Set(["restart_service", "reload_service", "run_command", "webhook"]);
-const VERIFY_TYPES = new Set(["service_active", "http_status", "command_exit"]);
+const VERIFY_TYPES = new Set(["service_active", "http_status", "command_exit", "pm2_online", "docker_running", "supervisor_running", "custom_active"]);
 
 const newId = () => "A-" + randomUUID().slice(0, 8);
 const newRunId = () => "AR-" + randomUUID().slice(0, 8);
@@ -25,13 +26,15 @@ const truncate = (s, max = 4000) => {
 const safeService = (s) => SERVICE_RE.test(String(s || "")) ? String(s) : "";
 const nowIso = (now) => new Date(now).toISOString();
 
-function normalizeTrigger(t = {}, allowCommands) {
+function normalizeTrigger(t = {}, allowCommands, manager = "systemd") {
   const type = String(t.type || "");
   if (!TRIGGER_TYPES.has(type)) return { error: "触发类型不合法" };
   if (type === "service_down") {
     const service = safeService(t.service);
     if (!service) return { error: "服务名不合法" };
-    return { trigger: { type, service, intervalSec: clamp(t.intervalSec, 10, 3600, 30) } };
+    const statusCommand = String(t.statusCommand || "").trim().slice(0, 1000);
+    if (manager === "custom" && !statusCommand) return { error: "自定义管理器需要状态检查命令" };
+    return { trigger: { type, service, intervalSec: clamp(t.intervalSec, 10, 3600, 30), ...(manager === "custom" ? { statusCommand } : {}) } };
   }
   if (type === "metric") {
     const metric = String(t.metric || "");
@@ -57,9 +60,10 @@ function normalizeTrigger(t = {}, allowCommands) {
   return { error: "cron 需要 everySec 或 dailyAt" };
 }
 
-function normalizeAction(a = {}, allowCommands = []) {
+function normalizeAction(a = {}, allowCommands = [], manager = "systemd") {
   const type = String(a.type || "");
   if (!ACTION_TYPES.has(type)) return { error: "动作类型不合法" };
+  if (manager === "custom" && (type === "restart_service" || type === "reload_service")) return { error: "自定义管理器请使用 run_command 动作" };
   if (type === "restart_service" || type === "reload_service") {
     const service = safeService(a.service);
     if (!service) return { error: "服务名不合法" };
@@ -76,13 +80,17 @@ function normalizeAction(a = {}, allowCommands = []) {
   return { action: { type, url, method: "POST", timeoutSec: clamp(a.timeoutSec, 1, 60, 10), risk: ["low", "medium", "high"].includes(a.risk) ? a.risk : "low" } };
 }
 
-function normalizeVerify(list = [], allowCommands = []) {
+function normalizeVerify(list = [], allowCommands = [], manager = "systemd") {
   return (Array.isArray(list) ? list : []).map((v) => {
     const type = String(v?.type || "");
     if (!VERIFY_TYPES.has(type)) return null;
-    if (type === "service_active") {
+    if (["service_active", "pm2_online", "docker_running", "supervisor_running"].includes(type)) {
       const service = safeService(v.service);
       return service ? { type, service } : null;
+    }
+    if (type === "custom_active") {
+      const command = String(v.command || "").trim().slice(0, 1000);
+      return command ? { type, command } : null;
     }
     if (type === "http_status") {
       const url = String(v.url || "").trim();
@@ -97,18 +105,23 @@ function normalizeVerify(list = [], allowCommands = []) {
 export function normalizeAutomation(input = {}, { allowCommands = [] } = {}) {
   const name = String(input.name || "").trim();
   if (!name) return { error: "名称不能为空" };
-  const t = normalizeTrigger(input.trigger || {}, allowCommands);
+  const manager = normalizeManager(input.manager);
+  const t = normalizeTrigger(input.trigger || {}, allowCommands, manager);
   if (t.error) return { error: t.error };
-  const a = normalizeAction(input.action || {}, allowCommands);
+  const a = normalizeAction(input.action || {}, allowCommands, manager);
   if (a.error) return { error: a.error };
-  const verify = normalizeVerify(input.verify, allowCommands);
-  if (!verify.length && a.action.service) verify.push({ type: "service_active", service: a.action.service });
+  const verify = normalizeVerify(input.verify, allowCommands, manager);
+  if (!verify.length) {
+    const auto = verifyFor(manager, a.action.service, t.trigger.statusCommand);
+    if (auto) verify.push(auto);
+  }
   const isCron = t.trigger.type === "cron";
   const rule = {
     id: String(input.id || newId()),
     name,
     description: String(input.description || ""),
     enabled: input.enabled !== false,
+    manager,
     trigger: t.trigger,
     action: a.action,
     verify,
@@ -197,10 +210,9 @@ export async function evaluateTrigger(rule, { exec = runCommand, fetchImpl = fet
   const t = rule.trigger;
   const state = {};
   if (t.type === "service_down") {
-    const r = await exec(`systemctl is-active ${t.service}`, { timeout: 10000 }).catch(() => ({ stdout: "", exitCode: 1 }));
-    const value = String(r.stdout || "").trim();
-    state.lastValue = value;
-    return { triggered: value !== "active", value, state };
+    const status = await serviceStatus(rule.manager, t.service, { run: exec, statusCommand: t.statusCommand });
+    state.lastValue = status.detail;
+    return { triggered: !status.up, value: status.detail, state };
   }
   if (t.type === "metric") {
     const value = await metricValue(rule, metricValues);
@@ -238,12 +250,13 @@ export async function evaluateTrigger(rule, { exec = runCommand, fetchImpl = fet
   return { triggered: true, state };
 }
 
-async function runAction(action, { exec, fetchImpl, allowCommands }) {
+async function runAction(action, { exec, fetchImpl, allowCommands, manager = "systemd" }) {
   const started = Date.now();
   try {
     if (action.type === "restart_service" || action.type === "reload_service") {
-      const verb = action.type === "restart_service" ? "restart" : "reload";
-      const r = await exec(`systemctl ${verb} ${action.service}`, { timeout: action.timeoutSec * 1000 });
+      const command = actionCommand(manager, action);
+      if (!command) return { ok: false, output: `未配置 ${manager} 动作命令`, durationMs: Date.now() - started };
+      const r = await exec(command, { timeout: action.timeoutSec * 1000 });
       return { ok: r.exitCode === 0, output: redactSecrets((r.stdout || "") + (r.stderr || "")), durationMs: Date.now() - started };
     }
     if (action.type === "run_command") {
@@ -262,10 +275,14 @@ async function runAction(action, { exec, fetchImpl, allowCommands }) {
 }
 
 async function verifyCheck(v, { exec, fetchImpl }) {
-  if (v.type === "service_active") {
-    const r = await exec(`systemctl is-active ${v.service}`, { timeout: 10000 }).catch(() => ({ stdout: "", exitCode: 1 }));
-    const value = String(r.stdout || "").trim();
-    return { type: v.type, ok: value === "active", detail: value };
+  const managerOf = { service_active: "systemd", pm2_online: "pm2", docker_running: "docker", supervisor_running: "supervisor" }[v.type];
+  if (managerOf) {
+    const status = await serviceStatus(managerOf, v.service, { run: exec });
+    return { type: v.type, ok: status.up, detail: status.detail };
+  }
+  if (v.type === "custom_active") {
+    const status = await serviceStatus("custom", "", { run: exec, statusCommand: v.command });
+    return { type: v.type, ok: status.up, detail: status.detail };
   }
   if (v.type === "http_status") {
     try {
@@ -281,7 +298,7 @@ async function verifyCheck(v, { exec, fetchImpl }) {
 
 export async function executeAutomation(rule, { exec = runCommand, fetchImpl = fetch, allowCommands = [], now = () => Date.now(), runId = newRunId() } = {}) {
   const at = now();
-  const action = await runAction(rule.action, { exec, fetchImpl, allowCommands });
+  const action = await runAction(rule.action, { exec, fetchImpl, allowCommands, manager: rule.manager });
   const checks = [];
   for (const v of rule.verify || []) checks.push(await verifyCheck(v, { exec, fetchImpl }));
   const ok = action.ok && checks.every((c) => c.ok);

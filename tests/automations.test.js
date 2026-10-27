@@ -90,6 +90,33 @@ test("手动运行会记录状态与历史", async () => {
   assert.equal(saved.state.runTimes.at(-1), 5000);
 });
 
+test("pm2 管理器使用 pm2 动作和 pm2_online 断言", async () => {
+  const rule = normalizeAutomation({ name: "pm2", manager: "pm2", trigger: { type: "service_down", service: "chatbot" }, action: { type: "restart_service", service: "chatbot" } }).rule;
+  assert.equal(rule.manager, "pm2");
+  assert.deepEqual(rule.verify, [{ type: "pm2_online", service: "chatbot" }]);
+  let online = false;
+  const calls = [];
+  const exec = async (cmd) => {
+    calls.push(cmd);
+    if (cmd.includes("pm2 jlist")) return { exitCode: 0, stdout: JSON.stringify([{ name: "chatbot", pm2_env: { status: online ? "online" : "stopped" } }]), stderr: "" };
+    if (cmd.startsWith("pm2 restart")) { online = true; return { exitCode: 0, stdout: "", stderr: "" }; }
+    return { exitCode: 0, stdout: "", stderr: "" };
+  };
+  const ev = await evaluateTrigger(rule, { exec, now: () => 1e9 });
+  assert.equal(ev.triggered, true);
+  const run = await executeAutomation(rule, { exec, now: () => 1e9 });
+  assert.equal(run.ok, true);
+  assert.ok(calls.includes("pm2 restart chatbot"));
+});
+
+test("自定义管理器需要状态命令和 run_command", () => {
+  assert.match(normalizeAutomation({ name: "x", manager: "custom", trigger: { type: "service_down", service: "x" }, action: { type: "run_command", command: "x" } }).error, /状态检查/);
+  const ok = normalizeAutomation({ name: "x", manager: "custom", trigger: { type: "service_down", service: "x", statusCommand: "pgrep -f x" }, action: { type: "run_command", command: "systemctl" } }, { allowCommands: ["systemctl"] });
+  assert.equal(ok.error, undefined);
+  assert.equal(ok.rule.verify[0].type, "custom_active");
+  assert.match(normalizeAutomation({ name: "x", manager: "custom", trigger: { type: "service_down", service: "x", statusCommand: "pgrep -f x" }, action: { type: "restart_service", service: "x" } }).error, /run_command/);
+});
+
 test("executeAutomation 汇总动作与断言", async () => {
   const rule = normalizeAutomation(baseRule()).rule;
   const run = await executeAutomation(rule, { exec: async (cmd) => ({ exitCode: cmd.includes("is-active") ? 3 : 0, stdout: "" }), now: () => 1 });

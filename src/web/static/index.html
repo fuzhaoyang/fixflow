@@ -4,10 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title data-i18n="app.title">Fixflow 服务器运维面板</title>
-  <link rel="stylesheet" href="app.css?v=17">
+  <link rel="stylesheet" href="app.css?v=18">
 </head>
 <body>
-<script>if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");</script>
+<script>
+  document.documentElement.dataset.theme = localStorage.getItem("fixflow_theme") === "light" ? "light" : "dark";
+  if (localStorage.getItem("menuCollapsed") === "1") document.body.classList.add("menu-collapsed");
+</script>
 <div id="boot-mask"><div class="spinner-lg"></div></div>
 <div id="auth-mask">
   <div class="auth-bg3d" aria-hidden="true">
@@ -1206,6 +1209,7 @@ Nginx 配置有问题吗，帮我看看
       </div>
       <div class="auto-script-actions">
         <button class="btn small" id="auto-run-test" data-i18n="auto.runTest">运行测试</button>
+        <button class="btn small" id="auto-ai-fix" style="display:none" data-i18n="auto.aiFix">AI 修复</button>
         <span class="hint" id="auto-run-status"></span>
       </div>
       <div id="auto-run-result" class="auto-test-result"></div>
@@ -1236,9 +1240,16 @@ Nginx 配置有问题吗，帮我看看
           <option value="medium" selected data-i18n="risk.mid">中</option>
           <option value="high" data-i18n="risk.high">高</option>
         </select></div>
+        <div class="field"><label data-i18n="auto.manager">进程管理器</label><select id="auto-manager">
+          <option value="systemd">systemd</option>
+          <option value="pm2">PM2</option>
+          <option value="docker">Docker</option>
+          <option value="supervisor">Supervisor</option>
+          <option value="custom" data-i18n="auto.managerCustom">自定义命令</option>
+        </select></div>
       </div>
       <div class="auto-panel" data-trigger="service_down">
-        <div class="field"><label data-i18n="auto.service">服务名</label><input id="auto-trig-service" type="text" placeholder="nginx"></div>
+        <div class="field"><label data-i18n="auto.service">服务名</label><div class="auto-inline"><input id="auto-trig-service" type="text" placeholder="nginx"><button class="btn small" id="auto-detect" data-i18n="auto.detect">检测</button></div></div>
       </div>
       <div class="auto-panel" data-trigger="metric" style="display:none">
         <div class="auto-row">
@@ -1263,6 +1274,9 @@ Nginx 配置有问题吗，帮我看看
           <div class="field"><label data-i18n="auto.everySec">间隔秒数</label><input id="auto-every" type="number" min="10"></div>
           <div class="field"><label data-i18n="auto.dailyAt">每天时间</label><input id="auto-daily" type="text" placeholder="03:30"></div>
         </div>
+      </div>
+      <div class="auto-panel" data-manager="custom" style="display:none">
+        <div class="field"><label data-i18n="auto.statusCommand">状态检查命令（exit 0 表示运行中）</label><input id="auto-status-command" type="text" placeholder="pgrep -f chatbot-server" data-i18n="auto.statusCommandPh" data-i18n-attr="placeholder"></div>
       </div>
       <div class="field"><label data-i18n="auto.action">动作</label><select id="auto-action-type">
         <option value="restart_service" data-i18n="auto.aRestart">重启服务</option>
@@ -1291,7 +1305,7 @@ Nginx 配置有问题吗，帮我看看
     </div>
   </div>
 </div>
-<script src="i18n.js?v=15"></script>
+<script src="i18n.js?v=17"></script>
 <script src="markdown.js?v=6"></script>
 <script src="app.js?v=11"></script>
 <script src="monitor.js?v=7"></script>
@@ -1302,6 +1316,6 @@ Nginx 配置有问题吗，帮我看看
 <script src="kb.js?v=7"></script>
 <script src="retros.js?v=10"></script>
 <script src="incidents.js?v=10"></script>
-<script src="automations.js?v=10"></script>
+<script src="automations.js?v=12"></script>
 </body>
 </html>

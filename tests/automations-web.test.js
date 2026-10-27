@@ -190,6 +190,11 @@ test("对话内自动化模式接线", () => {
   assert.match(html, /id="auto-run-delete-mask"/);
   assert.match(auto, /function askAutoRunDelete/);
   assert.match(auto, /closest\("#auto-run-delete"\)/);
+  assert.match(html, /id="auto-ai-fix"/);
+  assert.match(auto, /auto-ai-fix/);
+  assert.match(html, /id="auto-manager"/);
+  assert.match(html, /id="auto-detect"/);
+  assert.match(auto, /detectAutoManager/);
   assert.match(css, /\.input-actions\s*\{[^}]*margin-left:\s*auto/);
 });
 
@@ -366,5 +371,53 @@ test("旧版无 id 的失败运行记录可删除", async () => {
   assert.equal((await del.json()).deleted, 1);
   const after = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
   assert.equal(after.runs.length, 0);
+  w.close();
+});
+
+test("AI 修复根据失败结果更新规则和测试脚本", async () => {
+  let prompt = "";
+  const chat = async ({ messages }) => {
+    prompt = messages[0].content;
+    return { text: JSON.stringify({
+      rule: { name: "chatbot-server", description: "服务挂了就重启", trigger: { type: "service_down", service: "chatbot-server" }, action: { type: "restart_service", service: "chatbot-server" } },
+      script: "#!/usr/bin/env bash\nset -e\nsystemctl restart chatbot-server\nsystemctl is-active --quiet chatbot-server",
+      explanation: "原脚本停服命令写错了，已改为正确的服务名",
+    }) };
+  };
+  const { promise } = makeServer({ apiKey: "k", baseUrl: "https://x", model: "m" }, { chat, noAutomationTimer: true });
+  const w = await promise;
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await login(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const res = await fetch(`${base}/api/automations/test-fix`, {
+    method: "POST", headers: H,
+    body: JSON.stringify({
+      rule: { ...ruleBody, name: "chatbot-server", trigger: { type: "service_down", service: "chatbot-server" }, action: { type: "restart_service", service: "chatbot-server" } },
+      script: "#!/usr/bin/env bash\nsystemctl stop wrong-service",
+      run: { ok: false, exitCode: 1, stdout: "", stderr: "Unit wrong-service.service not found." },
+    }),
+  });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.rule.name, "chatbot-server");
+  assert.match(data.script, /systemctl restart chatbot-server/);
+  assert.match(data.explanation, /服务名/);
+  assert.match(prompt, /wrong-service/);
+  w.close();
+});
+
+test("检测进程管理器", async () => {
+  const exec = async (cmd) => cmd.includes("pm2 jlist")
+    ? { exitCode: 0, stdout: JSON.stringify([{ name: "chatbot-server", pm2_env: { status: "online" } }]), stderr: "" }
+    : { exitCode: 1, stdout: "", stderr: "" };
+  const { promise } = makeServer({}, { chat: async () => ({ text: "{}" }), noAutomationTimer: true, runCommand: exec });
+  const w = await promise;
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await login(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const res = await fetch(`${base}/api/automations/detect`, { method: "POST", headers: H, body: JSON.stringify({ service: "chatbot-server" }) });
+  assert.equal(res.status, 200);
+  const data = await res.json();
+  assert.equal(data.manager, "pm2");
   w.close();
 });

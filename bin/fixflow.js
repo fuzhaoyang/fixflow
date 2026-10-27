@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { loadConfig } from "../src/config.js";
 import { startFlow } from "../src/cli.js";
 import { startWeb } from "../src/web/server.js";
@@ -12,6 +13,8 @@ import { runUninstall } from "../scripts/uninstall.js";
 import { runDoctor } from "../src/doctor.js";
 import { hashPassword, isStrongPassword } from "../src/auth.js";
 import readline from "node:readline/promises";
+
+process.env.PATH = `${dirname(process.execPath)}:${process.env.PATH || ""}`;
 
 // 兜底：记录崩溃堆栈，避免偶发的未处理异常/拒绝直接终止面板
 process.on("unhandledRejection", (reason) => {

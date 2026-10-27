@@ -1849,3 +1849,9 @@ test("登录成功前不展示被踢下线弹窗", () => {
   assert.match(app, /res\.status === 401[\s\S]*panelReady/);
   assert.match(chat, /panelReady = true/);
 });
+
+test("登录 loading 页在首屏应用已保存主题", () => {
+  const html = readFileSync(new URL("../src/web/static/index.html", import.meta.url), "utf8");
+  assert.match(html, /dataset\.theme/);
+  assert.ok(html.indexOf("dataset.theme") < html.indexOf('id="boot-mask"'));
+});

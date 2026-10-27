@@ -1289,3 +1289,5 @@
     .auto-run-del { margin-left: 4px; }
     .list-loading { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 32px 12px; color: var(--muted); font-size: 13px; }
     .list-loading .spinner { width: 16px; height: 16px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; }
+    .auto-inline { display: flex; gap: 6px; align-items: center; }
+    .auto-inline input { flex: 1; min-width: 0; }

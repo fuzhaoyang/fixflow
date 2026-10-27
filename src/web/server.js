@@ -32,6 +32,7 @@ import { analyzeIncident } from "../incidents-rca.js";
 import { addDeployment, readDeployments } from "../deployments.js";
 import { normalizeAutomation, readAutomations, writeAutomations, readRuns, createAutomationEngine, runAutomationNow, appendRun, deleteRuns } from "../automations.js";
 import { chat } from "../agent.js";
+import { detectManager } from "../process-manager.js";
 import { redactSecrets } from "../tools.js";
 
 const STATIC = join(fileURLToPath(new URL(".", import.meta.url)), "static");
@@ -1374,8 +1375,8 @@ export async function startWeb(config = {}, deps = {}) {
           .slice(-20)
           .map((m) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
         const historyText = history.map((m) => `${m.role === "user" ? "用户" : "助手"}：${m.content}`).join("\n").slice(0, 20000);
-        const schema = '{"rule":{"name":"","description":"","trigger":{"type":"service_down|metric|http|cron",...},"action":{"type":"restart_service|reload_service|run_command|webhook",...},"verify":[],"cooldownSec":300,"maxRunsPerHour":3,"risk":"medium"},"script":"#!/usr/bin/env bash\\n..."}';
-        const prompt = `你是 Fixflow 自动化助手。根据用户需求，同时返回更新后的结构化规则和本机测试脚本。只输出 JSON，不要解释、不要 markdown。\nJSON 结构：${schema}\n触发字段：service_down 用 service；metric 用 metric(cpu|mem|disk|net|sessions)、op(>=|<=)、threshold、mount(仅 disk)、durationSec；http 用 url、method、expectStatus、consecutiveFailures；cron 用 everySec 或 dailyAt(HH:MM)。\n动作字段：restart_service/reload_service 用 service；run_command 用 command（必须以上述白名单前缀开头：${JSON.stringify(config.automationCommands)}）；webhook 用 url。\n测试脚本要求：必须是可直接执行的 bash；先用 systemctl stop 停掉目标服务，再执行规则动作，做断言，最后无论成功失败都恢复服务；只操作规则涉及的服务；不要交互、不要 sudo、不要删除系统文件；输出关键步骤。\n同一对话历史（仅文本，供理解上下文）：\n${historyText || "（无）"}\n当前规则：${JSON.stringify(draft)}\n当前脚本：${JSON.stringify(script)}\n用户需求：${text}`;
+        const schema = '{"rule":{"name":"","description":"","manager":"systemd|pm2|docker|supervisor|custom","trigger":{"type":"service_down|metric|http|cron",...},"action":{"type":"restart_service|reload_service|run_command|webhook",...},"verify":[],"cooldownSec":300,"maxRunsPerHour":3,"risk":"medium"},"script":"#!/usr/bin/env bash\\n..."}';
+        const prompt = `你是 Fixflow 自动化助手。根据用户需求，同时返回更新后的结构化规则和本机测试脚本。只输出 JSON，不要解释、不要 markdown。\nJSON 结构：${schema}\n进程管理器 manager：systemd / pm2 / docker / supervisor / custom。用户明确说明时按用户说明；测试脚本必须使用对应管理器的命令（systemctl / pm2 / docker / supervisorctl / 自定义命令）。custom 必须提供 trigger.statusCommand，action 必须用 run_command。\n触发字段：service_down 用 service；metric 用 metric(cpu|mem|disk|net|sessions)、op(>=|<=)、threshold、mount(仅 disk)、durationSec；http 用 url、method、expectStatus、consecutiveFailures；cron 用 everySec 或 dailyAt(HH:MM)。\n动作字段：restart_service/reload_service 用 service；run_command 用 command（必须以上述白名单前缀开头：${JSON.stringify(config.automationCommands)}）；webhook 用 url。\n测试脚本要求：必须是可直接执行的 bash；先用 systemctl stop 停掉目标服务，再执行规则动作，做断言，最后无论成功失败都恢复服务；只操作规则涉及的服务；不要交互、不要 sudo、不要删除系统文件；输出关键步骤。\n同一对话历史（仅文本，供理解上下文）：\n${historyText || "（无）"}\n当前规则：${JSON.stringify(draft)}\n当前脚本：${JSON.stringify(script)}\n用户需求：${text}`;
         try {
           const out = await chatImpl({ apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model, messages: [{ role: "user", content: prompt }], timeout: 90000 });
           const rawText = String(out.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
@@ -1440,6 +1441,54 @@ export async function startWeb(config = {}, deps = {}) {
         } finally {
           runningTests.delete(rule.id);
           if (file) await rm(file, { force: true }).catch(() => {});
+        }
+      } else if (url.pathname === "/api/automations/detect" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        const service = String(body.service || "").trim();
+        if (!/^[A-Za-z0-9_.@-]+$/.test(service)) { sendJson(res, { error: "服务名不合法" }, 400); return; }
+        const r = await detectManager(service, { run: execCmd });
+        sendJson(res, { ok: true, ...r });
+      } else if (url.pathname === "/api/automations/test-fix" && req.method === "POST") {
+        const body = JSON.parse(await readBody(req) || "{}");
+        if (!config.apiKey) { sendJson(res, { error: "请先在设置中配置模型" }, 400); return; }
+        const ruleDraft = body.rule && typeof body.rule === "object" ? body.rule : {};
+        const script = String(body.script || "").slice(0, 20000);
+        const run = body.run && typeof body.run === "object" ? body.run : {};
+        const runInfo = JSON.stringify({
+          ok: run.ok,
+          exitCode: run.exitCode,
+          stdout: String(run.stdout || "").slice(0, 4000),
+          stderr: String(run.stderr || "").slice(0, 4000),
+          output: String(run.output || "").slice(0, 4000),
+          checks: Array.isArray(run.checks) ? run.checks.slice(0, 20) : [],
+          steps: Array.isArray(run.steps) ? run.steps.slice(0, 20) : [],
+        }).slice(0, 16000);
+        const schema = '{"rule":{"name":"","description":"","manager":"systemd|pm2|docker|supervisor|custom","trigger":{"type":"service_down|metric|http|cron",...},"action":{"type":"restart_service|reload_service|run_command|webhook",...},"verify":[]},"script":"#!/usr/bin/env bash\\n...","explanation":"一句话说明修复原因"}';
+        const prompt = `你是 Fixflow 自动化修复助手。下面是自动化测试失败的结果。请检查失败原因，修复测试脚本；如果规则本身也有问题（服务名、动作、断言），一并修复规则。只输出 JSON，不要解释、不要 markdown。\nJSON 结构：${schema}\n进程管理器 manager：systemd / pm2 / docker / supervisor / custom。先根据当前规则、脚本和失败输出判断是否认错管理器；如果错了，修正 manager 并改用对应命令（systemctl / pm2 / docker / supervisorctl / 自定义命令）。custom 必须提供 trigger.statusCommand，action 必须用 run_command。\n动作限制：restart_service/reload_service 用 service；run_command 的 command 必须以上述白名单前缀开头：${JSON.stringify(config.automationCommands)}；webhook 用 url。\n脚本要求：可直接执行的 bash；先停目标服务，再执行动作，做断言，最后无论成功失败都恢复服务；只操作规则涉及的服务；不要交互、不要 sudo、不要删除系统文件；输出关键步骤。\n当前规则：${JSON.stringify(ruleDraft)}\n当前脚本：${JSON.stringify(script)}\n最近测试结果：${runInfo}\n请输出修复后的完整 JSON。`;
+        try {
+          const out = await chatImpl({ apiKey: config.apiKey, baseUrl: config.baseUrl, model: config.model, messages: [{ role: "user", content: prompt }], timeout: 90000 });
+          const rawText = String(out.text || "").replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+          const start = rawText.indexOf("{");
+          const end = rawText.lastIndexOf("}");
+          if (start < 0 || end <= start) throw new Error("模型未返回 JSON");
+          const parsed = JSON.parse(rawText.slice(start, end + 1));
+          let scriptOut = String(parsed.script || "").trim();
+          if (!scriptOut) throw new Error("模型未返回修复后的测试脚本");
+          if (scriptOut.length > 20000) throw new Error("测试脚本过长（上限 20000 字符）");
+          if (!scriptOut.startsWith("#!")) scriptOut = "#!/usr/bin/env bash\n" + scriptOut;
+          const ruleIn = {
+            ...(parsed.rule && typeof parsed.rule === "object" ? parsed.rule : {}),
+            id: ruleDraft.id,
+            createdAt: ruleDraft.createdAt,
+            state: ruleDraft.state,
+            testScript: scriptOut,
+          };
+          if (!ruleIn.name) ruleIn.name = ruleDraft.name || "自动化修复";
+          const r = normalizeAutomation(ruleIn, { allowCommands: config.automationCommands });
+          if (r.error) { sendJson(res, { error: `规则不合法：${r.error}`, raw: rawText }, 400); return; }
+          sendJson(res, { ok: true, rule: r.rule, script: r.rule.testScript, explanation: String(parsed.explanation || "").slice(0, 2000) });
+        } catch (e) {
+          sendJson(res, { error: `AI 修复失败：${e?.message || e}` }, 400);
         }
       } else if (url.pathname === "/api/report") {
         const data = await metricsCache("metrics", () => { if (process.env.FF_DEBUG_METRICS) console.log(`[metrics] ${Date.now()}`); return collectAll(config); });
