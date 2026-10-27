@@ -26,6 +26,7 @@ const autoRunTest = document.getElementById("auto-run-test");
 const autoRunStatus = document.getElementById("auto-run-status");
 const autoRunResult = document.getElementById("auto-run-result");
 const autoRunDeleteMask = document.getElementById("auto-run-delete-mask");
+const autoRunDeleteTitle = document.getElementById("auto-run-delete-title");
 const autoRunDeleteText = document.getElementById("auto-run-delete-text");
 const autoRunDeletePw = document.getElementById("auto-run-delete-password");
 const autoRunDeleteErr = document.getElementById("auto-run-delete-err");
@@ -47,6 +48,8 @@ let autoMode = false;
 let autoRunPage = 1;
 let autoRunSelected = new Set();
 let autoRunDeleteIds = [];
+let autoDeleteMode = "run";
+let autoDeleteRuleName = "";
 const AUTO_RUN_PAGE_SIZE = 15;
 
 const autoTime = (ts) => {
@@ -190,9 +193,23 @@ function renderAutoRuns() {
 }
 
 function askAutoRunDelete(ids) {
+  autoDeleteMode = "run";
   autoRunDeleteIds = ids.filter(Boolean);
   if (!autoRunDeleteIds.length) return;
+  autoRunDeleteTitle.textContent = t("auto.deleteRunTitle");
   autoRunDeleteText.textContent = t("auto.deleteRunText").replace("{n}", autoRunDeleteIds.length);
+  autoRunDeleteErr.textContent = "";
+  autoRunDeletePw.value = "";
+  autoRunDeleteMask.classList.add("show");
+  setTimeout(() => autoRunDeletePw.focus(), 50);
+}
+
+function askAutoRuleDelete(rule) {
+  autoDeleteMode = "rule";
+  autoRunDeleteIds = [rule.id];
+  autoDeleteRuleName = rule.name;
+  autoRunDeleteTitle.textContent = t("auto.deleteRuleTitle");
+  autoRunDeleteText.textContent = t("auto.delConfirm").replace("{name}", rule.name);
   autoRunDeleteErr.textContent = "";
   autoRunDeletePw.value = "";
   autoRunDeleteMask.classList.add("show");
@@ -202,14 +219,15 @@ function askAutoRunDelete(ids) {
 async function confirmAutoRunDelete() {
   const password = autoRunDeletePw.value.trim();
   if (!password) { autoRunDeleteErr.textContent = t("auto.rootPwdRequired"); return; }
+  const isRule = autoDeleteMode === "rule";
   autoRunDeleteConfirm.disabled = true;
   try {
-    const res = await fetch("api/automations/runs", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ids: autoRunDeleteIds, password }) });
+    const res = await fetch(isRule ? "api/automations" : "api/automations/runs", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify(isRule ? { id: autoRunDeleteIds[0], password } : { ids: autoRunDeleteIds, password }) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.error) { autoRunDeleteErr.textContent = data.error || t("auto.deleteRunFail"); return; }
-    for (const id of autoRunDeleteIds) autoRunSelected.delete(id);
+    if (!isRule) for (const id of autoRunDeleteIds) autoRunSelected.delete(id);
     autoRunDeleteMask.classList.remove("show");
-    if (typeof showSaveMsg === "function") showSaveMsg(t("auto.runsDeleted").replace("{n}", data.deleted ?? autoRunDeleteIds.length), "ok");
+    if (typeof showSaveMsg === "function") showSaveMsg(isRule ? t("auto.ruleDeleted").replace("{name}", autoDeleteRuleName) : t("auto.runsDeleted").replace("{n}", data.deleted ?? autoRunDeleteIds.length), "ok");
     await loadAutomations();
   } finally {
     autoRunDeleteConfirm.disabled = false;
@@ -688,10 +706,7 @@ autoRulesEl.addEventListener("click", (e) => {
   if (!rule) return;
   if (btn.dataset.autoRun) runAutoNow(rule);
   else if (btn.dataset.autoEdit) openAutoDetail(rule);
-  else if (btn.dataset.autoDel) {
-    if (!confirm(t("auto.delConfirm").replace("{name}", rule.name))) return;
-    fetch("api/automations", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: rule.id }) }).then(loadAutomations);
-  }
+  else if (btn.dataset.autoDel) askAutoRuleDelete(rule);
 });
 autoRulesEl.addEventListener("change", (e) => {
   const input = e.target.closest("[data-auto-toggle]");

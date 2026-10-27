@@ -35,7 +35,8 @@ const ruleBody = {
 };
 
 test("自动化 API：增删改查、白名单持久化", async () => {
-  const { promise, dir } = makeServer();
+  const exec = async (cmd) => ({ exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" });
+  const { promise, dir } = makeServer({}, { runCommand: exec });
   const w = await promise;
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await login(base);
@@ -67,7 +68,12 @@ test("自动化 API：增删改查、白名单持久化", async () => {
   const cfg = JSON.parse(readFileSync(join(dir, "config.json"), "utf8"));
   assert.deepEqual(cfg.automationCommands, ["systemctl"]);
 
-  const del = await fetch(`${base}/api/automations`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id }) });
+  const noPw = await fetch(`${base}/api/automations`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id }) });
+  assert.equal(noPw.status, 403);
+  const badPw = await fetch(`${base}/api/automations`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id, password: "badpass" }) });
+  assert.equal(badPw.status, 403);
+  assert.equal((await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json()).rules.length, 1);
+  const del = await fetch(`${base}/api/automations`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id, password: "rootpw" }) });
   assert.equal(del.status, 200);
   assert.equal((await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json()).rules.length, 0);
   w.close();

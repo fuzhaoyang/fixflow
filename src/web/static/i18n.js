@@ -22,7 +22,7 @@ const I18N_ZH = {
   "auto.empty": "暂无自动化规则，请在 Agent 对话中进入自动化模式创建", "auto.emptyMatch": "没有匹配的规则", "auto.enabled": "已启用", "auto.disabled": "已停用", "auto.toggle": "启用/停用",
   "auto.risk": "风险", "auto.trigger": "触发", "auto.action": "动作", "auto.cooldown": "冷却", "auto.maxRuns": "每小时上限",
   "auto.lastRun": "最近运行", "auto.neverRun": "从未运行", "auto.runOk": "成功", "auto.runFail": "失败", "auto.testBadge": "测试", "auto.manualBadge": "手动",
-  "auto.runNow": "立即运行", "auto.edit": "编辑", "auto.delete": "删除", "auto.delConfirm": "确认删除自动化「{name}」？",
+  "auto.runNow": "立即运行", "auto.edit": "编辑", "auto.delete": "删除", "auto.delConfirm": "确认删除自动化「{name}」？", "auto.deleteRuleTitle": "删除自动化", "auto.ruleDeleted": "已删除自动化「{name}」",
   "auto.tabRules": "规则", "auto.tabRuns": "运行历史", "auto.tabCommands": "命令白名单", "auto.commandsHint": "run_command 动作只允许以这些前缀开头的命令，每行一个；留空表示禁用 run_command。", "auto.saveCommands": "保存白名单",
   "auto.nlLabel": "自然语言生成规则", "auto.nlPh": "例如：nginx 挂了就重启它，5 分钟内只执行一次", "auto.parse": "解析", "auto.parsing": "解析中…", "auto.parseFail": "解析失败", "auto.parsed": "已填入表单，请确认后保存",
   "auto.name": "名称", "auto.desc": "描述", "auto.riskLevel": "风险等级", "auto.tService": "服务异常", "auto.tMetric": "指标阈值", "auto.tHttp": "HTTP 探测", "auto.tCron": "定时",
@@ -288,7 +288,7 @@ const I18N_EN = {
   "auto.empty": "No automation rules. Create one in Automation mode in the Agent chat.", "auto.emptyMatch": "No matching rules", "auto.enabled": "Enabled", "auto.disabled": "Disabled", "auto.toggle": "Enable / disable",
   "auto.risk": "Risk", "auto.trigger": "Trigger", "auto.action": "Action", "auto.cooldown": "Cooldown", "auto.maxRuns": "Max per hour",
   "auto.lastRun": "Last run", "auto.neverRun": "Never run", "auto.runOk": "OK", "auto.runFail": "Failed", "auto.testBadge": "test", "auto.manualBadge": "manual",
-  "auto.runNow": "Run now", "auto.edit": "Edit", "auto.delete": "Delete", "auto.delConfirm": "Delete automation \"{name}\"?",
+  "auto.runNow": "Run now", "auto.edit": "Edit", "auto.delete": "Delete", "auto.delConfirm": "Delete automation \"{name}\"?", "auto.deleteRuleTitle": "Delete automation", "auto.ruleDeleted": "Deleted automation \"{name}\"",
   "auto.tabRules": "Rules", "auto.tabRuns": "Run history", "auto.tabCommands": "Command allowlist", "auto.commandsHint": "run_command may only start with one of these prefixes, one per line. Leave empty to disable run_command.", "auto.saveCommands": "Save allowlist",
   "auto.nlLabel": "Generate from natural language", "auto.nlPh": "e.g. restart nginx when it is down, at most once every 5 minutes", "auto.parse": "Parse", "auto.parsing": "Parsing…", "auto.parseFail": "Parse failed", "auto.parsed": "Filled in. Review and save.",
   "auto.name": "Name", "auto.desc": "Description", "auto.riskLevel": "Risk level", "auto.tService": "Service down", "auto.tMetric": "Metric threshold", "auto.tHttp": "HTTP probe", "auto.tCron": "Schedule",
@@ -779,6 +779,7 @@ ${FIG.chat}
   <li>直接打字让助手干活，回复逐字显示；支持上传图片让模型看图。</li>
   <li>会改动系统的操作会弹「变更审批单」，展示命令与影响，确认后才执行。</li>
   <li>敏感操作（关端口、改配置、文件写操作、证书续签等）确认时还需重输 root / sudo 密码。</li>
+  <li>面板以 root 运行时优先校验 root 密码；root 未设置密码/被锁定时，回退到 <code>adminUser</code> 配置的非 root sudo 账号。</li>
   <li>输入框上方「清空历史」清空当前会话；「终端」打开右侧终端。</li>
   <li>聊天窗右上角「知识库」可配置知识库；运维 / 产品知识问题会优先查询知识库。</li>
   <li>输入栏「自动化」进入自动化模式，与普通对话共用当前聊天窗和历史；生成规则 / 脚本后点「应用」打开规则弹窗。</li>
@@ -896,7 +897,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">配置与进阶</h3>
 <ul>
-  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>serviceHide</code> / <code>serviceHideSockets</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
+  <li>配置文件：<code>~/.config/fixflow/config.json</code>。常用键：<code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>adminUser</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>serviceHide</code> / <code>serviceHideSockets</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>。</li>
   <li>环境变量可覆盖：<code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>。</li>
   <li>面板监听 <code>0.0.0.0</code>，用「随机端口 + 随机入口路径」保护（无入口前缀的请求返回 404）；启动时会尝试自动放行本机防火墙端口。可用 nginx 反代绑定域名，或启用内置 HTTPS（自签证书）。</li>
   <li>常用命令：<code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>；日志 <code>~/.config/fixflow/cli.log</code>。</li>
@@ -1111,6 +1112,7 @@ ${FIG.chat}
   <li>Type naturally and let the assistant work; replies stream word by word. You can upload images for the model to see.</li>
   <li>System-changing operations pop a "change approval form" showing the commands and impact — confirm before it runs.</li>
   <li>Sensitive actions (close a port, change config, write files, renew certs…) also require re-entering the root / sudo password.</li>
+  <li>When the panel runs as root, the root password is checked first; if root has no password or is locked, it falls back to the non-root sudo account configured by <code>adminUser</code>.</li>
   <li>"Clear history" above the input resets the session; "Terminal" opens the built-in terminal on the right.</li>
   <li>The "Knowledge Base" button at the top-right of the chat window configures the KB; ops / product-knowledge questions query it first.</li>
   <li>"Automation" in the input bar enters automation mode, sharing the current chat window and history; after rule / script generation, click "Apply" to open the rule dialog.</li>
@@ -1228,7 +1230,7 @@ ${FIG.confirm}
 
 <h3 id="advanced">Configuration &amp; Advanced</h3>
 <ul>
-  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>serviceHide</code> / <code>serviceHideSockets</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
+  <li>Config file: <code>~/.config/fixflow/config.json</code>. Common keys: <code>apiKey</code> / <code>baseUrl</code> / <code>model</code> / <code>port</code> / <code>services</code> / <code>databases</code> / <code>sslSites</code> / <code>pingTargets</code> / <code>memLimitMB</code> / <code>adminUser</code> / <code>automationCommands</code> / <code>alertSmtp</code> / <code>serviceHide</code> / <code>serviceHideSockets</code> / <code>lang</code> / <code>theme</code> / <code>knowledge</code>.</li>
   <li>Environment variables override: <code>FIXFLOW_API_KEY</code> / <code>FIXFLOW_BASE_URL</code> / <code>FIXFLOW_MODEL</code>.</li>
   <li>The panel listens on <code>0.0.0.0</code> and is protected by a "random port + random entry path" (requests without the entry prefix get 404); it tries to open the port in the local firewall on startup. You can reverse-proxy with nginx to a domain, or enable built-in HTTPS (self-signed).</li>
   <li>Common commands: <code>systemctl status fixflow</code> / <code>restart fixflow</code> / <code>stop fixflow</code>; logs at <code>~/.config/fixflow/cli.log</code>.</li>

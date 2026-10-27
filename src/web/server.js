@@ -385,6 +385,7 @@ export async function startWeb(config = {}, deps = {}) {
   const execCmd = deps.runCommand || runCommand;
   const chatImpl = deps.chat || chat;
   const sendMail = deps.sendEmail || sendEmail;
+  const FW_AUTH_FAIL = "root 密码错误，或 root 账号未设置密码/已锁定，或 sudo 暂时不可用，操作未执行";
   const fwVerify = async (password) => {
     if (!password) return false;
     const adminUser = isRoot() ? await resolveAdminUser() : "";
@@ -640,7 +641,7 @@ export async function startWeb(config = {}, deps = {}) {
   };
   const fsWriteGuard = async (body, res) => {
     if (!(await fwVerify(body.password || ""))) {
-      sendJson(res, { error: "密码错误，操作未执行" }, 403);
+      sendJson(res, { error: FW_AUTH_FAIL }, 403);
       return false;
     }
     return true;
@@ -1182,9 +1183,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = JSON.parse(await readBody(req) || "{}");
         const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(String).filter(Boolean).slice(0, 500);
         if (!ids.length) { sendJson(res, { error: "请选择要删除的事件" }, 400); return; }
-        const adminUser = await resolveAdminUser();
-        if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
-        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
+        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "root 密码错误，或 root 账号未设置密码/已锁定，或 sudo 暂时不可用，删除未执行" }, 403); return; }
         const r = await deleteIncidents({ filePath: incidentsPath, ids });
         const incSet = new Set(ids);
         const retroIds = (await readRetros(retrosPath)).filter((c) => incSet.has(c.incidentId)).map((c) => c.id);
@@ -1201,7 +1200,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname.startsWith("/api/incidents/") && url.pathname.endsWith("/action") && req.method === "POST") {
         const id = decodeURIComponent(url.pathname.slice("/api/incidents/".length, -"/action".length));
         const body = JSON.parse(await readBody(req) || "{}");
-        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); return; }
         const inc = await getIncident(incidentsPath, id);
         if (!inc) { sendJson(res, { error: "事件不存在" }, 404); return; }
         const action = (await allowedActionsFor(inc)).find((a) => a.key === body.action);
@@ -1226,9 +1225,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = JSON.parse(await readBody(req) || "{}");
         const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(String).filter(Boolean).slice(0, 500);
         if (!ids.length) { sendJson(res, { error: "请选择要删除的复盘" }, 400); return; }
-        const adminUser = await resolveAdminUser();
-        if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
-        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
+        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "root 密码错误，或 root 账号未设置密码/已锁定，或 sudo 暂时不可用，删除未执行" }, 403); return; }
         const r = await deleteRetros({ filePath: retrosPath, ids });
         const deleted = new Set(ids);
         for (const inc of await listIncidents(incidentsPath)) {
@@ -1339,15 +1336,14 @@ export async function startWeb(config = {}, deps = {}) {
         sendJson(res, { ok: true, rule: r.rule });
       } else if (url.pathname === "/api/automations" && req.method === "DELETE") {
         const body = JSON.parse(await readBody(req) || "{}");
+        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "root 密码错误，或 root 账号未设置密码/已锁定，或 sudo 暂时不可用，删除未执行" }, 403); return; }
         await writeAutomations(automationsPath, (await readAutomations(automationsPath)).filter((x) => x.id !== body.id));
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/automations/runs" && req.method === "DELETE") {
         const body = JSON.parse(await readBody(req) || "{}");
         const ids = (Array.isArray(body.ids) ? body.ids : [body.id]).map(String).filter(Boolean).slice(0, 500);
         if (!ids.length) { sendJson(res, { error: "请选择要删除的运行记录" }, 400); return; }
-        const adminUser = await resolveAdminUser();
-        if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
-        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
+        if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "root 密码错误，或 root 账号未设置密码/已锁定，或 sudo 暂时不可用，删除未执行" }, 403); return; }
         const r = await deleteRuns({ filePath: automationRunsPath, ids });
         broadcast({ type: "automations" });
         sendJson(res, { ok: true, deleted: r.deleted });
@@ -1571,7 +1567,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { id, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password || ""))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
           return;
         }
         const entry = config.sslSites.find((e) => e.id === id);
@@ -1640,7 +1636,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/history/clear" && req.method === "POST") {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); return; }
         await writeHistoryFile(historyPath, []);
         session.clear();
         kbSessionId = "fixflow-" + randomUUID();
@@ -1743,12 +1739,12 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/panel-audit/export" && req.method === "POST") {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); return; }
         sendJson(res, { records: await readHistoryFile(panelAuditPath) });
       } else if (url.pathname === "/api/panel-audit/clear" && req.method === "POST") {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); return; }
         await writeAuditFile(panelAuditPath, []);
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/fs/list" && req.method === "GET") {
@@ -1844,7 +1840,7 @@ export async function startWeb(config = {}, deps = {}) {
             const pathField = parts.find((p) => p.type === "field" && p.name === "path");
             const passField = parts.find((p) => p.type === "field" && p.name === "password");
             const file = parts.find((p) => p.type === "file");
-            if (!(await fwVerify(passField?.value || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
+            if (!(await fwVerify(passField?.value || ""))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); }
             else {
               const base = safeFsPath(pathField?.value);
               const fname = file ? basename(file.filename || "").replace(/[\\/]/g, "") : "";
@@ -1861,7 +1857,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { port, proto = "tcp", from = "", password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else if (!/^\d+(,\d+)*$/.test(String(port || "")) || String(port).split(",").some((p) => { const n = Number(p); return !Number.isInteger(n) || n < 1 || n > 65535; })) {
           sendJson(res, { error: "无效的端口" }, 400);
         } else if (!["tcp", "udp"].includes(proto)) {
@@ -1886,7 +1882,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { port, proto = "tcp", mode, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else if (!Number.isInteger(port) || port < 1 || port > 65535) {
           sendJson(res, { error: "无效的端口" }, 400);
         } else if (!["tcp", "udp"].includes(proto)) {
@@ -1912,7 +1908,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { action, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else if (!["enable", "disable"].includes(action)) {
           sendJson(res, { error: "不支持的操作" }, 400);
         } else {
@@ -1943,7 +1939,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = JSON.parse(await readBody(req) || "{}");
         const { list, ip, comment = "", password } = body;
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else if (!["black", "white"].includes(list)) {
           sendJson(res, { error: "不支持的名单类型" }, 400);
         } else if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(String(ip || ""))) {
@@ -1971,7 +1967,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = JSON.parse(await readBody(req) || "{}");
         const { list, ip, password } = body;
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else if (!["black", "white"].includes(list)) {
           sendJson(res, { error: "不支持的名单类型" }, 400);
         } else if (!/^(\d{1,3}\.){3}\d{1,3}(\/\d{1,2})?$/.test(String(ip || ""))) {
@@ -1993,7 +1989,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else {
           const cmd = "DEBIAN_FRONTEND=noninteractive apt-get -y upgrade";
           const r = await fwRun(cmd, password, 300000);
@@ -2004,7 +2000,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else {
           const cmd = "journalctl --vacuum-time=7d 2>&1; apt-get clean 2>&1; find /tmp -mindepth 1 -atime +7 -exec rm -rf {} + 2>/dev/null; echo done";
           const r = await fwRun(cmd, password, 120000);
@@ -2015,7 +2011,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { action, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else if (!["reboot", "shutdown"].includes(action)) {
           sendJson(res, { error: "不支持的操作" }, 400);
         } else {
@@ -2057,7 +2053,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if ((url.pathname === "/api/store/install" || url.pathname === "/api/store/uninstall") && req.method === "POST") {
         const body = await readBody(req);
         const { pkg, password, version } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(password))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); return; }
         const name = String(pkg || "").trim();
         if (!/^[a-zA-Z0-9+._-]+$/.test(name)) { sendJson(res, { error: "非法的软件包名" }, 400); return; }
         const ver = String(version || "").trim();
@@ -2104,7 +2100,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/systemd/op" && req.method === "POST") {
         const body = await readBody(req);
         const { unit, action, password } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password || ""))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); return; }
+        if (!(await fwVerify(password || ""))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); return; }
         if (!SYS_ACTIONS.includes(action)) { sendJson(res, { error: "不支持的操作" }, 400); return; }
         const u = String(unit || "").trim();
         if (!/^[a-zA-Z0-9_.@-]+$/.test(u)) { sendJson(res, { error: "非法的服务名" }, 400); return; }
@@ -2130,7 +2126,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { path, content, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password || ""))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else {
           const r = await writeNginxConf(path, content ?? "");
           sendJson(res, r, r.ok ? 200 : 400);
@@ -2139,7 +2135,7 @@ export async function startWeb(config = {}, deps = {}) {
         const body = await readBody(req);
         const { action, password } = JSON.parse(body || "{}");
         if (!(await fwVerify(password || ""))) {
-          sendJson(res, { error: "密码错误，操作未执行" }, 403);
+          sendJson(res, { error: FW_AUTH_FAIL }, 403);
         } else {
           const cmds = { start: "systemctl start nginx", stop: "systemctl stop nginx", restart: "systemctl restart nginx", reload: "systemctl reload nginx" };
           const cmd = cmds[action] || cmds.reload;
@@ -2154,7 +2150,7 @@ export async function startWeb(config = {}, deps = {}) {
         const { name, action, password } = JSON.parse(body || "{}");
         const ops = { start: "start", stop: "stop", restart: "restart", rm: "rm -f" };
         if (!name || !ops[action]) { sendJson(res, { error: "不支持的参数" }, 400); }
-        else if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
+        else if (!(await fwVerify(password))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); }
         else {
           const r = await fwRun(`docker ${ops[action]} ${name}`, password, 60000);
           sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });
@@ -2162,7 +2158,7 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/docker/prune" && req.method === "POST") {
         const body = await readBody(req);
         const { password } = JSON.parse(body || "{}");
-        if (!(await fwVerify(password))) { sendJson(res, { error: "密码错误，操作未执行" }, 403); }
+        if (!(await fwVerify(password))) { sendJson(res, { error: FW_AUTH_FAIL }, 403); }
         else {
           const r = await fwRun("docker image prune -f", password, 120000);
           sendJson(res, { ok: r.exitCode === 0, stdout: r.stdout, stderr: r.stderr });

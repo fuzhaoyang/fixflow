@@ -220,6 +220,8 @@ fixflow
 
 输入 `y` 才执行，其他任何输入都视为拒绝。**系统里所有写入操作都过这一关，包括以 root 运行。**
 
+> 面板以 root 运行时，二次密码验证优先校验 **root 密码**；如果 root 账号未设置密码或已被锁定，会回退到 `config.json` 中 `adminUser` 指定的非 root sudo 账号。两者都没有时，请先设置 root 密码或配置 `adminUser`，否则二次验证会一直失败。
+
 ---
 
 ## 七、配置说明（进阶）
@@ -240,6 +242,7 @@ fixflow
 | `pingTargets` | 连通性检测目标 | `[]` |
 | `downServices` | 服务异常关闭监控（非 active 即发邮件，收件人填「告警→邮箱配置」） | `["nginx"]` |
 | `automationCommands` | 自动化 `run_command` 动作的命令前缀白名单；留空禁用该动作 | `[]` |
+| `adminUser` | root 运行面板时，root 密码校验失败后的备用 sudo 账号（root 账号未设置密码/被锁定时使用） | 空 |
 | `serviceHide` | 服务页额外隐藏的 systemd 服务名（不含类型后缀） | `[]` |
 | `serviceHideSockets` | 服务页额外隐藏的 socket 名称 | `[]` |
 | `alertSmtp` | 告警邮件 SMTP 配置（host / port / user / pass / from / to，面板「告警→邮箱配置」写入） | `{}` |

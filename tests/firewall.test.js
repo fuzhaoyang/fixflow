@@ -128,12 +128,34 @@ test("syncAclRules 清掉旧规则后按目标顺序插入", async () => {
   ]);
 });
 
-test("verifyAdminPassword root 进程降权校验管理员 sudo 密码", async () => {
+test("verifyAdminPassword root 进程优先校验 root 密码，失败回退管理员 sudo", async () => {
   const calls = [];
-  const run = async (cmd) => { calls.push(cmd); return { exitCode: 0, stdout: "" }; };
+  let rootOk = true;
+  const run = async (cmd) => {
+    calls.push(cmd);
+    if (cmd.startsWith("passwd -S root")) return { exitCode: 0, stdout: "root P 2026-01-01 0 99999 7 -1\n" };
+    if (cmd.includes("su -c true root")) return { exitCode: rootOk ? 0 : 1, stdout: "" };
+    if (cmd.includes("runuser -u 'admin' -- sudo -S")) return { exitCode: 0, stdout: "" };
+    if (cmd.includes("sudo -S -p '' true")) return { exitCode: 0, stdout: "" };
+    return { exitCode: 1, stdout: "" };
+  };
+  assert.equal(await verifyAdminPassword("pw", { run, getuid: () => 0, user: "admin" }), true);
+  assert.ok(calls.some((c) => c.includes("runuser -u nobody -- su -c true root")));
+  calls.length = 0;
+  rootOk = false;
   assert.equal(await verifyAdminPassword("pw", { run, getuid: () => 0, user: "admin" }), true);
   assert.ok(calls.some((c) => c.includes("runuser -u 'admin' -- sudo -S -p '' true")));
+  calls.length = 0;
+  assert.equal(await verifyAdminPassword("pw", { run, getuid: () => 0 }), false);
   assert.equal(await verifyAdminPassword("", { run, getuid: () => 0, user: "admin" }), false);
+  const lockedRun = async (cmd) => {
+    calls.push(cmd);
+    if (cmd.startsWith("passwd -S root")) return { exitCode: 0, stdout: "root L 2026-01-01 0 99999 7 -1\n" };
+    return { exitCode: 1, stdout: "" };
+  };
+  calls.length = 0;
+  assert.equal(await verifyAdminPassword("pw", { run: lockedRun, getuid: () => 0 }), false);
+  assert.equal(calls.some((c) => c.includes("su -c true root")), false);
   calls.length = 0;
   assert.equal(await verifyAdminPassword("pw", { run, getuid: () => 1000 }), true);
   assert.ok(calls.some((c) => c.includes("sudo -S -p '' true")));

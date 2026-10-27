@@ -22,8 +22,16 @@ const shellQuote = (s) => "'" + String(s).replace(/'/g, "'\\''") + "'";
 export async function verifyAdminPassword(password, { run = runCommand, getuid, user } = {}) {
   if (!password) return false;
   if (isRoot(getuid)) {
+    // root 进程优先校验真正的 root 密码：降权到 nobody 后再 su root，避免 root→root 免密
+    const rootState = await run("passwd -S root 2>/dev/null").catch(() => null);
+    const rootLocked = /^root\s+(L|NP)\b/.test(String(rootState?.stdout || "").trim());
+    if (!rootLocked) {
+      const root = await run(`echo ${shellQuote(password)} | runuser -u nobody -- su -c true root 2>/dev/null`).catch(() => null);
+      if (root?.exitCode === 0) return true;
+    }
+    // 兼容 root 账号被锁定或未设密码的环境：回退到显式配置的管理员 sudo 校验
     const u = String(user || process.env.SUDO_USER || "").trim();
-    if (!u) return false;
+    if (!u || u === "root") return false;
     const r = await run(`echo ${shellQuote(password)} | runuser -u ${shellQuote(u)} -- sudo -S -p '' true 2>/dev/null`);
     return r.exitCode === 0;
   }

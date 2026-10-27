@@ -271,7 +271,7 @@ test("/api/incidents DELETE 需要 root 密码，支持单个和批量", async (
   writeFileSync(incidentsPath, JSON.stringify({ incidents: [mk("INC-1", 3), mk("INC-2", 2), mk("INC-3", 1)] }));
   writeFileSync(retrosPath, JSON.stringify([{ id: "R-1", incidentId: "INC-1" }, { id: "R-2", incidentId: "INC-2" }]));
   const exec = async (cmd) => {
-    if (cmd.includes("sudo -S")) return { exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" };
+    if (/su -c true root|sudo -S/.test(cmd)) return { exitCode: cmd.includes("badpass") ? 1 : 0, stdout: "", stderr: "" };
     return { exitCode: 0, stdout: "", stderr: "" };
   };
   const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, incidentsPath, retrosPath }, { captchas: testCaptchas, noAlertsTimer: true, noAutomationTimer: true, runCommand: exec });

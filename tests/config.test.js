@@ -117,3 +117,10 @@ test("serviceHide / serviceHideSockets 读取并过滤空值", () => {
   assert.deepEqual(cfg.serviceHide, ["alsa-restore"]);
   assert.deepEqual(cfg.serviceHideSockets, ["podman"]);
 });
+
+test("adminUser 读取并去除空白", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fixflow-"));
+  const file = join(dir, "config.json");
+  writeFileSync(file, JSON.stringify({ adminUser: " fixadmin " }));
+  assert.equal(loadConfig({ filePath: file }).adminUser, "fixadmin");
+});
