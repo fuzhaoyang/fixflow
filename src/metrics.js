@@ -71,7 +71,12 @@ export async function testDbConnection(conn, { password = "", run = runCommand, 
 }
 
 export function parseFailedServices(stdout) {
-  return String(stdout || "").split("\n").map((l) => l.trim().split(/\s+/)[0]).filter(Boolean);
+  return String(stdout || "").split("\n").map((line) => line
+    .replace(/\x1b\[[0-9;]*m/g, "")
+    .trim()
+    .replace(/^[^\w@:.-]+\s*/, "")
+    .split(/\s+/)[0])
+    .filter(Boolean);
 }
 
 export function diffFailedServices(prev, now) {

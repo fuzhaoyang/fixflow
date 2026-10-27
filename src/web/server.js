@@ -556,9 +556,20 @@ export async function startWeb(config = {}, deps = {}) {
   };
   const reconcileOpenServiceIncidents = async () => {
     const list = await listIncidents(incidentsPath);
+    const validService = /^[A-Za-z0-9_.@:-]+$/;
     for (const inc of list) {
       if (inc.status === "resolved" || inc.source !== "service") continue;
       const service = String(inc.service || "");
+      if (!validService.test(service)) {
+        await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
+          x.status = "resolved";
+          x.resolvedAt = Date.now();
+          x.timeline = Array.isArray(x.timeline) ? x.timeline : [];
+          x.timeline.push({ ts: Date.now(), text: "历史事件服务名解析异常，已自动关闭" });
+        } });
+        broadcast({ type: "incidents" });
+        continue;
+      }
       if (!service || service === "host" || service === "ssl") continue;
       const r = await execCmd(`systemctl is-active ${service}`).catch(() => null);
       if (String(r?.stdout || "").trim() !== "active") continue;

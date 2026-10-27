@@ -478,6 +478,11 @@ UnitFileState=static
   assert.equal(r.services.find((s) => s.name === "ssh").unitType, "socket");
 });
 
+test("parseFailedServices 去除 systemctl 前置状态符号", () => {
+  const out = parseFailedServices("● deepin-defender-scanner.service loaded failed failed deepin defender scanner\n  ● nginx.service loaded failed failed Failed with result 'exit-code'.\n\x1b[0;1;31m●\x1b[0m cron.timer loaded failed failed timeout\n");
+  assert.deepEqual(out, ["deepin-defender-scanner.service", "nginx.service", "cron.timer"]);
+});
+
 test("parseFailedServices / diffFailedServices", () => {
   const now = parseFailedServices("nginx.service loaded failed failed Failed with result 'exit-code'.\ncron.timer loaded failed failed Failed with result 'timeout'.\n");
   assert.deepEqual(now, ["nginx.service", "cron.timer"]);
