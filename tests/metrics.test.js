@@ -459,10 +459,15 @@ After=network.target
 RequiredBy=
 UnitFileState=static
 `;
-  const run = async (cmd) => cmd.startsWith("systemctl show")
-    ? { exitCode: 0, stdout: show, stderr: "" }
-    : { exitCode: 0, stdout: "1234 2.5 3.2\n", stderr: "" };
+  const calls = [];
+  const run = async (cmd) => {
+    calls.push(cmd);
+    return cmd.startsWith("systemctl show")
+      ? { exitCode: 0, stdout: show, stderr: "" }
+      : { exitCode: 0, stdout: "1234 2.5 3.2\n", stderr: "" };
+  };
   const r = await collectSystemd([], { run });
+  assert.ok(calls.some((c) => c.startsWith("systemctl show") && c.includes("'*'")), `systemctl show 需要 unit 通配符: ${calls[0]}`);
   assert.equal(r.services.length, 3);
   assert.deepEqual(r.summary, { active: 1, failed: 1, inactive: 1, total: 3 });
   const nginx = r.services.find((s) => s.name === "nginx");
@@ -479,6 +484,8 @@ UnitFileState=static
   assert.equal(nginx.unitFileState, "enabled");
   assert.equal(r.services.find((s) => s.name === "cron").unitType, "timer");
   assert.equal(r.services.find((s) => s.name === "ssh").unitType, "socket");
+  assert.equal(r.services.find((s) => s.name === "cron").canReload, false);
+  assert.equal(r.services.find((s) => s.name === "ssh").canReload, undefined);
 });
 
 test("parseFailedServices 去除 systemctl 前置状态符号", () => {
