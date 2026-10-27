@@ -1182,7 +1182,7 @@ export async function startWeb(config = {}, deps = {}) {
         if (!ids.length) { sendJson(res, { error: "请选择要删除的事件" }, 400); return; }
         const adminUser = await resolveAdminUser();
         if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
-        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误，删除未执行" }, 403); return; }
+        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
         const r = await deleteIncidents({ filePath: incidentsPath, ids });
         for (const id of ids) incidentAnalyses.delete(id);
         broadcast({ type: "incidents" });
@@ -1222,7 +1222,7 @@ export async function startWeb(config = {}, deps = {}) {
         if (!ids.length) { sendJson(res, { error: "请选择要删除的复盘" }, 400); return; }
         const adminUser = await resolveAdminUser();
         if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
-        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误，删除未执行" }, 403); return; }
+        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
         const r = await deleteRetros({ filePath: retrosPath, ids });
         const deleted = new Set(ids);
         for (const inc of await listIncidents(incidentsPath)) {
@@ -1341,7 +1341,7 @@ export async function startWeb(config = {}, deps = {}) {
         if (!ids.length) { sendJson(res, { error: "请选择要删除的运行记录" }, 400); return; }
         const adminUser = await resolveAdminUser();
         if (!adminUser) { sendJson(res, { error: "无法确定管理员账号，无法校验密码" }, 500); return; }
-        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误，删除未执行" }, 403); return; }
+        if (!(await verifyAdminPassword(body.password || "", { run: execCmd, user: adminUser }))) { sendJson(res, { error: "root/sudo 密码错误或 sudo 暂时不可用（连续失败会锁定），删除未执行" }, 403); return; }
         const r = await deleteRuns({ filePath: automationRunsPath, ids });
         broadcast({ type: "automations" });
         sendJson(res, { ok: true, deleted: r.deleted });

@@ -9,6 +9,7 @@ function startFakeSmtp() {
     let buf = "";
     let auth = 0;
     let inData = false;
+    sock.on("error", () => {});
     sock.write("220 fake ESMTP\r\n");
     sock.on("data", (chunk) => {
       buf += chunk.toString("utf8");
@@ -47,7 +48,7 @@ test("sendEmail 通过 SMTP AUTH LOGIN 直连发送", async () => {
     assert.ok(commands.some((c) => c === "RCPT TO:<b@x.com>"));
     assert.ok(commands.some((c) => c.startsWith("Content-Type: multipart/alternative")));
   } finally {
-    server.close();
+    await new Promise((resolve) => server.close(resolve));
   }
 });
 
@@ -74,6 +75,6 @@ test("sendEmail from 不是邮箱时回退 user", async () => {
     assert.ok(commands.some((c) => c === "MAIL FROM:<u>"));
     assert.ok(commands.some((c) => c === "From: u"));
   } finally {
-    server.close();
+    await new Promise((resolve) => server.close(resolve));
   }
 });

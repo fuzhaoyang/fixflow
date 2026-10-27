@@ -1830,3 +1830,8 @@ test("事件/复盘/自动化列表包含统一 loading 状态", () => {
     assert.match(readFileSync(new URL(name, dir), "utf8"), /listLoadingHtml/);
   }
 });
+
+test("文件写操作提示 root/sudo 密码，避免与面板登录密码混淆", () => {
+  const fs = readFileSync(new URL("../src/web/static/fs.js", import.meta.url), "utf8");
+  assert.match(fs, /setProcPwdLabel\("proc"\)/);
+});
