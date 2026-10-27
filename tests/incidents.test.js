@@ -295,3 +295,32 @@ test("事件页支持每页 5 条和单个/批量删除入口", () => {
   assert.match(html, /id="incident-delete-mask"/);
   assert.match(html, /id="incident-pager"/);
 });
+
+test("failed 服务检查命令失败时不误判恢复", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "ff-failed-check-"));
+  const cfg = join(dir, "config.json");
+  const incidentsPath = join(dir, "incidents.json");
+  writeFileSync(cfg, "{}");
+  const inc = { id: "INC-fail", fingerprint: "service:failed:deepin-defender-scanner.service", source: "service", service: "deepin-defender-scanner.service", host: "PECI1484", alertname: "服务 deepin-defender-scanner.service 进入 failed 状态", title: "服务 deepin-defender-scanner.service 进入 failed 状态", severity: 2, status: "open", startedAt: 1, lastSeen: 1, resolvedAt: 0, labels: { unit: "deepin-defender-scanner.service", kind: "failed" }, annotations: {}, timeline: [], evidence: [], rca: null, retroId: null };
+  writeFileSync(incidentsPath, JSON.stringify({ incidents: [inc] }));
+  const out = [
+    { exitCode: 0, stdout: "● deepin-defender-scanner.service loaded failed failed deepin defender scanner\n", stderr: "" },
+    { exitCode: 1, stdout: "", stderr: "systemctl temporarily failed" },
+    { exitCode: 0, stdout: "● deepin-defender-scanner.service loaded failed failed deepin defender scanner\n", stderr: "" },
+  ];
+  let i = 0;
+  const exec = async (cmd) => {
+    if (cmd.startsWith("systemctl --state=failed")) return out[Math.min(i++, out.length - 1)];
+    if (cmd.startsWith("systemctl is-active")) return { exitCode: 3, stdout: "failed", stderr: "" };
+    return { exitCode: 0, stdout: "", stderr: "" };
+  };
+  const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg, incidentsPath }, { captchas: testCaptchas, noAlertsTimer: true, noAutomationTimer: true, runCommand: exec });
+  live.push(w);
+  await w.checkFailedServices();
+  await w.checkFailedServices();
+  await w.checkFailedServices();
+  const items = (await readIncidents(incidentsPath)).incidents;
+  assert.equal(items.length, 1);
+  assert.equal(items[0].status, "open");
+  await w.close();
+});

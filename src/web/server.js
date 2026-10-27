@@ -782,6 +782,7 @@ export async function startWeb(config = {}, deps = {}) {
   const checkFailedServices = async () => {
     try {
       const r = await execCmd("systemctl --state=failed --no-legend --no-pager");
+      if (r.exitCode !== 0) return;
       const failed = parseFailedServices(r.stdout || "");
       if (lastFailedSet === null) { lastFailedSet = failed; return; }
       const { newFailures, recoveries } = diffFailedServices(lastFailedSet, failed);
@@ -789,12 +790,12 @@ export async function startWeb(config = {}, deps = {}) {
       const hook = config.sslAlerts.webhook || config.metricAlertWebhook;
       const host = hostname();
       for (const s of newFailures) {
-        syncPanelIncident({ fingerprint: `service:failed:${s}`, source: "service", service: s, host, title: `服务 ${s} 进入 failed 状态`, severity: 2, status: "firing", startedAt: Date.now(), labels: { unit: s, kind: "failed" } }).catch(() => {});
+        await syncPanelIncident({ fingerprint: `service:failed:${s}`, source: "service", service: s, host, title: `服务 ${s} 进入 failed 状态`, severity: 2, status: "firing", startedAt: Date.now(), labels: { unit: s, kind: "failed" } }).catch(() => {});
         await sendWebhook(hook, { kind: "service-failed", unit: s });
         await sendEmail(config.sslAlerts.smtp, `[Fixflow] 服务进入失败状态：${s}`, `服务 ${s} 已进入 failed 状态，请检查。`);
       }
       for (const s of recoveries) {
-        syncPanelIncident({ fingerprint: `service:failed:${s}`, source: "service", service: s, host, title: `服务 ${s} 进入 failed 状态`, severity: 2, status: "resolved", startedAt: Date.now(), labels: { unit: s, kind: "failed" } }).catch(() => {});
+        await syncPanelIncident({ fingerprint: `service:failed:${s}`, source: "service", service: s, host, title: `服务 ${s} 进入 failed 状态`, severity: 2, status: "resolved", startedAt: Date.now(), labels: { unit: s, kind: "failed" } }).catch(() => {});
         await sendWebhook(hook, { kind: "service-recovered", unit: s });
         await sendEmail(config.sslAlerts.smtp, `[Fixflow] 服务已恢复：${s}`, `服务 ${s} 已恢复正常。`);
       }
@@ -817,7 +818,7 @@ export async function startWeb(config = {}, deps = {}) {
       const host = hostname();
       for (const e of events) {
         const down = e.kind === "down";
-        syncPanelIncident({ fingerprint: `service:down:${e.name}`, source: "service", service: e.name, host, title: `服务 ${e.name} 异常关闭`, severity: 2, status: down ? "firing" : "resolved", startedAt: Date.now(), labels: { unit: e.name, kind: "down", state: e.state } }).catch(() => {});
+        await syncPanelIncident({ fingerprint: `service:down:${e.name}`, source: "service", service: e.name, host, title: `服务 ${e.name} 异常关闭`, severity: 2, status: down ? "firing" : "resolved", startedAt: Date.now(), labels: { unit: e.name, kind: "down", state: e.state } }).catch(() => {});
       }
       const st = await alertsManager.smtp();
       if (!st.to) return;
@@ -2279,6 +2280,7 @@ export async function startWeb(config = {}, deps = {}) {
     httpsServer,
     automationEngine,
     checkDownServices,
+    checkFailedServices,
     close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } automationEngine.stop(); clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(historyTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }
