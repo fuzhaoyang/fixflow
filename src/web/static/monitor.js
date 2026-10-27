@@ -778,6 +778,60 @@ let sysStateFilter = "all";
 let sysTypeFilter = "all";
 let openSdRows = new Set();
 const SYS_DANGEROUS = /^(systemd|systemd-|dbus|NetworkManager|firewalld|networkd|resolved|journald|logind|udevd|sshd?|ssh|lightdm|gdm|sddm|display-manager|dde-|kwin|plymouth|getty|user@)/;
+const SYS_HIDDEN_SERVICES = new Set([
+  "emergency", "initrd-cleanup", "initrd-parse-etc", "initrd-switch-root", "initrd-udevadm-cleanup-db",
+  "kmod-static-nodes", "ldconfig", "live-config", "modprobe@configfs", "modprobe@dm_mod", "modprobe@drm",
+  "modprobe@fuse", "modprobe@loop", "rc-local", "rescue", "selinux-autorelabel-mark", "usec_setfiles-autorelabel-mark",
+  "cache-udcp", "coredump-reporter", "ddm", "deepin-anything-server", "deepin-appstore-checkappupgrade",
+  "deepin-authenticate", "deepin-debug-config-service", "deepin-elf-verify", "deepin-handle-local-fs-target",
+  "deepin-home-appstore-daemon", "deepin-login-sound", "deepin-service-group@app", "deepin-service-manager",
+  "deepin-shutdown-sound", "deepin-sys-shutdown", "deepin.sync.helper", "event-log", "org.deepin.linglong.PackageManager",
+  "uos-reporter", "uos-ste-eventd-modprobe@efi_pstore", "uos-ste-eventd-monthly", "uos-ste-eventd-shutdown",
+  "uos-ste-eventd", "uos-ste-resourced", "watchOsVersion",
+  "apt-daily-upgrade", "apt-daily", "deepin-immutable-cleanup", "dpkg-db-backup", "lastore-abort-auto-download",
+  "lastore-auto-download", "lastore-daemon", "lastoreAutoCheck", "lastoreRetryPostMsg", "logrotate", "man-db",
+  "uos-upgrade-delivery-daemon",
+  "acpid", "alsa-restore", "alsa-state", "bluetooth", "cups", "keyboard-setup", "lm-sensors", "udisks2", "upower",
+  "dracut-shutdown", "grub-common", "mkinitcpio-generate-shutdown-ramfs", "user-runtime-dir@22551", "wtmpdb-update-boot",
+]);
+const SYS_HIDDEN_SOCKETS = new Set(["acpid", "avahi-daemon", "cups", "dm-event", "lvm2-lvmpolld", "pcscd", "podman", "syslog"]);
+function isHiddenSystemd(s) {
+  if (SYS_DANGEROUS.test(s.name)) return true;
+  if (s.unitType === "timer") return true;
+  if (s.unitType === "socket") return SYS_HIDDEN_SOCKETS.has(s.name);
+  return SYS_HIDDEN_SERVICES.has(s.name);
+}
+function isHiddenLogSource(s) {
+  const unit = String(s?.unit || "");
+  const unitType = unit.endsWith(".socket") ? "socket" : unit.endsWith(".timer") ? "timer" : "service";
+  return isHiddenSystemd({ name: String(s?.name || ""), unitType });
+}
+
+const SYS_CATEGORY_ORDER = ["ops", "container", "net", "security", "storage", "hw", "log", "sys", "desktop", "update", "timer", "socket", "other"];
+const SYS_CATEGORY_LABEL = {
+  ops: "srv.catOps", container: "srv.catContainer", net: "srv.catNet", security: "srv.catSecurity",
+  storage: "srv.catStorage", hw: "srv.catHw", log: "srv.catLog", sys: "srv.catSys",
+  desktop: "srv.catDesktop", update: "srv.catUpdate", timer: "srv.catTimer", socket: "srv.catSocket", other: "srv.catOther",
+};
+function serviceCategory(s) {
+  if (s.unitType === "timer") return "timer";
+  if (s.unitType === "socket") return "socket";
+  const n = s.name || "";
+  if (/^(fixflow|nginx)/.test(n)) return "ops";
+  if (/^(docker|podman)/.test(n)) return "container";
+  if (/^(networking|connman|avahi|ifupdown|winbind|nmbd|nslcd|wpa_supplicant|ModemManager|NetworkManager|ssh|sshd)/.test(n)) return "net";
+  if (/^(apparmor|auditd|filearmor|deepin-defender|udcp-|usec|usecd|license|tpm|pcscd|fprintd|sso-service)/.test(n)) return "security";
+  if (/^(blk-availability|dm-event|lvm2-|iscsi|fcoe|rbdmap|fstrim|e2scrub|xfs_scrub|check_disk_space)/.test(n)) return "storage";
+  if (/^(acpid|alsa-|bluetooth|cups|lm-sensors|keyboard-setup|udisks2|upower|accounts-daemon|polkit|cron)/.test(n)) return "hw";
+  if (/^(rsyslog)/.test(n)) return "log";
+  if (/^(lastore|apt-daily|dpkg-db-backup|logrotate|man-db|deepin-immutable-cleanup|uos-upgrade)/.test(n)) return "update";
+  if (/^(dde-|deepin|ddm|lightdm|org\.deepin|uos-|cache-udcp|event-log|coredump-reporter|usec_remoteapp|watchOsVersion)/.test(n)) return "desktop";
+  if (/^(systemd|dbus|initrd-|plymouth|getty|emergency|rescue|rc-local|modprobe@|kmod-|ldconfig|live-config|user@|selinux-autorelabel)/.test(n)) return "sys";
+  return "other";
+}
+function serviceCategoryLabel(s) {
+  return t(SYS_CATEGORY_LABEL[serviceCategory(s)] || "srv.catOther");
+}
 
 function opBtn(s, action) {
   const label = { start: t("srv.opStart"), stop: t("srv.opStop"), restart: t("srv.opRestart"), reload: t("srv.opReload"), enable: t("srv.opEnable"), disable: t("srv.opDisable") }[action];
@@ -805,14 +859,19 @@ function sortCommonFirst(list) {
 
 function renderSystemd(m) {
   if (!m?.services) return `<pre>${escapeHtml(m?.error || "N/A")}</pre>`;
-  const services = m.services || [];
-  const summary = m.summary || {};
+  const services = (m.services || []).filter((s) => !isHiddenSystemd(s));
+  const summary = { active: 0, failed: 0, inactive: 0, total: services.length };
+  for (const s of services) {
+    if (s.state === "active") summary.active++;
+    else if (s.state === "failed") summary.failed++;
+    else summary.inactive++;
+  }
   const q = (searchBox.value || "").trim().toLowerCase();
   const list = sortCommonFirst(services.filter((s) =>
     (sysStateFilter === "all" || s.state === sysStateFilter) &&
     (sysTypeFilter === "all" || s.unitType === sysTypeFilter) &&
     (!q || s.name.toLowerCase().includes(q))
-  ));
+  )).sort((a, b) => SYS_CATEGORY_ORDER.indexOf(serviceCategory(a)) - SYS_CATEGORY_ORDER.indexOf(serviceCategory(b)));
   const summaryHtml = `<div class="sys-summary">
     <span class="ok">${t("srv.summaryActive")} <b>${summary.active ?? 0}</b></span>
     <span class="bad">${t("srv.summaryFailed")} <b>${summary.failed ?? 0}</b></span>
@@ -827,7 +886,7 @@ function renderSystemd(m) {
   if (!list.length) return summaryHtml + filterHtml + `<pre>${escapeHtml(q ? t("srv.noMatchQ").replace("{q}", q) : t("srv.noMatchCfg"))}</pre>`;
   const svcPids = new Set(services.map((s) => String(s.mainPid)));
   const procs = ((m.userProcs && m.userProcs.procs) || []).filter((p) => !svcPids.has(String(p.pid)));
-  const procRows = procs.map((p) => `<tr><td>${t("srv.proc")}</td><td>${escapeHtml(p.name)}</td><td class="ok">${t("srv.running")}</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td><td>—</td></tr>`).join("");
+  const procRows = procs.map((p) => `<tr><td>${t("srv.proc")}</td><td>${escapeHtml(p.name)}</td><td>${t("srv.catOther")}</td><td class="ok">${t("srv.running")}</td><td>${escapeHtml(p.cpu ?? "—")}</td><td>${escapeHtml(p.mem ?? "—")}</td><td>—</td><td>${p.pid}</td><td>—</td><td>—</td></tr>`).join("");
   const rows = list.map((s) => {
     const cls = s.state === "active" ? "ok" : s.state === "failed" ? "bad" : "na";
     const dangerous = SYS_DANGEROUS.test(s.name);
@@ -843,13 +902,14 @@ function renderSystemd(m) {
     return `<tr class="sys-row${open ? " open" : ""}">
       <td>${typeTag || t("srv.svc")}</td>
       <td><a href="javascript:void(0)" data-systoggle="${escapeHtml(s.name)}">${escapeHtml(s.name)}</a>${dangerous ? ` <span class="tag na">${t("srv.dangerous")}</span>` : ""}</td>
+      <td>${escapeHtml(serviceCategoryLabel(s))}</td>
       <td class="${cls}">${escapeHtml(s.sub || s.state)}</td>
       <td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td>
       <td>${escapeHtml(s.mainPid || "—")}</td><td class="nowrap">${escapeHtml(s.started)}</td>
       <td>${opHtml}</td>
-    </tr>${open ? `<tr class="sys-detail-row"><td colspan="9">${renderSdDetail(s)}</td></tr>` : ""}`;
+    </tr>${open ? `<tr class="sys-detail-row"><td colspan="10">${renderSdDetail(s)}</td></tr>` : ""}`;
   }).join("");
-  return summaryHtml + filterHtml + `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th class="nowrap">${t("srv.started")}</th><th>${t("srv.ops")}</th></tr></thead><tbody>${rows}${procRows}</tbody></table></div>`;
+  return summaryHtml + filterHtml + `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.category")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th class="nowrap">${t("srv.started")}</th><th>${t("srv.ops")}</th></tr></thead><tbody>${rows}${procRows}</tbody></table></div>`;
 }
 
 cards.addEventListener("click", (e) => {

@@ -273,7 +273,8 @@ function renderLogList() {
   const kw = (logsFilter.value || "").trim().toLowerCase();
   const common = logSourceTab === "common";
   const isCommon = (name) => COMMON_SERVICE_KEYWORDS.some((k) => name.toLowerCase().includes(k));
-  const sys = logSources.systemd.filter((s) => (!common || isCommon(s.name)) && (!kw || s.name.toLowerCase().includes(kw)));
+  const hidden = (s) => typeof isHiddenLogSource === "function" && isHiddenLogSource(s);
+  const sys = logSources.systemd.filter((s) => !hidden(s) && (!common || isCommon(s.name)) && (!kw || s.name.toLowerCase().includes(kw)));
   const dock = (logSources.docker || []).filter((c) => (!common || /up|running/i.test(c.status || "")) && (!kw || c.name.toLowerCase().includes(kw)));
   const pm2 = (logSources.pm2 || []).filter((p) => !kw || p.name.toLowerCase().includes(kw));
   const item = (s, src) => {

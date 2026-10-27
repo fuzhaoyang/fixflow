@@ -989,6 +989,7 @@ test("日志页含常用/全部切换与 pm2 分组", async () => {
   assert.match(js, /logs\.srcCommon/);
   assert.match(js, /logs\.srcAll/);
   assert.match(js, /pm2/);
+  assert.match(js, /isHiddenLogSource/);
   w.close();
 });
 
@@ -1698,6 +1699,11 @@ test("服务页前端：renderSystemd 交互钩子存在", async () => {
   assert.match(js, /api\/systemd\/op/);
   assert.match(js, /api\/systemd\/logs/);
   assert.match(js, /SYS_DANGEROUS/);
+  assert.match(js, /SYS_HIDDEN_SERVICES/);
+  assert.match(js, /SYS_HIDDEN_SOCKETS/);
+  assert.match(js, /isHiddenSystemd/);
+  assert.match(js, /function serviceCategory/);
+  assert.match(js, /srv\.category/);
   w.close();
 });
 
