@@ -5,7 +5,7 @@ let overviewData = null;
 let nicFilter = "all";
 let unitDivider = 1;
 let tokenUnit = 1000000;
-let trafficTab = "traffic";
+let trafficTab = "trend";
 let unitTouched = false;
 let rangeMinutes = 15;
 let histCache = null;
@@ -537,7 +537,7 @@ document.getElementById("token-unit-select").onchange = (e) => {
 
 function initOverview() {
   initRings();
-  switchTrafficTab("traffic");
+  switchTrafficTab("trend");
   document.getElementById("unit-select").value = "MB/s";
   unitDivider = 1024 * 1024;
   refreshOverview();
@@ -845,11 +845,11 @@ function renderSystemd(m) {
       <td><a href="javascript:void(0)" data-systoggle="${escapeHtml(s.name)}">${escapeHtml(s.name)}</a>${dangerous ? ` <span class="tag na">${t("srv.dangerous")}</span>` : ""}</td>
       <td class="${cls}">${escapeHtml(s.sub || s.state)}</td>
       <td>${escapeHtml(s.cpu ?? "—")}</td><td>${escapeHtml(s.mem ?? "—")}</td><td>${escapeHtml(s.memMb ?? "—")}</td>
-      <td>${escapeHtml(s.mainPid || "—")}</td><td>${escapeHtml(s.started)}</td>
+      <td>${escapeHtml(s.mainPid || "—")}</td><td class="nowrap">${escapeHtml(s.started)}</td>
       <td>${opHtml}</td>
     </tr>${open ? `<tr class="sys-detail-row"><td colspan="9">${renderSdDetail(s)}</td></tr>` : ""}`;
   }).join("");
-  return summaryHtml + filterHtml + `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th>${t("srv.started")}</th><th>${t("srv.ops")}</th></tr></thead><tbody>${rows}${procRows}</tbody></table></div>`;
+  return summaryHtml + filterHtml + `<div class="card-body"><table class="svc-table"><thead><tr><th>${t("srv.type")}</th><th>${t("srv.name")}</th><th>${t("srv.state")}</th><th>${t("srv.cpu")}</th><th>${t("srv.mem")}</th><th>${t("srv.memMb")}</th><th>PID</th><th class="nowrap">${t("srv.started")}</th><th>${t("srv.ops")}</th></tr></thead><tbody>${rows}${procRows}</tbody></table></div>`;
 }
 
 cards.addEventListener("click", (e) => {
@@ -1146,7 +1146,7 @@ function renderSsl(m) {
     const ops = [];
     if (s.type === "local" && s.enabled !== false && m.renewTool) ops.push(`<a href="javascript:void(0)" data-ssl-action="renew" data-ssl-id="${escapeHtml(s.id)}" data-ssl-name="${escapeHtml(s.cn || s.path)}">${t("ssl.renew")}</a>`);
     if (s.source === "manual") {
-      ops.push(`<a href="javascript:void(0)" data-ssl-action="toggle" data-ssl-id="${escapeHtml(s.id)}" data-ssl-enabled="${s.enabled !== false}">${s.enabled === false ? t("ssl.enable") : t("ssl.disable")}</a>`);
+      ops.push(`<a href="javascript:void(0)" data-ssl-action="toggle" data-ssl-id="${escapeHtml(s.id)}" data-ssl-enabled="${s.enabled !== false}">${s.enabled === false ? t("ssl.monitorResume") : t("ssl.monitorPause")}</a>`);
       ops.push(`<a href="javascript:void(0)" data-ssl-action="del" data-ssl-id="${escapeHtml(s.id)}" class="danger">${t("ssl.del")}</a>`);
     }
     const opsHtml = ops.length ? `<span class="proc-ops ssl-ops">${ops.join("")}</span>` : "—";

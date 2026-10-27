@@ -334,6 +334,7 @@
     .card-body .svc-table thead th, .fs-list-wrap .svc-table thead th { position: sticky; top: 0; z-index: 1; }
     .svc-table tbody tr:hover { background: var(--hover); }
     .svc-table td.ok { color: var(--ok); } .svc-table td.bad { color: var(--bad); } .svc-table td.na { color: var(--muted); }
+    .svc-table th.nowrap, .svc-table td.nowrap { white-space: nowrap; word-break: normal; }
     .svc-table td code { background: var(--panel2); padding: 1px 6px; border-radius: 4px; font-size: 12px; }
     .svc-table td code.term-cmd-danger { color: var(--bad); font-weight: 600; }
     .term-log-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
