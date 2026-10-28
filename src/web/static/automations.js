@@ -55,6 +55,7 @@ let autoRunDeleteIds = [];
 let autoDeleteMode = "run";
 let autoDeleteRuleName = "";
 const AUTO_RUN_PAGE_SIZE = 15;
+let autoRunPageSize = readPageSize("runs", AUTO_RUN_PAGE_SIZE);
 
 const autoTime = (ts) => {
   const d = new Date(ts);
@@ -130,7 +131,7 @@ function autoRunFiltered() {
 }
 
 function autoRunPageItems() {
-  return autoRunFiltered().slice((autoRunPage - 1) * AUTO_RUN_PAGE_SIZE, autoRunPage * AUTO_RUN_PAGE_SIZE);
+  return autoRunFiltered().slice((autoRunPage - 1) * autoRunPageSize, autoRunPage * autoRunPageSize);
 }
 
 function updateAutoRunSelection() {
@@ -148,19 +149,18 @@ function updateAutoRunSelection() {
   }
 }
 
-function renderAutoRunPager(pages) {
-  if (pages <= 1) return "";
-  return `<div class="incident-pager"><button class="btn small" data-auto-run-page="${autoRunPage - 1}" ${autoRunPage <= 1 ? "disabled" : ""}>‹</button><span>${autoRunPage}/${pages}</span><button class="btn small" data-auto-run-page="${autoRunPage + 1}" ${autoRunPage >= pages ? "disabled" : ""}>›</button></div>`;
+function renderAutoRunPager(pages, total) {
+  return `<div class="incident-pager">${pagerHtml("auto-run", autoRunPageSize, autoRunPage, pages, total)}</div>`;
 }
 
 function renderAutoRuns() {
   const list = autoRunFiltered();
   const nameOf = (id) => autoRules.find((r) => r.id === id)?.name || id;
-  const pages = Math.max(1, Math.ceil(list.length / AUTO_RUN_PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(list.length / autoRunPageSize));
   if (autoRunPage > pages) autoRunPage = pages;
   if (autoRunPage < 1) autoRunPage = 1;
   if (autoCount) autoCount.textContent = `${t("auto.count").replace("{n}", list.length)} · ${t("auto.page").replace("{p}", autoRunPage).replace("{n}", pages)}`;
-  const items = list.slice((autoRunPage - 1) * AUTO_RUN_PAGE_SIZE, autoRunPage * AUTO_RUN_PAGE_SIZE);
+  const items = list.slice((autoRunPage - 1) * autoRunPageSize, autoRunPage * autoRunPageSize);
   const selectedOnPage = items.filter((r) => autoRunSelected.has(r.id)).length;
   const toolbar = `<div class="auto-runs-toolbar"><label class="inc-select-all"><input type="checkbox" id="auto-run-select-all" ${items.length > 0 && selectedOnPage === items.length ? "checked" : ""}><span>${t("auto.selectAll")}</span></label><button class="btn small danger" id="auto-run-delete" ${autoRunSelected.size ? "" : "disabled"}>${t("auto.deleteSelected")}${autoRunSelected.size ? ` (${autoRunSelected.size})` : ""}</button></div>`;
   if (!list.length) {
@@ -192,7 +192,7 @@ function renderAutoRuns() {
       </summary>
       <div class="auto-run-body">${body}</div>
     </details>`;
-  }).join("") + renderAutoRunPager(pages);
+  }).join("") + renderAutoRunPager(pages, list.length);
   updateAutoRunSelection();
 }
 
@@ -783,9 +783,25 @@ autoRunsEl.addEventListener("click", (e) => {
   if (page) { e.preventDefault(); e.stopPropagation(); autoRunPage = Number(page.dataset.autoRunPage) || 1; renderAutoRuns(); }
 });
 autoRunsEl.addEventListener("change", (e) => {
+  if (e.target.matches("[data-auto-run-size]")) {
+    autoRunPageSize = Number(e.target.value) || AUTO_RUN_PAGE_SIZE;
+    savePageSize("runs", autoRunPageSize);
+    autoRunPage = 1;
+    renderAutoRuns();
+    return;
+  }
   if (e.target.id !== "auto-run-select-all") return;
   const ids = autoRunPageItems().map((r) => r.id);
   for (const id of ids) { if (e.target.checked) autoRunSelected.add(id); else autoRunSelected.delete(id); }
+  renderAutoRuns();
+});
+autoRunsEl.addEventListener("keydown", (e) => {
+  const input = e.target.closest("[data-auto-run-jump]");
+  if (!input || e.key !== "Enter") return;
+  e.preventDefault();
+  const max = Math.max(1, Number(input.max) || 1);
+  const n = parseInt(input.value, 10);
+  autoRunPage = Math.min(max, Math.max(1, Number.isFinite(n) ? n : 1));
   renderAutoRuns();
 });
 

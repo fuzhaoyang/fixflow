@@ -1855,3 +1855,33 @@ test("登录 loading 页在首屏应用已保存主题", () => {
   assert.match(html, /dataset\.theme/);
   assert.ok(html.indexOf("dataset.theme") < html.indexOf('id="boot-mask"'));
 });
+
+test("运行历史/事件/复盘分页支持条数选择与跳页", () => {
+  const dir = new URL("../src/web/static/", import.meta.url);
+  const read = (name) => readFileSync(new URL(name, dir), "utf8");
+  const app = read("app.js");
+  const auto = read("automations.js");
+  const incidents = read("incidents.js");
+  const retros = read("retros.js");
+  assert.match(app, /PAGE_SIZE_OPTIONS = \[5, 15, 50, 100\]/);
+  assert.match(app, /function pagerHtml/);
+  assert.match(app, /pager-num/);
+  assert.match(app, /start \+ 6/);
+  assert.match(app, /pager-total/);
+  assert.match(app, /page\.total/);
+  assert.match(auto, /renderAutoRunPager\(pages, list\.length\)/);
+  assert.match(incidents, /renderIncidentPager\(pages, list\.length\)/);
+  assert.match(retros, /renderRetroPager\(pages, list\.length\)/);
+  const css = read("app.css");
+  assert.match(css, /\.incident-pager \{[^}]*justify-content: flex-end/);
+  assert.match(css, /\.retro-pager \{[^}]*justify-content: flex-end/);
+  assert.match(auto, /readPageSize\("runs", AUTO_RUN_PAGE_SIZE\)/);
+  assert.match(incidents, /readPageSize\("incidents", INCIDENT_PAGE_SIZE\)/);
+  assert.match(retros, /readPageSize\("retros", RETRO_PAGE_SIZE\)/);
+  assert.match(auto, /pagerHtml\("auto-run"/);
+  assert.match(incidents, /pagerHtml\("inc"/);
+  assert.match(retros, /pagerHtml\("retro"/);
+  assert.match(auto, /data-auto-run-size/);
+  assert.match(incidents, /data-inc-size/);
+  assert.match(retros, /data-retro-size/);
+});

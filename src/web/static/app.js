@@ -404,6 +404,28 @@ function flushAudit() {
   fetch("api/panel-audit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ records }) }).catch(() => {});
 }
 
+const PAGE_SIZE_OPTIONS = [5, 15, 50, 100];
+function readPageSize(key, fallback) {
+  const n = Number(localStorage.getItem("fixflow_page_size_" + key));
+  return PAGE_SIZE_OPTIONS.includes(n) ? n : fallback;
+}
+function savePageSize(key, size) {
+  try { localStorage.setItem("fixflow_page_size_" + key, String(size)); } catch {}
+}
+function pagerHtml(prefix, size, page, pages, total) {
+  const opts = PAGE_SIZE_OPTIONS.map((n) => `<option value="${n}"${n === size ? " selected" : ""}>${n}</option>`).join("");
+  const start = Math.max(1, Math.min(page - 3, pages - 6));
+  const end = Math.min(pages, start + 6);
+  let nums = "";
+  for (let n = start; n <= end; n++) nums += `<button class="btn small pager-num${n === page ? " active" : ""}" data-${prefix}-page="${n}">${n}</button>`;
+  return `<label class="pager-size">${t("page.size")} <select class="fw-mode" data-${prefix}-size>${opts}</select></label>
+    <button class="btn small" data-${prefix}-page="${page - 1}"${page <= 1 ? " disabled" : ""}>‹</button>
+    ${nums}
+    <span class="pager-jump">${t("page.jump")} <input class="pager-jump-input" type="number" min="1" max="${pages}" value="${page}" data-${prefix}-jump> / ${pages}</span>
+    <button class="btn small" data-${prefix}-page="${page + 1}"${page >= pages ? " disabled" : ""}>›</button>
+    <span class="pager-total">${t("page.total").replace("{n}", total)}</span>`;
+}
+
 function renderAudit() {
   const kw = (auditSearch.value || "").trim().toLowerCase();
   const rows = auditRecords.filter((r) => !kw || `${r.time} ${r.user} ${r.page} ${r.action} ${r.target} ${r.detail}`.toLowerCase().includes(kw));

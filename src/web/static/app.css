@@ -561,7 +561,7 @@
     .retro-card-foot { display: flex; gap: 6px; min-height: 18px; }
     .retro-card .tag.warn { background: color-mix(in srgb, var(--warn) 16%, transparent); color: var(--warn); }
     .retro-empty { color: var(--muted); text-align: center; padding: 40px 0; grid-column: 1 / -1; }
-    .retro-pager { display: flex; justify-content: center; align-items: center; gap: 8px; padding: 8px 0; color: var(--muted); font-size: 12px; }
+    .retro-pager { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 8px 0; color: var(--muted); font-size: 12px; flex-wrap: wrap; }
     .retro-modal { width: 760px; max-width: 94vw; }
     .retro-md { max-width: 100%; max-height: 70vh; overflow: auto; }
     .retro-md::before { display: none; }
@@ -1277,8 +1277,15 @@
     .incident-check { display: flex; align-items: center; }
     .incident-tags { display: flex; align-items: center; gap: 6px; margin-right: auto; margin-left: 8px; }
     .incident-del { margin-left: 8px; }
-    .incident-pager { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0; font-size: 12px; color: var(--muted); }
+    .incident-pager { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 6px 0; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
     .incident-pager .btn { min-width: 28px; }
+    .pager-size, .pager-jump { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .pager-jump-input { width: 52px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 5px 8px; font-size: 12px; text-align: center; outline: none; }
+    .pager-jump-input:focus { border-color: var(--accent); }
+    .pager-num { min-width: 28px; padding: 5px 8px; background: var(--panel2); color: var(--text); border: 1px solid var(--border); }
+    .pager-num:hover { border-color: var(--accent); }
+    .pager-num.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .pager-total { margin-left: 4px; white-space: nowrap; }
 
     /* ---------- 复盘列表：批量删除 ---------- */
     #view-retros .retro-toolbar { flex-wrap: wrap; }

@@ -25,6 +25,7 @@ let pendingRetroId = null;
 let retroSelected = new Set();
 let retroDeleteIds = [];
 const RETRO_PAGE_SIZE = 15;
+let retroPageSize = readPageSize("retros", RETRO_PAGE_SIZE);
 
 const retroDate = (ts) => {
   const d = new Date(ts);
@@ -38,7 +39,7 @@ function retroFiltered() {
 }
 
 function retroPageItems() {
-  return retroFiltered().slice((retroPage - 1) * RETRO_PAGE_SIZE, retroPage * RETRO_PAGE_SIZE);
+  return retroFiltered().slice((retroPage - 1) * retroPageSize, retroPage * retroPageSize);
 }
 
 function updateRetroSelection(items = retroPageItems()) {
@@ -54,25 +55,24 @@ function updateRetroSelection(items = retroPageItems()) {
   }
 }
 
-function renderRetroPager(pages) {
+function renderRetroPager(pages, total) {
   if (!retroPager) return;
-  if (pages <= 1) { retroPager.innerHTML = ""; return; }
-  retroPager.innerHTML = `<button class="btn small" data-retro-page="${retroPage - 1}" ${retroPage <= 1 ? "disabled" : ""}>‹</button><span>${retroPage}/${pages}</span><button class="btn small" data-retro-page="${retroPage + 1}" ${retroPage >= pages ? "disabled" : ""}>›</button>`;
+  retroPager.innerHTML = pagerHtml("retro", retroPageSize, retroPage, pages, total);
 }
 
 function renderRetros() {
   const list = retroFiltered();
-  const pages = Math.max(1, Math.ceil(list.length / RETRO_PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(list.length / retroPageSize));
   if (retroPage > pages) retroPage = pages;
   if (retroPage < 1) retroPage = 1;
   if (retroCount) retroCount.textContent = `${t("retro.count").replace("{n}", list.length)} · ${t("retro.page").replace("{p}", retroPage).replace("{n}", pages)}`;
   if (!list.length) {
     retroGrid.innerHTML = `<div class="retro-empty">${escapeHtml(t("retro.empty"))}</div>`;
-    renderRetroPager(1);
+    if (retroPager) retroPager.innerHTML = "";
     updateRetroSelection([]);
     return;
   }
-  const items = list.slice((retroPage - 1) * RETRO_PAGE_SIZE, retroPage * RETRO_PAGE_SIZE);
+  const items = list.slice((retroPage - 1) * retroPageSize, retroPage * retroPageSize);
   retroGrid.innerHTML = items.map((c) => {
     const pending = c.rootCause === "待补充";
     return `<div class="retro-card" data-retro="${escapeHtml(c.id)}">
@@ -88,7 +88,7 @@ function renderRetros() {
       <div class="retro-card-foot">${c.ai ? `<span class="tag">${escapeHtml(t("retro.ai"))}</span>` : ""}</div>
     </div>`;
   }).join("");
-  renderRetroPager(pages);
+  renderRetroPager(pages, list.length);
   updateRetroSelection(items);
 }
 
@@ -192,6 +192,22 @@ if (retroPager) retroPager.addEventListener("click", (e) => {
   const b = e.target.closest("[data-retro-page]");
   if (!b || b.disabled) return;
   retroPage = Number(b.dataset.retroPage) || 1;
+  renderRetros();
+});
+if (retroPager) retroPager.addEventListener("change", (e) => {
+  if (!e.target.matches("[data-retro-size]")) return;
+  retroPageSize = Number(e.target.value) || RETRO_PAGE_SIZE;
+  savePageSize("retros", retroPageSize);
+  retroPage = 1;
+  renderRetros();
+});
+if (retroPager) retroPager.addEventListener("keydown", (e) => {
+  const input = e.target.closest("[data-retro-jump]");
+  if (!input || e.key !== "Enter") return;
+  e.preventDefault();
+  const max = Math.max(1, Number(input.max) || 1);
+  const n = parseInt(input.value, 10);
+  retroPage = Math.min(max, Math.max(1, Number.isFinite(n) ? n : 1));
   renderRetros();
 });
 if (location.hash === "#/retros") loadRetros();

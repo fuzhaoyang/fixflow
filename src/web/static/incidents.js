@@ -24,6 +24,7 @@ let incidentQuery = "";
 let incidentDetail = null;
 let incidentPage = 1;
 const INCIDENT_PAGE_SIZE = 5;
+let incidentPageSize = readPageSize("incidents", INCIDENT_PAGE_SIZE);
 let incidentSelected = new Set();
 let incidentDeleteIds = [];
 
@@ -45,7 +46,7 @@ function incidentFiltered() {
 }
 
 function incidentPageItems() {
-  return incidentFiltered().slice((incidentPage - 1) * INCIDENT_PAGE_SIZE, incidentPage * INCIDENT_PAGE_SIZE);
+  return incidentFiltered().slice((incidentPage - 1) * incidentPageSize, incidentPage * incidentPageSize);
 }
 
 function updateIncidentSelection(items = incidentPageItems()) {
@@ -61,15 +62,14 @@ function updateIncidentSelection(items = incidentPageItems()) {
   }
 }
 
-function renderIncidentPager(pages) {
+function renderIncidentPager(pages, total) {
   if (!incidentPager) return;
-  if (pages <= 1) { incidentPager.innerHTML = ""; return; }
-  incidentPager.innerHTML = `<button class="btn small" data-inc-page="prev" ${incidentPage <= 1 ? "disabled" : ""}>‹</button><span>${incidentPage}/${pages}</span><button class="btn small" data-inc-page="next" ${incidentPage >= pages ? "disabled" : ""}>›</button>`;
+  incidentPager.innerHTML = pagerHtml("inc", incidentPageSize, incidentPage, pages, total);
 }
 
 function renderIncidents() {
   const list = incidentFiltered();
-  const pages = Math.max(1, Math.ceil(list.length / INCIDENT_PAGE_SIZE));
+  const pages = Math.max(1, Math.ceil(list.length / incidentPageSize));
   if (incidentPage > pages) incidentPage = pages;
   if (incidentPage < 1) incidentPage = 1;
   if (incidentCount) incidentCount.textContent = `${t("incident.count").replace("{n}", list.length)} · ${t("incident.page").replace("{p}", incidentPage).replace("{n}", pages)}`;
@@ -79,7 +79,7 @@ function renderIncidents() {
     updateIncidentSelection([]);
     return;
   }
-  const items = list.slice((incidentPage - 1) * INCIDENT_PAGE_SIZE, incidentPage * INCIDENT_PAGE_SIZE);
+  const items = list.slice((incidentPage - 1) * incidentPageSize, incidentPage * incidentPageSize);
   incidentList.innerHTML = items.map((i) => `<div class="incident-card" data-incident="${escapeHtml(i.id)}">
     <div class="retro-card-head">
       <label class="incident-check"><input type="checkbox" data-inc-select="${escapeHtml(i.id)}" ${incidentSelected.has(i.id) ? "checked" : ""}></label>
@@ -90,7 +90,7 @@ function renderIncidents() {
     <div class="retro-card-meta">${escapeHtml(i.service)} · ${escapeHtml(i.host)} · ${escapeHtml(incTimeShort(i.startedAt))} · ${escapeHtml(t("incident.statusLabel").replace("{s}", incStatus(i.status)))}</div>
     <div class="retro-card-summary">${escapeHtml(i.rcaSummary || t("incident.pending"))}</div>
   </div>`).join("");
-  renderIncidentPager(pages);
+  renderIncidentPager(pages, list.length);
   updateIncidentSelection(items);
 }
 
@@ -219,8 +219,24 @@ if (incidentSelectAll) incidentSelectAll.addEventListener("change", () => {
 if (incidentDeleteBtn) incidentDeleteBtn.onclick = () => askIncidentDelete([...incidentSelected]);
 if (incidentPager) incidentPager.addEventListener("click", (e) => {
   const b = e.target.closest("[data-inc-page]");
-  if (!b) return;
-  incidentPage += b.dataset.incPage === "next" ? 1 : -1;
+  if (!b || b.disabled) return;
+  incidentPage = Number(b.dataset.incPage) || 1;
+  renderIncidents();
+});
+if (incidentPager) incidentPager.addEventListener("change", (e) => {
+  if (!e.target.matches("[data-inc-size]")) return;
+  incidentPageSize = Number(e.target.value) || INCIDENT_PAGE_SIZE;
+  savePageSize("incidents", incidentPageSize);
+  incidentPage = 1;
+  renderIncidents();
+});
+if (incidentPager) incidentPager.addEventListener("keydown", (e) => {
+  const input = e.target.closest("[data-inc-jump]");
+  if (!input || e.key !== "Enter") return;
+  e.preventDefault();
+  const max = Math.max(1, Number(input.max) || 1);
+  const n = parseInt(input.value, 10);
+  incidentPage = Math.min(max, Math.max(1, Number.isFinite(n) ? n : 1));
   renderIncidents();
 });
 if (incidentBody) incidentBody.addEventListener("click", (e) => {
