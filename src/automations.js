@@ -250,22 +250,24 @@ export async function evaluateTrigger(rule, { exec = runCommand, fetchImpl = fet
   return { triggered: true, state };
 }
 
-async function runAction(action, { exec, fetchImpl, allowCommands, manager = "systemd" }) {
+async function runAction(action, { exec, fetchImpl, allowCommands, manager = "systemd", signal }) {
   const started = Date.now();
   try {
     if (action.type === "restart_service" || action.type === "reload_service") {
       const command = actionCommand(manager, action);
       if (!command) return { ok: false, output: `未配置 ${manager} 动作命令`, durationMs: Date.now() - started };
-      const r = await exec(command, { timeout: action.timeoutSec * 1000 });
+      const r = await exec(command, { timeout: action.timeoutSec * 1000, signal });
       return { ok: r.exitCode === 0, output: redactSecrets((r.stdout || "") + (r.stderr || "")), durationMs: Date.now() - started };
     }
     if (action.type === "run_command") {
       if (!Array.isArray(allowCommands) || !allowCommands.some((p) => action.command.startsWith(String(p)))) return { ok: false, output: "命令不在自动化白名单中", durationMs: Date.now() - started };
-      const r = await exec(action.command, { timeout: action.timeoutSec * 1000 });
+      const r = await exec(action.command, { timeout: action.timeoutSec * 1000, signal });
       return { ok: r.exitCode === 0, output: redactSecrets((r.stdout || "") + (r.stderr || "")), durationMs: Date.now() - started };
     }
     if (action.type === "webhook") {
-      const res = await fetchImpl(action.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "automation", at: new Date().toISOString() }), signal: AbortSignal.timeout(action.timeoutSec * 1000) });
+      const timeout = AbortSignal.timeout(action.timeoutSec * 1000);
+      const sig = signal ? (typeof AbortSignal.any === "function" ? AbortSignal.any([signal, timeout]) : signal) : timeout;
+      const res = await fetchImpl(action.url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind: "automation", at: new Date().toISOString() }), signal: sig });
       return { ok: res.ok, output: `HTTP ${res.status}`, durationMs: Date.now() - started };
     }
     return { ok: false, output: "未知动作", durationMs: Date.now() - started };
@@ -296,12 +298,13 @@ async function verifyCheck(v, { exec, fetchImpl }) {
   return { type: v.type, ok: r.exitCode === v.expectExit, detail: String(r.stdout || r.stderr || "").slice(0, 500) };
 }
 
-export async function executeAutomation(rule, { exec = runCommand, fetchImpl = fetch, allowCommands = [], now = () => Date.now(), runId = newRunId() } = {}) {
+export async function executeAutomation(rule, { exec = runCommand, fetchImpl = fetch, allowCommands = [], now = () => Date.now(), runId = newRunId(), signal } = {}) {
   const at = now();
-  const action = await runAction(rule.action, { exec, fetchImpl, allowCommands, manager: rule.manager });
+  const action = await runAction(rule.action, { exec, fetchImpl, allowCommands, manager: rule.manager, signal });
   const checks = [];
-  for (const v of rule.verify || []) checks.push(await verifyCheck(v, { exec, fetchImpl }));
-  const ok = action.ok && checks.every((c) => c.ok);
+  if (!signal?.aborted) for (const v of rule.verify || []) checks.push(await verifyCheck(v, { exec, fetchImpl }));
+  const aborted = Boolean(signal?.aborted);
+  const ok = action.ok && !aborted && checks.every((c) => c.ok);
   return {
     id: runId,
     automationId: rule.id,
@@ -310,6 +313,7 @@ export async function executeAutomation(rule, { exec = runCommand, fetchImpl = f
     action: rule.action,
     ok,
     actionOk: action.ok,
+    aborted,
     output: truncate(action.output),
     checks,
     durationMs: Math.max(action.durationMs, now() - at),
@@ -336,14 +340,19 @@ function recordRun(rule, run, now) {
   };
 }
 
-export async function runAutomationNow({ filePath, runsPath, id, exec = runCommand, fetchImpl = fetch, allowCommands = [], now = () => Date.now() } = {}) {
+export async function runAutomationNow({ filePath, runsPath, id, exec = runCommand, fetchImpl = fetch, allowCommands = [], now = () => Date.now(), signal } = {}) {
   const rules = await readAutomations(filePath);
   const rule = rules.find((r) => r.id === id);
   if (!rule) return { error: "自动化不存在" };
-  const run = await executeAutomation(rule, { exec, fetchImpl, allowCommands, now });
+  const run = await executeAutomation(rule, { exec, fetchImpl, allowCommands, now, signal });
   run.manual = true;
   recordRun(rule, run, now());
-  await writeAutomations(filePath, rules);
+  const latest = await readAutomations(filePath);
+  const current = latest.find((r) => r.id === id);
+  if (current) {
+    current.state = rule.state;
+    await writeAutomations(filePath, latest);
+  }
   await appendRun(runsPath, run);
   return { run };
 }
@@ -352,6 +361,7 @@ export function createAutomationEngine({ filePath, runsPath, exec = runCommand, 
   let timer = null;
   let running = false;
   let appends = 0;
+  const controllers = new Map();
   async function tick() {
     if (running) return;
     running = true;
@@ -363,20 +373,27 @@ export function createAutomationEngine({ filePath, runsPath, exec = runCommand, 
       let dirty = false;
       for (const rule of rules) {
         if (!rule.enabled) continue;
-        const result = await evaluateTrigger(rule, { exec, fetchImpl, metricValues, now });
-        const allowed = canRun(rule, now());
-        if (result.state && Object.keys(result.state).length) {
-          rule.state = { ...(rule.state || {}), ...result.state };
+        const controller = new AbortController();
+        controllers.set(rule.id, controller);
+        try {
+          const result = await evaluateTrigger(rule, { exec, fetchImpl, metricValues, now });
+          const allowed = canRun(rule, now());
+          if (result.state && Object.keys(result.state).length) {
+            rule.state = { ...(rule.state || {}), ...result.state };
+            dirty = true;
+          }
+          if (!result.triggered || !allowed || controller.signal.aborted) continue;
+          try { await onTrigger(rule, result); } catch (e) { logger.error("[fixflow] 自动化触发通知失败:", e?.message || e); }
+          if (controller.signal.aborted) continue;
+          const run = await executeAutomation(rule, { exec, fetchImpl, allowCommands, now, signal: controller.signal });
+          recordRun(rule, run, now());
           dirty = true;
+          await appendRun(runsPath, run);
+          if (++appends % 200 === 0) await trimRuns(runsPath);
+          if (!run.aborted) await onRun(run, rule);
+        } finally {
+          controllers.delete(rule.id);
         }
-        if (!result.triggered || !allowed) continue;
-        try { await onTrigger(rule, result); } catch (e) { logger.error("[fixflow] 自动化触发通知失败:", e?.message || e); }
-        const run = await executeAutomation(rule, { exec, fetchImpl, allowCommands, now });
-        recordRun(rule, run, now());
-        dirty = true;
-        await appendRun(runsPath, run);
-        if (++appends % 200 === 0) await trimRuns(runsPath);
-        await onRun(run, rule);
       }
       if (dirty) {
         const latest = await readAutomations(filePath);
@@ -395,7 +412,8 @@ export function createAutomationEngine({ filePath, runsPath, exec = runCommand, 
   return {
     tick,
     start(intervalMs = 15000) { if (timer) return; timer = setInterval(() => tick().catch(() => {}), intervalMs); },
-    stop() { if (timer) clearInterval(timer); timer = null; },
+    stop() { if (timer) clearInterval(timer); timer = null; for (const c of controllers.values()) c.abort(); controllers.clear(); },
+    abortRule(id) { const c = controllers.get(id); if (c) c.abort(); },
   };
 }
 

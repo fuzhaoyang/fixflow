@@ -786,7 +786,8 @@ export async function startWeb(config = {}, deps = {}) {
     },
   });
   if (!deps.noAutomationTimer) automationEngine.start();
-  const runningTests = new Set();
+  const runningTests = new Map();
+  const runningActions = new Map();
   let lastCaptureT = Math.floor(Date.now() / 1000) - 60;
   const historyTimer = setInterval(async () => {
     const now = Math.floor(Date.now() / 1000);
@@ -1338,7 +1339,13 @@ export async function startWeb(config = {}, deps = {}) {
       } else if (url.pathname === "/api/automations" && req.method === "DELETE") {
         const body = JSON.parse(await readBody(req) || "{}");
         if (!(await fwVerify(body.password || ""))) { sendJson(res, { error: "root 密码错误，或 root 账号未设置密码/已锁定，或 sudo 暂时不可用，删除未执行" }, 403); return; }
-        await writeAutomations(automationsPath, (await readAutomations(automationsPath)).filter((x) => x.id !== body.id));
+        const id = String(body.id || "");
+        runningTests.get(id)?.abort();
+        const action = runningActions.get(id);
+        action?.ctrl.abort();
+        if (action) await action.done;
+        automationEngine.abortRule(id);
+        await writeAutomations(automationsPath, (await readAutomations(automationsPath)).filter((x) => x.id !== id));
         sendJson(res, { ok: true });
       } else if (url.pathname === "/api/automations/runs" && req.method === "DELETE") {
         const body = JSON.parse(await readBody(req) || "{}");
@@ -1350,10 +1357,20 @@ export async function startWeb(config = {}, deps = {}) {
         sendJson(res, { ok: true, deleted: r.deleted });
       } else if (url.pathname === "/api/automations/run" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
-        const r = await runAutomationNow({ filePath: automationsPath, runsPath: automationRunsPath, id: body.id, exec: execCmd, allowCommands: config.automationCommands });
-        if (r.error) { sendJson(res, r, 404); return; }
-        broadcast({ type: "automations" });
-        sendJson(res, r);
+        const id = String(body.id || "");
+        const ctrl = new AbortController();
+        let finish;
+        const entry = { ctrl, done: new Promise((r) => { finish = r; }) };
+        runningActions.set(id, entry);
+        try {
+          const r = await runAutomationNow({ filePath: automationsPath, runsPath: automationRunsPath, id, exec: execCmd, allowCommands: config.automationCommands, signal: ctrl.signal });
+          if (r.error) { sendJson(res, r, 404); return; }
+          broadcast({ type: "automations" });
+          sendJson(res, r);
+        } finally {
+          finish();
+          if (runningActions.get(id) === entry) runningActions.delete(id);
+        }
       } else if (url.pathname === "/api/automations/commands" && req.method === "POST") {
         const body = JSON.parse(await readBody(req) || "{}");
         const commands = (Array.isArray(body.commands) ? body.commands : []).map((s) => String(s).trim()).filter(Boolean).slice(0, 50);
@@ -1411,15 +1428,17 @@ export async function startWeb(config = {}, deps = {}) {
         if (!script) { sendJson(res, { error: "暂无测试脚本" }, 400); return; }
         if (script.length > 20000) { sendJson(res, { error: "测试脚本过长" }, 400); return; }
         if (runningTests.has(rule.id)) { sendJson(res, { error: "该规则的测试正在运行" }, 409); return; }
-        runningTests.add(rule.id);
+        const ctrl = new AbortController();
+        runningTests.set(rule.id, ctrl);
         let file = "";
         try {
           const ok = await requestConfirm({ source: "automation", riskLevel: "high", reason: "运行 AI 生成的测试脚本", impact: "脚本会在本机真实停止/恢复服务并执行命令", command: script.slice(0, 4000) });
           if (!ok) { sendJson(res, { ok: false, rejected: true }); return; }
+          if (ctrl.signal.aborted) { sendJson(res, { ok: false, aborted: true }); return; }
           file = join(tmpdir(), `fixflow-auto-${randomUUID()}.sh`);
           await writeFile(file, script, { mode: 0o700 });
           const started = Date.now();
-          const r = await execCmd(`bash ${JSON.stringify(file)}`, { timeout: 300000, maxOutput: 20 * 1024 }).catch((e) => ({ exitCode: 1, stdout: "", stderr: String(e?.message || e) }));
+          const r = await execCmd(`bash ${JSON.stringify(file)}`, { timeout: 300000, maxOutput: 20 * 1024, signal: ctrl.signal }).catch((e) => ({ exitCode: 1, stdout: "", stderr: String(e?.message || e) }));
           const run = {
             id: "AR-" + randomUUID().slice(0, 8),
             automationId: rule.id,
@@ -1429,6 +1448,7 @@ export async function startWeb(config = {}, deps = {}) {
             mode: "local",
             script,
             ok: r.exitCode === 0,
+            aborted: Boolean(r.aborted || ctrl.signal.aborted),
             exitCode: r.exitCode,
             stdout: r.stdout || "",
             stderr: r.stderr || "",
@@ -1439,7 +1459,7 @@ export async function startWeb(config = {}, deps = {}) {
           broadcast({ type: "automations" });
           sendJson(res, { ok: true, run });
         } finally {
-          runningTests.delete(rule.id);
+          if (runningTests.get(rule.id) === ctrl) runningTests.delete(rule.id);
           if (file) await rm(file, { force: true }).catch(() => {});
         }
       } else if (url.pathname === "/api/automations/detect" && req.method === "POST") {

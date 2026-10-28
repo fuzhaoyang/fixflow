@@ -149,6 +149,62 @@ test("运行测试脚本需 SSE 确认，执行后写入历史", async () => {
   w.close();
 });
 
+test("删除规则会中止正在运行的测试脚本", async () => {
+  const calls = [];
+  let bashStarted;
+  const startedP = new Promise((r) => { bashStarted = r; });
+  const exec = (cmd, opts = {}) => {
+    calls.push(cmd);
+    if (cmd.includes("bash ")) {
+      bashStarted();
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = (aborted) => {
+          if (done) return;
+          done = true;
+          resolve({ exitCode: 1, stdout: "", stderr: aborted ? "命令已中止" : "", aborted });
+        };
+        if (opts.signal?.aborted) finish(true);
+        else opts.signal?.addEventListener("abort", () => finish(true), { once: true });
+        setTimeout(() => finish(false), 1000);
+      });
+    }
+    return Promise.resolve({ exitCode: 0, stdout: "", stderr: "" });
+  };
+  const { promise } = makeServer({}, { runCommand: exec });
+  const w = await promise;
+  const base = `http://127.0.0.1:${w.server.address().port}`;
+  const cookie = await login(base);
+  const H = { Cookie: cookie, "Content-Type": "application/json" };
+  const script = "#!/usr/bin/env bash\nsystemctl stop nginx\nsleep 300";
+  const rule = (await (await fetch(`${base}/api/automations`, { method: "POST", headers: H, body: JSON.stringify({ ...ruleBody, testScript: script }) })).json()).rule;
+
+  const sse = await fetch(`${base}/api/stream`, { headers: { Cookie: cookie } });
+  const reader = sse.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  const runPromise = fetch(`${base}/api/automations/test-run`, { method: "POST", headers: H, body: JSON.stringify({ id: rule.id, script }) });
+  while (!buf.includes('"type":"confirm"')) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+  }
+  const line = buf.split("\n").find((l) => l.startsWith("data: ") && l.includes('"type":"confirm"'));
+  const confirmEvent = JSON.parse(line.slice(6));
+  await fetch(`${base}/api/confirm`, { method: "POST", headers: H, body: JSON.stringify({ id: confirmEvent.id, ok: true }) });
+  await startedP;
+
+  const del = await fetch(`${base}/api/automations`, { method: "DELETE", headers: H, body: JSON.stringify({ id: rule.id, password: "rootpw" }) });
+  assert.equal(del.status, 200);
+  const res = await runPromise;
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).run.aborted, true);
+  const list = await (await fetch(`${base}/api/automations`, { headers: { Cookie: cookie } })).json();
+  assert.equal(list.rules.length, 0);
+  reader.cancel().catch(() => {});
+  w.close();
+});
+
 test("自动化聊天会把同窗历史文本传给模型", async () => {
   let prompt = "";
   const chat = async ({ messages }) => {

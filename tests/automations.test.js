@@ -76,6 +76,74 @@ test("引擎遵守冷却时间", async () => {
   assert.equal((await readRuns(runs)).length, 1);
 });
 
+test("删除规则会中止正在执行的动作", async () => {
+  const d = dir();
+  const file = join(d, "automations.json");
+  const runs = join(d, "runs.jsonl");
+  const rule = normalizeAutomation(baseRule({ id: "A-abort", cooldownSec: 0 })).rule;
+  await writeAutomations(file, [rule]);
+  let aborted = false;
+  let started;
+  const startedP = new Promise((r) => { started = r; });
+  const engine = createAutomationEngine({
+    filePath: file,
+    runsPath: runs,
+    now: () => 1_000_000_000,
+    exec: (cmd, opts = {}) => {
+      if (cmd.includes("restart")) {
+        started();
+        return new Promise((resolve) => {
+          let done = false;
+          const finish = (wasAborted) => {
+            if (done) return;
+            done = true;
+            aborted = wasAborted;
+            resolve({ exitCode: 1, stdout: "", stderr: wasAborted ? "命令已中止" : "", aborted: wasAborted });
+          };
+          if (opts.signal?.aborted) finish(true);
+          else opts.signal?.addEventListener("abort", () => finish(true), { once: true });
+          setTimeout(() => finish(false), 1000);
+        });
+      }
+      return Promise.resolve({ exitCode: cmd.includes("is-active") ? 3 : 0, stdout: "", stderr: "" });
+    },
+  });
+  const tick = engine.tick();
+  await startedP;
+  engine.abortRule("A-abort");
+  await tick;
+  assert.equal(aborted, true);
+});
+
+test("手动运行期间删除规则不会把规则写回", async () => {
+  const d = dir();
+  const file = join(d, "automations.json");
+  const runs = join(d, "runs.jsonl");
+  const rule = normalizeAutomation(baseRule({ id: "A-del", cooldownSec: 0 })).rule;
+  await writeAutomations(file, [rule]);
+  const ctrl = new AbortController();
+  let started;
+  const startedP = new Promise((r) => { started = r; });
+  const exec = (cmd, opts = {}) => {
+    if (cmd.includes("restart")) {
+      started();
+      return new Promise((resolve) => {
+        const finish = (aborted) => resolve({ exitCode: 1, stdout: "", stderr: "", aborted });
+        if (opts.signal?.aborted) finish(true);
+        else opts.signal?.addEventListener("abort", () => finish(true), { once: true });
+        setTimeout(() => finish(false), 1000);
+      });
+    }
+    return Promise.resolve({ exitCode: cmd.includes("is-active") ? 3 : 0, stdout: "", stderr: "" });
+  };
+  const pending = runAutomationNow({ filePath: file, runsPath: runs, id: rule.id, exec, signal: ctrl.signal, now: () => 1_000_000_000 });
+  await startedP;
+  await writeAutomations(file, []);
+  ctrl.abort();
+  await pending;
+  assert.equal((await readAutomations(file)).length, 0);
+});
+
 test("手动运行会记录状态与历史", async () => {
   const d = dir();
   const file = join(d, "automations.json");
