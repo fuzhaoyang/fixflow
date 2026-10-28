@@ -273,7 +273,7 @@ test("GET 自动化时从聊天历史回捞缺失的测试脚本", async () => {
   w.close();
 });
 
-test("nginx 下线：先发告警，verify 通过后发修复成功邮件", async () => {
+test("nginx 快速自愈不发邮件", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-auto-mail-"));
   const cfg = join(dir, "config.json");
   writeFileSync(cfg, JSON.stringify({ alertSmtp: { host: "smtp.test", port: "25", user: "u", pass: "p", from: "a@x.com", to: "ops@x.com" } }));
@@ -287,7 +287,7 @@ test("nginx 下线：先发告警，verify 通过后发修复成功邮件", asyn
   };
   const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg }, {
     captchas: testCaptchas, noAutomationTimer: true, noAlertsTimer: true, runCommand: exec,
-    sendEmail: async (smtp, subject, body) => { mails.push({ smtp, subject, body }); events.push(subject.includes("服务下线") ? "down" : "success"); return true; },
+    sendEmail: async (smtp, subject, body) => { mails.push({ smtp, subject, body }); return true; },
   });
   live.push(w);
   const base = `http://127.0.0.1:${w.server.address().port}`;
@@ -295,14 +295,8 @@ test("nginx 下线：先发告警，verify 通过后发修复成功邮件", asyn
   const H = { Cookie: cookie, "Content-Type": "application/json" };
   await fetch(`${base}/api/automations`, { method: "POST", headers: H, body: JSON.stringify(ruleBody) });
   await w.automationEngine.tick();
-  assert.equal(mails.length, 2);
-  assert.ok(events.indexOf("down") >= 0 && events.indexOf("down") < events.indexOf("action"), `顺序应为告警→修复: ${events}`);
-  assert.ok(events.indexOf("success") > events.indexOf("verify"), `顺序应为断言→修复成功: ${events}`);
-  assert.match(mails[0].subject, /服务下线/);
-  assert.match(mails[0].body, /开始修复/);
-  assert.match(mails[1].subject, /自动化修复成功/);
-  assert.match(mails[1].body, /nginx/);
-  assert.match(mails[1].body, /通过/);
+  assert.equal(mails.length, 0, "自愈发生在防抖窗口内，不应发邮件");
+  assert.ok(events.includes("action") && events.indexOf("action") < events.lastIndexOf("verify"));
   const incs = (await readIncidents(join(dir, "incidents.json"))).incidents;
   assert.equal(incs.length, 1);
   assert.equal(incs[0].service, "nginx");
@@ -323,13 +317,17 @@ test("nginx 下线：先发告警，verify 通过后发修复成功邮件", asyn
   w.close();
 });
 
-test("自动化修复后 verify 未通过：发修复失败邮件", async () => {
+test("持续未恢复按 5 分钟防抖、1h+6h 提醒，恢复后发一封", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ff-auto-mail-fail-"));
   const cfg = join(dir, "config.json");
+  const autoFile = join(dir, "automations.json");
   writeFileSync(cfg, JSON.stringify({ alertSmtp: { host: "smtp.test", port: "25", user: "u", pass: "p", from: "a@x.com", to: "ops@x.com" } }));
   const mails = [];
+  let active = false;
+  let fixNext = false;
   const exec = async (cmd) => {
-    if (cmd.includes("is-active")) return { exitCode: 3, stdout: "inactive", stderr: "" };
+    if (cmd.startsWith("systemctl restart")) { if (fixNext) active = true; return { exitCode: 0, stdout: "", stderr: "" }; }
+    if (cmd.includes("is-active")) return { exitCode: active ? 0 : 3, stdout: active ? "active" : "inactive", stderr: "" };
     return { exitCode: 0, stdout: "", stderr: "" };
   };
   const w = await startWeb({ port: 0, services: [], databases: [], configPath: cfg }, {
@@ -340,16 +338,54 @@ test("自动化修复后 verify 未通过：发修复失败邮件", async () => 
   const base = `http://127.0.0.1:${w.server.address().port}`;
   const cookie = await login(base);
   const H = { Cookie: cookie, "Content-Type": "application/json" };
-  await fetch(`${base}/api/automations`, { method: "POST", headers: H, body: JSON.stringify(ruleBody) });
+  await fetch(`${base}/api/automations`, { method: "POST", headers: H, body: JSON.stringify({ ...ruleBody, cooldownSec: 0, maxRunsPerHour: 60 }) });
+  const resetRuleState = async () => {
+    const rules = JSON.parse(readFileSync(autoFile, "utf8"));
+    rules[0].state = { ...rules[0].state, backoffUntil: 0, lastRunAt: 0, runTimes: [] };
+    writeFileSync(autoFile, JSON.stringify(rules));
+  };
+
   await w.automationEngine.tick();
+  assert.equal(mails.length, 0, "防抖窗口内不发邮件");
+  let inc = (await readIncidents(join(dir, "incidents.json"))).incidents[0];
+  assert.equal(inc.status, "open");
+  await w.checkAutomationNotify(inc.startedAt + 5 * 60 * 1000 - 1000);
+  assert.equal(mails.length, 0);
+  await w.checkAutomationNotify(inc.startedAt + 5 * 60 * 1000 + 1000);
+  assert.equal(mails.length, 1);
+  assert.match(mails[0].subject, /自动化未恢复/);
+  assert.match(mails[0].body, /nginx/);
+  assert.match(mails[0].body, /1 小时后/);
+
+  await resetRuleState();
+  await w.automationEngine.tick();
+  assert.equal(mails.length, 1, "未恢复期间的重试不再发邮件");
+
+  inc = (await readIncidents(join(dir, "incidents.json"))).incidents[0];
+  const firstAt = inc.automation.notify.firstAt;
+  await w.checkAutomationNotify(firstAt + 60 * 60 * 1000 - 1000);
+  assert.equal(mails.length, 1);
+  await w.checkAutomationNotify(firstAt + 60 * 60 * 1000 + 1000);
   assert.equal(mails.length, 2);
-  assert.match(mails[0].subject, /服务下线/);
-  assert.match(mails[1].subject, /自动化修复失败/);
-  assert.match(mails[1].body, /未达预期|失败/);
-  const incs = (await readIncidents(join(dir, "incidents.json"))).incidents;
-  assert.equal(incs.length, 1);
-  assert.equal(incs[0].status, "open");
-  assert.equal(incs[0].automation?.ok, false);
+  assert.match(mails[1].subject, /自动化仍未恢复/);
+  inc = (await readIncidents(join(dir, "incidents.json"))).incidents[0];
+  assert.equal(inc.automation.notify.reminders, 1);
+  await w.checkAutomationNotify(inc.automation.notify.lastAt + 6 * 60 * 60 * 1000 + 1000);
+  assert.equal(mails.length, 3);
+
+  fixNext = true;
+  await resetRuleState();
+  await w.automationEngine.tick();
+  inc = (await readIncidents(join(dir, "incidents.json"))).incidents[0];
+  assert.equal(inc.status, "resolved");
+  assert.equal(inc.automation.notify.resolvedAt, undefined);
+  await w.checkAutomationNotify(Date.now() + 1000);
+  assert.equal(mails.length, 4);
+  assert.match(mails[3].subject, /自动化已恢复/);
+  inc = (await readIncidents(join(dir, "incidents.json"))).incidents[0];
+  assert.ok(inc.automation.notify.resolvedAt);
+  await w.checkAutomationNotify(Date.now() + 2000);
+  assert.equal(mails.length, 4, "恢复后不再提醒");
   w.close();
 });
 
@@ -378,10 +414,9 @@ test("有自动化规则时监控不重复发下线/恢复邮件", async () => {
   await w.checkDownServices();
   assert.equal(mails.length, 0, "监控应让位给自动化发邮件");
   await w.automationEngine.tick();
-  assert.equal(mails.length, 2);
-  assert.match(mails[0].subject, /服务下线/);
+  assert.equal(mails.length, 0, "快速自愈不发邮件");
   await w.checkDownServices();
-  assert.equal(mails.length, 2, "自动化处理后不再发通用恢复邮件");
+  assert.equal(mails.length, 0, "自动化处理后不再发通用恢复邮件");
   w.close();
 });
 

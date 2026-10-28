@@ -798,7 +798,7 @@ ${FIG.alerts}
 <ol>
   <li><b>日报告警</b>：配置 SMTP 邮箱，设定每日时间与指令，模型自动生成报表并发送。</li>
   <li><b>指标告警</b>：设置面板外网地址 / Webhook；按 CPU / 内存 / 磁盘 / 网络流量 / TCP 会话数设阈值、持续时间与级别（P1–P5）；事件可认领、恢复。</li>
-    <li><b>服务下线 / 自动化通知</b>：服务非 active 时发告警；若配置了 service_down 自动化规则，修复后 verify 通过再发「自动化修复成功」邮件，失败发「自动化修复失败」邮件。</li>
+    <li><b>服务下线 / 自动化通知</b>：服务非 active 时发告警；若配置了 service_down 自动化规则，5 分钟内自愈不发邮件，持续未恢复则合并发一封「自动化未恢复」，之后 1 小时、再每 6 小时提醒一次，恢复后发一封「自动化已恢复」。</li>
 <li><b>面板内存</b>：在「设置」里配置面板进程内存上限，超出时页面顶部弹横幅提示（仅提示，不中断服务）。</li>
 </ol>
 <h4 id="settings">设置</h4>
@@ -844,8 +844,8 @@ ${FIG.knowledgeFooter}
   <li>触发：服务下线 / 指标阈值 / HTTP 探测 / 定时。</li>
   <li>动作：重启服务 / 重载服务 / 执行命令（受「命令白名单」前缀约束）/ Webhook。</li>
   <li>执行限制：冷却时间、每小时最多执行次数、失败指数退避；运行历史记录动作输出和 verify 断言结果。</li>
-  <li>服务下线流程：先发「服务下线」邮件 → 自动修复 → verify 全部通过后发「自动化修复成功」邮件；失败发「自动化修复失败」邮件并按冷却 / 退避重试。</li>
-  <li>邮件使用「告警 → 邮箱配置」的 SMTP 和收件人；已有启用 service_down 规则的服务，不再重复发通用下线 / 恢复邮件。</li>
+  <li>服务下线流程：自动修复并按冷却 / 退避重试；5 分钟内自愈不发邮件，持续未恢复合并发一封「自动化未恢复」，之后 1 小时、再每 6 小时提醒一次，恢复后发一封「自动化已恢复」。</li>
+  <li>邮件使用「告警 → 邮箱配置」的 SMTP 和收件人；已有启用 service_down 规则的服务，不再重复发通用下线 / 恢复邮件，重试过程也不逐次发邮件。</li>
   <li>「命令白名单」只约束 run_command 和 command_exit 断言，按前缀匹配，不是安全沙箱，建议只填精确前缀。</li>
   <li>进程管理器支持 systemd / PM2 / Docker / Supervisor / 自定义命令；可点「检测」按服务名探测，脚本、动作和断言都会按所选管理器生成。</li>
   <li>定时（cron）自动化只记录运行历史，不生成事件 / 复盘；服务下线 / 指标 / HTTP 自动化会参与事件链路。</li>
@@ -1132,7 +1132,7 @@ ${FIG.alerts}
 <ol>
   <li><b>Daily report</b>: configure an SMTP mailbox, set a daily time and instruction — the model generates and sends the report automatically.</li>
   <li><b>Metric alerts</b>: set the panel public URL / webhook; configure thresholds, duration and level (P1–P5) for CPU / memory / disk / network traffic / TCP sessions; events can be acknowledged and recovered.</li>
-    <li><b>Service down / automation notifications</b>: an alert is sent when a service is not active; if a service_down automation rule exists, a "repair succeeded" email is sent after all verify checks pass, or a "repair failed" email on failure.</li>
+    <li><b>Service down / automation notifications</b>: an alert is sent when a service is not active; with a service_down automation rule, self-healing within 5 minutes sends no email. If it stays down, one merged "automation not recovered" email is sent, then reminders after 1 hour and every 6 hours, and one "automation recovered" email on recovery.</li>
 <li><b>Panel memory</b>: set a process memory limit in "Settings"; when exceeded, a banner appears at the top (advisory only — service keeps running).</li>
 </ol>
 <h4 id="settings">Settings</h4>
@@ -1178,8 +1178,8 @@ ${FIG.knowledgeFooter}
   <li>Triggers: service down / metric threshold / HTTP probe / schedule.</li>
   <li>Actions: restart service / reload service / run command (prefix-restricted by the command allowlist) / webhook.</li>
   <li>Execution limits: cooldown, max runs per hour and exponential backoff; run history stores action output and verify results.</li>
-  <li>Service-down flow: send the "service down" email first, repair automatically, then send "automation repair succeeded" when all verify checks pass; on failure send "automation repair failed" and retry with cooldown / backoff.</li>
-  <li>Emails use the SMTP / recipients in "Alerts → Mail settings"; services with an enabled service_down rule no longer receive duplicate generic down / recovery emails.</li>
+  <li>Service-down flow: repair automatically and retry with cooldown / backoff; self-healing within 5 minutes sends no email. If it stays down, send one merged "automation not recovered" email, then reminders after 1 hour and every 6 hours, and one "automation recovered" email on recovery.</li>
+  <li>Emails use the SMTP / recipients in "Alerts → Mail settings"; services with an enabled service_down rule no longer receive duplicate generic down / recovery emails or one email per retry.</li>
   <li>The command allowlist only restricts run_command and command_exit checks and matches by prefix. It is not a sandbox, so keep prefixes narrow.</li>
   <li>Process managers: systemd / PM2 / Docker / Supervisor / custom command. Use "Detect" to probe by service name; the script, action and verify checks follow the selected manager.</li>
   <li>Cron automations only record run history; they do not create incidents / postmortems. Service-down, metric and HTTP automations participate in the incident flow.</li>

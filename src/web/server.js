@@ -102,6 +102,9 @@ async function collectNginxLoad({ run = runCommand } = {}) {
 }
 
 const APT_PROTO_RE = /^(PMERROR|PMESSAGES|PSTATUS|PREG|PACKAGE|STATUS):/;
+const AUTO_NOTIFY_DEBOUNCE_MS = 5 * 60 * 1000;
+const AUTO_NOTIFY_FIRST_MS = 60 * 60 * 1000;
+const AUTO_NOTIFY_EVERY_MS = 6 * 60 * 60 * 1000;
 
 // 流式执行命令（root 直跑或 sudo -S），每行回调；解决缓冲式执行 50KB 截断被杀的问题
 function spawnLines(cmd, { onLine, timeout = 300000, signal } = {}) {
@@ -725,20 +728,14 @@ export async function startWeb(config = {}, deps = {}) {
         if (inc) {
           await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
             x.labels = { ...(x.labels || {}), automation: rule.id, rule: rule.name, trigger: rule.trigger.type };
-            x.automation = { ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, action: rule.action, startedAt: Date.now() };
+            x.automation = { ...(x.automation || {}), ruleId: rule.id, ruleName: rule.name, trigger: rule.trigger, action: rule.action, startedAt: x.automation?.startedAt || Date.now() };
             x.timeline.push({ ts: Date.now(), text: `自动化规则「${rule.name}」触发，动作：${automationActionText(rule.action)}` });
           } });
         }
       }
       if (rule.trigger?.type !== "service_down") return;
-      const service = rule.trigger.service;
-      if (autoDownNotified.has(service)) return;
-      autoDownNotified.add(service);
-      autoHandled.add(service);
-      await automationMail(
-        `[Fixflow] 服务下线：${service}`,
-        `服务 ${service} 已下线（状态：${result.value || "unknown"}）。\n自动化规则「${rule.name}」已开始修复。\n主机：${hostname()}\n时间：${formatDateTime(new Date())}`
-      );
+      autoDownNotified.add(rule.trigger.service);
+      autoHandled.add(rule.trigger.service);
     },
     onRun: async (run, rule) => {
       broadcast({ type: "automations" });
@@ -769,23 +766,71 @@ export async function startWeb(config = {}, deps = {}) {
           }
         }
       }
-      if (rule.trigger?.type !== "service_down") return;
-      const service = rule.trigger.service;
-      if (run.ok) {
-        autoDownNotified.delete(service);
-        await automationMail(
-          `[Fixflow] 自动化修复成功：${service}`,
-          `服务 ${service} 已自动修复，verify 断言全部通过。\n规则：${rule.name}\n动作：${automationActionText(rule.action)}\n断言：\n${automationChecksText(run)}\n耗时：${run.durationMs}ms\n主机：${hostname()}\n时间：${formatDateTime(new Date())}`
-        );
-      } else {
-        await automationMail(
-          `[Fixflow] 自动化修复失败：${service}`,
-          `服务 ${service} 自动修复未达预期。\n规则：${rule.name}\n动作：${automationActionText(rule.action)}\n动作结果：${run.actionOk ? "成功" : "失败"}\n断言：\n${automationChecksText(run)}\n输出：${(run.output || "").slice(0, 1000)}\n将继续按冷却/退避重试。\n主机：${hostname()}\n时间：${formatDateTime(new Date())}`
-        );
-      }
+      if (rule.trigger?.type === "service_down" && run.ok) autoDownNotified.delete(rule.trigger.service);
     },
   });
-  if (!deps.noAutomationTimer) automationEngine.start();
+  let notifyRunning = false;
+  const checkAutomationNotify = async (now = Date.now()) => {
+    if (notifyRunning) return;
+    notifyRunning = true;
+    try {
+      const st = await alertsManager.smtp();
+      if (!st.to) return;
+      for (const inc of await listIncidents(incidentsPath)) {
+        if (inc.labels?.trigger !== "service_down" || !inc.labels?.automation) continue;
+        const notify = inc.automation?.notify || {};
+        const startedAt = Number(inc.startedAt) || now;
+        const service = inc.service || "service";
+        const ruleName = inc.automation?.ruleName || inc.labels?.rule || "自动化";
+        const actionText = inc.automation?.action ? automationActionText(inc.automation.action) : "—";
+        const checksText = automationChecksText(inc.automation || {});
+        const minutes = Math.max(1, Math.round((now - startedAt) / 60000));
+        if (inc.status === "resolved") {
+          if (!notify.firstAt || notify.resolvedAt) continue;
+          const duration = Math.max(1, Math.round(((Number(inc.resolvedAt) || now) - startedAt) / 60000));
+          await automationMail(
+            `[Fixflow] 自动化已恢复：${service}`,
+            `服务 ${service} 已恢复。\n规则：${ruleName}\n动作：${actionText}\n持续：${duration} 分钟\n最近一次断言：\n${checksText}\n主机：${hostname()}\n时间：${formatDateTime(new Date(now))}`
+          );
+          await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
+            x.automation = { ...(x.automation || {}), notify: { ...(x.automation?.notify || {}), resolvedAt: now } };
+          } });
+          broadcast({ type: "incidents" });
+          continue;
+        }
+        if (!notify.firstAt) {
+          if (now - startedAt < AUTO_NOTIFY_DEBOUNCE_MS) continue;
+          await automationMail(
+            `[Fixflow] 自动化未恢复：${service}`,
+            `服务 ${service} 持续异常 ${minutes} 分钟。\n规则：${ruleName}\n动作：${actionText}\n最近一次执行：${inc.automation?.ok ? "成功" : "失败"}\n断言：\n${checksText}\n输出：${(inc.automation?.output || "").slice(0, 1000)}\n后续提醒：1 小时后，之后每 6 小时一次。\n主机：${hostname()}\n时间：${formatDateTime(new Date(now))}`
+          );
+          await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
+            x.automation = { ...(x.automation || {}), notify: { ...(x.automation?.notify || {}), firstAt: now, lastAt: now } };
+          } });
+          broadcast({ type: "incidents" });
+          continue;
+        }
+        const lastAt = Number(notify.lastAt) || Number(notify.firstAt) || startedAt;
+        const interval = notify.reminders ? AUTO_NOTIFY_EVERY_MS : AUTO_NOTIFY_FIRST_MS;
+        if (now - lastAt < interval) continue;
+        await automationMail(
+          `[Fixflow] 自动化仍未恢复：${service}`,
+          `服务 ${service} 仍未恢复（已 ${minutes} 分钟）。\n规则：${ruleName}\n动作：${actionText}\n最近一次执行：${inc.automation?.ok ? "成功" : "失败"}\n断言：\n${checksText}\n下次提醒：6 小时后。\n主机：${hostname()}\n时间：${formatDateTime(new Date(now))}`
+        );
+        await updateIncident({ filePath: incidentsPath, id: inc.id, patch: (x) => {
+          x.automation = { ...(x.automation || {}), notify: { ...(x.automation?.notify || {}), lastAt: now, reminders: (Number(x.automation?.notify?.reminders) || 0) + 1 } };
+        } });
+        broadcast({ type: "incidents" });
+      }
+    } finally {
+      notifyRunning = false;
+    }
+  };
+  let automationNotifyTimer = null;
+  if (!deps.noAutomationTimer) {
+    automationEngine.start();
+    automationNotifyTimer = setInterval(() => checkAutomationNotify().catch(() => {}), 60000);
+  }
   const runningTests = new Map();
   const runningActions = new Map();
   let lastCaptureT = Math.floor(Date.now() / 1000) - 60;
@@ -2396,8 +2441,9 @@ export async function startWeb(config = {}, deps = {}) {
     server,
     httpsServer,
     automationEngine,
+    checkAutomationNotify,
     checkDownServices,
     checkFailedServices,
-    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } automationEngine.stop(); clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(historyTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
+    close: () => new Promise((resolve) => { termGen++; if (termShell) { try { termShell.kill(); } catch {} termShell = null; } automationEngine.stop(); clearInterval(automationNotifyTimer); clearInterval(monitorTimer); clearInterval(alertTimer); clearInterval(metricAlertTimer); clearInterval(memTimer); clearInterval(failedTimer); clearInterval(downTimer); clearInterval(historyTimer); clearInterval(sseGuard); clearTimeout(prewarmTimer); clearTimeout(alertStartTimer); clearTimeout(metricsWarmTimer); server.closeAllConnections?.(); if (httpsServer) httpsServer.closeAllConnections?.(); Promise.all([closeSrv(server), httpsServer ? closeSrv(httpsServer) : Promise.resolve()]).then(resolve); }),
   };
 }
