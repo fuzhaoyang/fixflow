@@ -437,7 +437,7 @@ function renderAutoActionScript() {
 }
 
 function renderAutoScript() {
-  autoScriptEl.textContent = autoScript || t("auto.scriptEmpty");
+  autoScriptEl.value = autoScript;
 }
 
 function isAutoMode() { return autoMode; }
@@ -623,6 +623,16 @@ async function saveAutoRule(keepOpen = false) {
   }
 }
 
+function appendAutoTestLog(id, line) {
+  if (!autoMask.classList.contains("show")) return;
+  const current = autoEditing?.id || autoDraft?.id;
+  if (id && current && id !== current) return;
+  const box = document.getElementById("auto-run-log");
+  if (!box) return;
+  box.textContent += String(line ?? "") + "\n";
+  box.scrollTop = box.scrollHeight;
+}
+
 function renderRunResult(run) {
   autoLastRun = run;
   if (autoAiFix) autoAiFix.style.display = run?.kind === "script-test" && run.ok === false ? "" : "none";
@@ -653,7 +663,7 @@ function handleAutoConfirm(ev) {
     </div>
   </div>`;
   const answer = (ok) => fetch("api/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: ev.id, ok }) });
-  document.getElementById("auto-confirm-yes").onclick = () => { autoRunStatus.textContent = t("auto.running"); autoRunResult.innerHTML = ""; answer(true); };
+  document.getElementById("auto-confirm-yes").onclick = () => { autoRunStatus.textContent = t("auto.running"); autoRunResult.innerHTML = `<pre id="auto-run-log" class="auto-run-log"></pre>`; answer(true); };
   document.getElementById("auto-confirm-no").onclick = () => { autoRunStatus.textContent = t("auto.rejected"); autoRunResult.innerHTML = ""; answer(false); };
 }
 
@@ -736,6 +746,7 @@ const closeAutoDetail = () => { if (!autoBusy) autoMask.classList.remove("show")
 autoClose.addEventListener("click", closeAutoDetail);
 autoCancel.addEventListener("click", closeAutoDetail);
 autoSave.addEventListener("click", () => saveAutoRule(false));
+autoScriptEl.addEventListener("input", () => { autoScript = autoScriptEl.value; });
 autoRunTest.addEventListener("click", runAutoScript);
 autoAiFix.addEventListener("click", runAutoFix);
 autoScriptCopy.addEventListener("click", async () => {

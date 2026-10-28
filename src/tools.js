@@ -92,17 +92,35 @@ const release = () => {
   else activeExec--;
 };
 
-function runExec(command, { timeout = 30000, signal, env = {}, maxOutput = MAX_OUTPUT } = {}) {
+function runExec(command, { timeout = 30000, signal, env = {}, maxOutput = MAX_OUTPUT, onLine } = {}) {
   return new Promise((resolve) => {
     const child = spawn("/bin/sh", ["-c", command], { detached: true, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, ...env } });
     let stdout = "", stderr = "";
+    let stdoutLine = "", stderrLine = "";
     let done = false, overflow = false, aborted = false;
     let timer;
+    const callLine = (line, stream) => {
+      if (typeof onLine !== "function") return;
+      try { onLine(line, stream); } catch {}
+    };
+    const emitLines = (chunk, stream) => {
+      if (typeof onLine !== "function") return;
+      const next = (stream === "stdout" ? stdoutLine : stderrLine) + chunk;
+      const rows = next.split("\n");
+      const rest = rows.pop();
+      if (stream === "stdout") stdoutLine = rest; else stderrLine = rest;
+      for (const line of rows) callLine(line.replace(/\r$/, ""), stream);
+    };
+    const flushLines = () => {
+      if (stdoutLine) { callLine(stdoutLine.replace(/\r$/, ""), "stdout"); stdoutLine = ""; }
+      if (stderrLine) { callLine(stderrLine.replace(/\r$/, ""), "stderr"); stderrLine = ""; }
+    };
     const killTree = () => { try { process.kill(-child.pid, "SIGKILL"); } catch {} };
     const finish = (code) => {
       if (done) return;
       done = true;
       clearTimeout(timer);
+      flushLines();
       resolve({
         stdout: redactSecrets(truncate(stdout, maxOutput)),
         stderr: redactSecrets(truncate(stderr, maxOutput)),
@@ -112,12 +130,16 @@ function runExec(command, { timeout = 30000, signal, env = {}, maxOutput = MAX_O
     };
     child.stdout.on("data", (d) => {
       if (overflow) return;
-      stdout += d;
+      const s = String(d);
+      stdout += s;
+      emitLines(s, "stdout");
       if (stdout.length > maxOutput) { stdout = stdout.slice(0, maxOutput); overflow = true; killTree(); }
     });
     child.stderr.on("data", (d) => {
       if (overflow) return;
-      stderr += d;
+      const s = String(d);
+      stderr += s;
+      emitLines(s, "stderr");
       if (stderr.length > maxOutput) { stderr = stderr.slice(0, maxOutput); overflow = true; killTree(); }
     });
     child.on("exit", finish);

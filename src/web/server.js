@@ -1483,7 +1483,12 @@ export async function startWeb(config = {}, deps = {}) {
           file = join(tmpdir(), `fixflow-auto-${randomUUID()}.sh`);
           await writeFile(file, script, { mode: 0o700 });
           const started = Date.now();
-          const r = await execCmd(`bash ${JSON.stringify(file)}`, { timeout: 300000, maxOutput: 20 * 1024, signal: ctrl.signal }).catch((e) => ({ exitCode: 1, stdout: "", stderr: String(e?.message || e) }));
+          const r = await execCmd(`bash ${JSON.stringify(file)}`, {
+            timeout: 300000,
+            maxOutput: 20 * 1024,
+            signal: ctrl.signal,
+            onLine: (line) => broadcast({ type: "auto-test-log", id: rule.id, line: redactSecrets(String(line)).slice(0, 2000) }),
+          }).catch((e) => ({ exitCode: 1, stdout: "", stderr: String(e?.message || e) }));
           const run = {
             id: "AR-" + randomUUID().slice(0, 8),
             automationId: rule.id,

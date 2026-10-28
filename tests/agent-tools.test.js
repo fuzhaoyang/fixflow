@@ -129,6 +129,13 @@ test("短命令正常不受中止影响", async () => {
   const r = await runCommand("printf ok", { signal: ctrl.signal });
   assert.equal(r.stdout.trim(), "ok");
 });
+test("onLine 按行回调 stdout/stderr 并补齐末尾无换行内容", async () => {
+  const lines = [];
+  const r = await runCommand("printf 'a\\nb'; printf 'c\\n' 1>&2", { onLine: (line, stream) => lines.push([stream, line]) });
+  assert.equal(r.exitCode, 0);
+  assert.deepEqual(lines.filter(([s]) => s === "stdout").map(([, l]) => l), ["a", "b"]);
+  assert.deepEqual(lines.filter(([s]) => s === "stderr").map(([, l]) => l), ["c"]);
+});
 
 // ============ 6. isWriteCommand 写命令识别（40 条） ============
 const WRITE_CMDS = [

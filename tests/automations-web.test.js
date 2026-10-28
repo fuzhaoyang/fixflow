@@ -235,6 +235,14 @@ test("对话内自动化模式接线", () => {
   assert.match(html, /id="auto-mode-btn"/);
   assert.match(html, /id="auto-mode-banner"/);
   assert.match(html, /id="auto-action-script"/);
+  assert.match(html, /<textarea id="auto-script"/);
+  assert.match(auto, /autoScriptEl\.addEventListener\("input"/);
+  assert.match(css, /\.auto-script \{[^}]*resize: vertical/);
+  const fsJs = readFileSync(join(import.meta.dirname, "..", "src", "web", "static", "fs.js"), "utf8");
+  assert.match(fsJs, /auto-test-log/);
+  assert.match(auto, /appendAutoTestLog/);
+  assert.match(auto, /auto-run-log/);
+  assert.match(css, /\.auto-run-log/);
   assert.match(chat, /sendAutoModeMessage/);
   assert.match(chat, /kind === "automation"/);
   assert.match(auto, /function enterAutoMode/);

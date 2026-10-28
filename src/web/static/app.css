@@ -1229,6 +1229,7 @@
     .auto-test-result { display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow: auto; }
     .auto-test-out { padding: 10px; max-height: 46vh; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-all; }
     .auto-test-result pre { margin: 6px 0 0; padding: 8px 10px; max-height: 200px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+    .auto-run-log { margin: 6px 0 0; padding: 8px 10px; min-height: 80px; max-height: 240px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-all; }
 
     /* ---------- 自动化：对话与测试脚本 ---------- */
     .auto-chat { margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px dashed var(--border); }
@@ -1247,8 +1248,8 @@
     .auto-code { border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--code-bg); overflow: hidden; }
     .auto-code-head { display: flex; align-items: center; gap: 7px; padding: 6px 10px; background: color-mix(in srgb, var(--panel2) 72%, var(--code-bg)); border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
     .auto-code-head::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 2px color-mix(in srgb, var(--ok) 18%, transparent); }
-    .auto-script { margin: 0; padding: 10px 12px; max-height: 320px; overflow: auto; background: transparent; border: none; border-radius: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre; tab-size: 2; }
-    .auto-script:empty::before { content: attr(data-empty); color: var(--muted); }
+    .auto-script { display: block; box-sizing: border-box; width: 100%; min-height: 180px; max-height: 320px; resize: vertical; margin: 0; padding: 10px 12px; overflow: auto; background: transparent; border: none; border-radius: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.6; color: var(--text); white-space: pre; tab-size: 2; outline: none; }
+    .auto-script::placeholder { color: var(--muted); }
     .auto-script-actions { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .auto-confirm { margin-top: 10px; padding: 10px; border: 1px solid color-mix(in srgb, var(--warn) 55%, var(--border)); border-radius: var(--r-sm); display: flex; flex-direction: column; gap: 8px; }
     .auto-confirm pre { margin: 0; padding: 8px 10px; max-height: 200px; overflow: auto; background: var(--code-bg); border: 1px solid var(--border); border-radius: var(--r-sm); font-family: var(--font-mono); font-size: 12px; color: var(--text); white-space: pre-wrap; word-break: break-all; }

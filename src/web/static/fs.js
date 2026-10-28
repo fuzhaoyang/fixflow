@@ -537,6 +537,8 @@ function connectStream() {
       if (document.getElementById("view-retros")?.style.display !== "none" && typeof loadRetros === "function") loadRetros();
     } else if (ev.type === "automations") {
       if (document.getElementById("view-automations")?.style.display !== "none" && typeof loadAutomations === "function") loadAutomations();
+    } else if (ev.type === "auto-test-log") {
+      if (typeof appendAutoTestLog === "function") appendAutoTestLog(ev.id, ev.line);
     } else if (ev.type === "done") {
       finishStreaming();
       attachTurnFooter({ source: ev.source || "model", usage: ev.usage });
