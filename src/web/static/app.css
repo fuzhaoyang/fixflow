@@ -1259,7 +1259,7 @@
     .auto-mode-banner { display: none; align-items: center; gap: 8px; padding: 6px 12px; background: color-mix(in srgb, var(--warn) 10%, var(--panel)); border-bottom: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border)); font-size: 12px; color: var(--text); flex-shrink: 0; }
     .auto-mode-banner .hint { flex: 1; font-size: 11px; color: var(--muted); }
     .auto-mode-banner .clear-btn { padding: 2px 8px; font-size: 12px; }
-    #auto-mode-btn.active, #term-auto-open.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    #auto-mode-btn.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
     #view-chat.auto-mode #attach { display: none; }
     .auto-chat-card { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
     .auto-chat-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }

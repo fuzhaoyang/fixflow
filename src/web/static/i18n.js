@@ -832,7 +832,7 @@ ${FIG.knowledgeFooter}
 <h3 id="automations">自动化</h3>
 <h4 id="auto-create">创建规则</h4>
 <ol>
-  <li>进入「Agent 对话」，点击输入栏「终端」旁的「自动化」，或终端标题栏的「自动化模式」。</li>
+  <li>进入「Agent 对话」，点击输入栏中的「自动化」进入自动化模式。</li>
   <li>用一句话描述需求，例如：<code>nginx 挂了就重启，测试脚本先停 nginx 再断言恢复</code>。</li>
   <li>模型同时生成结构化规则和本机测试脚本；脚本卡片上点「应用」打开规则弹窗。</li>
   <li>核对规则和「自动化脚本」（触发条件 / 动作 / verify 断言），点「保存」生效。</li>
@@ -1166,7 +1166,7 @@ ${FIG.knowledgeFooter}
 <h3 id="automations">Automations</h3>
 <h4 id="auto-create">Create a rule</h4>
 <ol>
-  <li>Open "Agent Chat" and click "Automation" next to "Terminal" in the input bar (or "Automation mode" in the terminal header).</li>
+  <li>Open "Agent Chat" and click "Automation" in the input bar.</li>
   <li>Describe the need, e.g. <code>restart nginx when it is down; the test script stops nginx and verifies recovery</code>.</li>
   <li>The model generates both the structured rule and a local test script; click "Apply" on the script card to open the rule dialog.</li>
   <li>Review the rule and "Automation script" (trigger / action / verify checks), then click "Save".</li>

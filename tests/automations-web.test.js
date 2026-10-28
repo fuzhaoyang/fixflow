@@ -243,6 +243,8 @@ test("对话内自动化模式接线", () => {
   assert.match(auto, /appendAutoTestLog/);
   assert.match(auto, /auto-run-log/);
   assert.match(css, /\.auto-run-log/);
+  assert.doesNotMatch(html, /term-auto-open/);
+  assert.doesNotMatch(auto, /termAutoOpen/);
   assert.match(chat, /sendAutoModeMessage/);
   assert.match(chat, /kind === "automation"/);
   assert.match(auto, /function enterAutoMode/);

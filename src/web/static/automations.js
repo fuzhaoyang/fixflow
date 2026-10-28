@@ -16,7 +16,6 @@ const autoModeBanner = document.getElementById("auto-mode-banner");
 const autoModeExit = document.getElementById("auto-mode-exit");
 const autoModeNew = document.getElementById("auto-mode-new");
 const autoModeBtn = document.getElementById("auto-mode-btn");
-const termAutoOpen = document.getElementById("term-auto-open");
 const autoModalStatus = document.getElementById("auto-modal-status");
 const autoScriptEl = document.getElementById("auto-script");
 const autoScriptCopy = document.getElementById("auto-script-copy");
@@ -449,7 +448,6 @@ function enterAutoMode() {
   document.getElementById("view-chat")?.classList.add("auto-mode");
   if (autoModeBanner) autoModeBanner.style.display = "flex";
   autoModeBtn?.classList.add("active");
-  termAutoOpen?.classList.add("active");
   if (ctx?.input) ctx.input.placeholder = t("auto.modePlaceholder");
   const last = [...chatHistory].reverse().find((m) => m.role === "assistant" && m.kind === "automation");
   if (last?.rule) autoDraft = { rule: last.rule, script: last.script || last.rule.testScript || "" };
@@ -463,7 +461,6 @@ function exitAutoMode() {
   document.getElementById("view-chat")?.classList.remove("auto-mode");
   if (autoModeBanner) autoModeBanner.style.display = "none";
   autoModeBtn?.classList.remove("active");
-  termAutoOpen?.classList.remove("active");
   if (ctx?.input) ctx.input.placeholder = t("chat.inputPh");
 }
 
@@ -762,7 +759,6 @@ autoMask.addEventListener("change", renderAutoActionScript);
 autoModeBtn?.addEventListener("click", () => (autoMode ? exitAutoMode() : enterAutoMode()));
 autoModeExit?.addEventListener("click", exitAutoMode);
 autoModeNew?.addEventListener("click", () => { autoDraft = null; addMsg(t("auto.modeNewHint"), "assistant"); });
-termAutoOpen?.addEventListener("click", () => (autoMode ? exitAutoMode() : enterAutoMode()));
 autoField("auto-trigger-type").addEventListener("change", (e) => setTriggerType(e.target.value));
 autoField("auto-action-type").addEventListener("change", (e) => setActionType(e.target.value));
 autoField("auto-metric").addEventListener("change", () => setTriggerType(autoField("auto-trigger-type").value));
