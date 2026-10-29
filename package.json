@@ -1,6 +1,6 @@
 {
   "name": "fixflow",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "服务器运维 AI Agent CLI + Web 面板",
   "author": "fuzhaoyang <932647051@qq.com>",
